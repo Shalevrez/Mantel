@@ -10,6 +10,25 @@ function wsBase() {
   return `${proto}//${location.host}`;
 }
 
+// ── Player id ────────────────────────────────────────
+// A stable id for this browser. The server uses it to recognise a player who
+// comes back — after a refresh, a dropped connection, or closing the browser
+// and reopening it — and hand them their own seat, and the host their controls.
+const PID_KEY = 'rami_pid';
+let pid = null;
+export function playerId() {
+  if (pid) return pid;
+  try { pid = localStorage.getItem(PID_KEY) || ''; } catch { /* storage blocked */ }
+  if (!pid) {
+    pid = (crypto.randomUUID && crypto.randomUUID()) ||
+          `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    // Blocked storage (private mode) only costs us the id across reloads — it
+    // still holds for this page's reconnects, and the server falls back to names.
+    try { localStorage.setItem(PID_KEY, pid); } catch {}
+  }
+  return pid;
+}
+
 // Ask the server to mint a new room; returns its code.
 export async function createRoom() {
   const r = await fetch('/api/new');
@@ -27,7 +46,8 @@ export function joinRoom({ code, name, host = false }, callbacks = {}) {
 
   const url = () =>
     `${wsBase()}/api/room?code=${encodeURIComponent(code)}` +
-    `&name=${encodeURIComponent(name)}&host=${host ? 1 : 0}`;
+    `&name=${encodeURIComponent(name)}&host=${host ? 1 : 0}` +
+    `&pid=${encodeURIComponent(playerId())}`;
 
   function connect() {
     ws = new WebSocket(url());
