@@ -25,6 +25,11 @@
       html, body { font-family: var(--font-ui); }
       /* Form controls don't inherit the page font by default — make them. */
       button, input, select, textarea { font-family: inherit; }
+
+      /* dvh excludes the collapsible mobile URL bar; vh doesn't, which on a
+         phone pushes the modal's footer button off the visible viewport.
+         The vh line stays as the fallback for engines without dvh. */
+      .rules-card { max-height: 88vh; max-height: 88dvh; }
       * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
 
       /* Boot failure panel — hidden until the watchdog below decides the app never mounted. */

@@ -13,13 +13,25 @@ import {
 } from "../game-core.js";
 
 
+// Card geometry comes from --card-w/--card-h (declared in Game's stylesheet), so
+// one media query resizes every card, pip and corner at once. The fallbacks keep
+// a CardView rendered outside the game screen at the original size.
+const CARD_W    = 'var(--card-w, 44px)';
+const CARD_H    = 'var(--card-h, 62px)';
+const CARD_W_SM = 'var(--card-w-sm, 26px)';
+const CARD_H_SM = 'var(--card-h-sm, 38px)';
+
 function CardView({ card, sel, onClick, sm, back, glow, faded, newCard }) {
-  const w = sm ? 26 : 44, h = sm ? 38 : 62;
+  const w = sm ? CARD_W_SM : CARD_W;
+  const h = sm ? CARD_H_SM : CARD_H;
+  // Everything inside a card is a ratio of its height, so it scales with it.
+  const fs = (ratio) => `calc(${h} * ${ratio})`;
+  const radius = `calc(${h} * .1)`;
 
   if (back) return (
     <div style={{
       width: w, height: h,
-      borderRadius: sm ? 4 : 6, flexShrink: 0, margin: sm ? '0 1px' : '0 2px',
+      borderRadius: radius, flexShrink: 0, margin: sm ? '0 1px' : '0 2px',
       background: 'linear-gradient(145deg,#234a8c 0%,#13284f 60%,#0c1d3c 100%)',
       border: `1.5px solid #36589c`,
       backgroundImage: `repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(255,255,255,.05) 3px, rgba(255,255,255,.05) 6px),
@@ -27,7 +39,7 @@ function CardView({ card, sel, onClick, sm, back, glow, faded, newCard }) {
       boxShadow: 'inset 0 0 0 2px rgba(255,255,255,.04), 0 2px 6px rgba(0,0,0,.45)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
-      <span style={{ color: 'rgba(201,151,58,.55)', fontSize: sm ? 11 : 18 }}>♦</span>
+      <span style={{ color: 'rgba(201,151,58,.55)', fontSize: fs(.29) }}>♦</span>
     </div>
   );
 
@@ -36,15 +48,16 @@ function CardView({ card, sel, onClick, sm, back, glow, faded, newCard }) {
   const sym = card.j ? '★' : SYM[card.suit];
   const isFace = !card.j && (card.v === 1 || card.v >= 11);
 
+  const inY = `calc(${h} * .045)`, inX = `calc(${w} * .09)`;
   const corner = (rotate) => (
     <div style={{
       position: 'absolute', lineHeight: 0.82, textAlign: 'center', color,
       ...(rotate
-        ? { bottom: sm ? 1 : 3, left: sm ? 2 : 4, transform: 'rotate(180deg)' }
-        : { top: sm ? 1 : 3, right: sm ? 2 : 4 }),
+        ? { bottom: inY, left: inX, transform: 'rotate(180deg)' }
+        : { top: inY, right: inX }),
     }}>
-      <div style={{ fontSize: sm ? 7 : 11, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{vs}</div>
-      <div style={{ fontSize: sm ? 6 : 9 }}>{sym}</div>
+      <div style={{ fontSize: fs(.18), fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{vs}</div>
+      <div style={{ fontSize: fs(.145) }}>{sym}</div>
     </div>
   );
 
@@ -52,7 +65,7 @@ function CardView({ card, sel, onClick, sm, back, glow, faded, newCard }) {
     <div onClick={onClick} style={{
       position: 'relative',
       width: w, height: h,
-      borderRadius: sm ? 4 : 6, flexShrink: 0, margin: sm ? '0 1px' : '0 2px',
+      borderRadius: radius, flexShrink: 0, margin: sm ? '0 1px' : '0 2px',
       background: card.j
         ? 'linear-gradient(150deg,#7c3aed 0%,#9f67f5 50%,#5b21b6 100%)'
         : 'linear-gradient(157deg,#ffffff 0%,#fbf6ec 55%,#f1e7d6 100%)',
@@ -61,7 +74,7 @@ function CardView({ card, sel, onClick, sm, back, glow, faded, newCard }) {
         : '1px solid rgba(0,0,0,.22)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       cursor: onClick ? 'pointer' : 'default', userSelect: 'none', overflow: 'hidden',
-      transform: sel ? 'translateY(-12px) scale(1.07)' : 'none',
+      transform: sel ? `translateY(calc(${h} * -.19)) scale(1.07)` : 'none',
       boxShadow: sel ? '0 11px 22px rgba(96,165,250,.55)'
         : newCard ? `0 0 0 3px ${GOLD}, 0 0 18px ${GOLD}88`
         : glow ? `0 0 12px ${GOLD}aa` : '0 2px 5px rgba(0,0,0,.32)',
@@ -77,7 +90,7 @@ function CardView({ card, sel, onClick, sm, back, glow, faded, newCard }) {
       }} />
       {corner(false)}
       <div style={{
-        fontSize: card.j ? (sm ? 12 : 20) : (sm ? 13 : 23),
+        fontSize: card.j ? fs(.32) : fs(.37),
         color, lineHeight: 1, fontWeight: card.j ? 800 : 400,
         textShadow: card.j ? '0 1px 2px rgba(0,0,0,.3)' : (isFace ? `0 0 1px ${color}55` : 'none'),
         zIndex: 1,
@@ -141,9 +154,10 @@ function RulesModal({ onClose }) {
     >
       <div
         onClick={(e) => e.stopPropagation()}
+        className="rules-card"
         style={{
           background: CREAM, borderRadius: 20, maxWidth: 440, width: '100%',
-          maxHeight: '88vh', display: 'flex', flexDirection: 'column',
+          display: 'flex', flexDirection: 'column',
           border: `2px solid ${GOLD}88`, boxShadow: '0 24px 72px rgba(0,0,0,.6)',
           overflow: 'hidden',
         }}
@@ -667,15 +681,95 @@ function Game({ state, dispatch }) {
   };
 
   return (
-    <div style={{
-      height: '100dvh', minHeight: '100vh',
+    <div className="game-shell" style={{
       background: `radial-gradient(ellipse 120% 70% at 50% -5%, #2c7a4d 0%, ${FELT} 42%, ${FELTD} 100%)`,
       backgroundColor: FELTD,
-      display: 'flex', flexDirection: 'column',
       direction: 'rtl',
-      overflow: 'hidden', userSelect: 'none',
+      userSelect: 'none',
     }}>
       <style>{`
+        :root {
+          /* One knob for every card on the table. Portrait: grow with the phone's
+             width, within sane bounds. */
+          --card-w: clamp(40px, 12vw, 56px);
+          --card-h: calc(var(--card-w) * 1.41);
+          --card-w-sm: calc(var(--card-w) * .6);
+          --card-h-sm: calc(var(--card-h) * .6);
+        }
+
+        /* 100dvh, not 100vh: on mobile browsers vh includes the collapsible URL
+           bar, so a 100vh column pushes the hand below the visible viewport. */
+        .game-shell {
+          height: 100vh; height: 100dvh;
+          display: flex; justify-content: center;
+          overflow: hidden;
+        }
+        /* The play field is capped on wide screens so a desktop browser doesn't
+           strand the piles in the middle of an ocean of felt. */
+        .game-grid {
+          width: 100%; max-width: 1040px; height: 100%;
+          display: grid;
+          grid-template-columns: minmax(0, 1fr);
+          grid-template-rows: auto auto minmax(0, 1fr) auto auto auto auto auto;
+          grid-template-areas: "header" "opp" "board" "piles" "prompt" "msg" "status" "hand";
+          padding-left: env(safe-area-inset-left, 0px);
+          padding-right: env(safe-area-inset-right, 0px);
+        }
+        .ga-header { grid-area: header; }
+        .ga-opp    { grid-area: opp; }
+        .ga-board  { grid-area: board; min-height: 0; overflow-y: auto; }
+        .ga-piles  { grid-area: piles; }
+        .ga-prompt { grid-area: prompt; }
+        .ga-msg    { grid-area: msg; }
+        .ga-status { grid-area: status; }
+        .ga-hand   { grid-area: hand; }
+        /* Portrait: the rail is transparent and its children sit in their own
+           grid areas. Landscape turns it into a real side column (below). */
+        .rail { display: contents; }
+
+        /* ── Landscape on a phone: height is the scarce axis, width is free.
+           Move the opponents, the piles and the status line into a side rail so
+           the whole vertical budget goes to the board and the hand. ── */
+        @media (orientation: landscape) and (max-height: 560px) {
+          :root {
+            /* Now bounded by height, so the hand still fits in one row. */
+            --card-w: clamp(32px, 9.5vh, 44px);
+          }
+          .game-grid {
+            max-width: none;
+            grid-template-columns: minmax(0, 1fr) clamp(108px, 18vw, 156px);
+            grid-template-rows: auto minmax(0, 1fr) auto auto auto;
+            grid-template-areas:
+              "header header"
+              "board  rail"
+              "prompt rail"
+              "msg    rail"
+              "hand   rail";
+          }
+          .rail {
+            grid-area: rail; display: flex; flex-direction: column;
+            min-height: 0;
+          }
+          /* Only the opponent list scrolls. The piles and the status line — which
+             is where "whose turn is it" lives — stay pinned and always visible. */
+          .ga-opp {
+            /* !important: the portrait layout pins this row with an inline
+               flex-shrink: 0, which would otherwise win over this rule. */
+            flex: 1 1 auto !important; min-height: 0; overflow-y: auto;
+            flex-direction: column; gap: 4px !important; padding: 4px 6px;
+          }
+          .ga-piles, .ga-status { flex-shrink: 0; }
+          /* The status text has a narrow column to live in; let it stack. */
+          .ga-status { font-size: 11px; line-height: 1.5; padding: 5px 6px; }
+          .ga-status > span { display: block; margin: 0 !important; }
+          .ga-piles { flex-wrap: wrap; gap: 6px !important; padding: 2px 0; }
+          /* The decorative fan of card backs costs ~38px per opponent, which is
+             the difference between the status line fitting in the rail or not. */
+          .opp-fan  { display: none !important; }
+          .ga-header { padding-top: 3px; padding-bottom: 3px; }
+          .hand-hint { display: none; }
+        }
+
         @keyframes newCardPulse {
           0%   { box-shadow: 0 0 0 3px ${GOLD}, 0 0 18px ${GOLD}88; }
           50%  { box-shadow: 0 0 0 5px ${GOLD}, 0 0 28px ${GOLD}cc; }
@@ -703,8 +797,10 @@ function Game({ state, dispatch }) {
         .discard-card { animation: discardDrop .3s ease-out both; }
       `}</style>
 
+      <div className="game-grid">
+
       {/* ── Header ────────────────────────────────── */}
-      <div style={{
+      <div className="ga-header" style={{
         background: 'rgba(0,0,0,.5)', padding: '7px 12px',
         color: CREAM, flexShrink: 0,
         borderBottom: `1px solid ${GOLD}44`,
@@ -731,8 +827,12 @@ function Game({ state, dispatch }) {
 
       {showRules && <RulesModal onClose={() => setShowRules(false)} />}
 
+      {/* Opponents, piles and the status line. In portrait each one falls into
+          its own grid area; in landscape they stack into the side rail. */}
+      <div className="rail">
+
       {/* ── Opponents — share the width equally, no horizontal scroll ── */}
-      <div style={{
+      <div className="ga-opp" style={{
         display: 'flex', gap: 6, padding: '6px 10px',
         flexShrink: 0, justifyContent: 'center',
       }}>
@@ -760,9 +860,12 @@ function Game({ state, dispatch }) {
               }}>
                 {active ? '▶ ' : ''}{p.name}
               </div>
-              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 3, height: 38 }}>
+              <div className="opp-fan" style={{
+                display: 'flex', justifyContent: 'center', marginBottom: 3,
+                height: 'var(--card-h-sm)',
+              }}>
                 {Array.from({ length: miniN }).map((_, k) => (
-                  <div key={k} style={{ marginInlineStart: k === 0 ? 0 : -18 }}>
+                  <div key={k} style={{ marginInlineStart: k === 0 ? 0 : 'calc(var(--card-w-sm) * -.7)' }}>
                     <CardView card={{ id: 'b' + k }} back sm />
                   </div>
                 ))}
@@ -780,8 +883,170 @@ function Game({ state, dispatch }) {
         })}
       </div>
 
+      {/* ── Piles row ─────────────────────────────── */}
+      <div className="ga-piles" style={{
+        display: 'flex', justifyContent: 'center', alignItems: 'flex-end',
+        gap: 18, padding: '8px 0', flexShrink: 0,
+      }}>
+        {/* Beit card — hidden (blind ANT bet); takeable in draw phase before you've laid */}
+        {(state.beitPresent ?? !!state.beit) && (() => {
+          const canTake = state.phase === 'draw' && isMyTurn && !human.hasLaid;
+          const blocked = state.phase === 'draw' && isMyTurn && human.hasLaid;
+          return (
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ color: GOLD, fontSize: 10, marginBottom: 3 }}>🏠 בית</div>
+              <div
+                onClick={() => canTake && dispatch({ type: 'TAKE_BEIT' })}
+                style={{ cursor: canTake ? 'pointer' : 'default', opacity: blocked ? 0.4 : 1 }}
+                title={blocked ? 'אפשר לקחת בית רק לפני שהורדת (לאנט)' : undefined}
+              >
+                <CardView card={{ id: 'beit' }} back glow={canTake} />
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Draw pile */}
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ color: 'rgba(255,255,255,.55)', fontSize: 10, marginBottom: 3 }}>
+            חבילה ({state.deckCount ?? state.deck?.length ?? 0})
+          </div>
+          <div
+            onClick={() => state.phase === 'draw' && isMyTurn && dispatch({ type: 'DRAW' })}
+            style={{
+              width: 'var(--card-w)', height: 'var(--card-h)',
+              borderRadius: 'calc(var(--card-h) * .1)',
+              background: 'linear-gradient(145deg,#1e3a6e,#0f2245)',
+              border: `2px solid ${state.phase === 'draw' && isMyTurn ? GOLD : '#2d4d8a'}`,
+              cursor: state.phase === 'draw' && isMyTurn ? 'pointer' : 'default',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: state.phase === 'draw' && isMyTurn ? `0 0 14px ${GOLD}88` : '0 2px 8px rgba(0,0,0,.4)',
+              transition: 'box-shadow .2s',
+              backgroundImage: `repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(255,255,255,.04) 3px,rgba(255,255,255,.04) 6px)`,
+            }}
+          >
+            <span style={{ fontSize: 'calc(var(--card-h) * .39)', color: CREAM }}>🂠</span>
+          </div>
+        </div>
+
+        {/* Discard pile — cumulative; take the top only via the buying offer */}
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ color: 'rgba(255,255,255,.55)', fontSize: 10, marginBottom: 3 }}>
+            אשפה ({state.discard.length})
+          </div>
+          {discard ? (() => {
+            const pile = state.discard;
+            const depth = Math.min(pile.length, 4);
+            const shown = pile.slice(-depth); // oldest → top
+            return (
+              <div style={{
+                position: 'relative', margin: '0 auto',
+                width: `calc(var(--card-w) + ${(depth - 1) * 6}px)`,
+                height: `calc(var(--card-h) + ${(depth - 1) * 3}px)`,
+              }}>
+                {shown.map((c, idx) => {
+                  const isTop = idx === shown.length - 1;
+                  return (
+                    <div
+                      key={c.id}
+                      className="discard-card"
+                      style={{
+                        position: 'absolute', left: idx * 6, bottom: idx * 3, zIndex: idx,
+                        filter: isTop ? 'none' : 'brightness(.82)',
+                      }}
+                    >
+                      <CardView card={c} />
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })() : (
+            <div style={{
+              width: 'var(--card-w)', height: 'var(--card-h)',
+              borderRadius: 'calc(var(--card-h) * .1)',
+              border: '2px dashed rgba(255,255,255,.18)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <span style={{ color: 'rgba(255,255,255,.2)', fontSize: 18 }}>∅</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Buying prompt ─────────────────────────── */}
+      {state.phase === 'buying' && humanDecides && (
+        <div className="ga-prompt" style={{
+          background: '#1c2c3e', margin: '0 10px', borderRadius: 14,
+          padding: '11px 14px', color: CREAM, textAlign: 'center',
+          flexShrink: 0, border: '1px solid rgba(255,255,255,.12)',
+        }}>
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8 }}>
+            {isFreeOffer
+              ? `קח את ${discard ? cTxt(discard) : '?'} מהאשפה — בחינם?`
+              : `לקנות ${discard ? cTxt(discard) : '?'}? (+קלף קנס מהחבילה)`
+            }
+          </div>
+          {discard && (
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
+              <CardView card={discard} />
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+            <button
+              onClick={() => isFreeOffer
+                ? dispatch({ type: 'TAKE_FREE' })
+                : dispatch({ type: 'BUY', idx: buy.checker })
+              }
+              style={{
+                padding: '9px 24px', background: '#16a34a', color: 'white',
+                border: 'none', borderRadius: 9, cursor: 'pointer',
+                fontSize: 14, fontWeight: 700, fontFamily: 'inherit',
+              }}
+            >
+              {isFreeOffer ? '✓ קח' : '💰 קנה'}
+            </button>
+            <button
+              onClick={() => dispatch({ type: 'SKIP' })}
+              style={{
+                padding: '9px 24px', background: '#475569', color: 'white',
+                border: 'none', borderRadius: 9, cursor: 'pointer',
+                fontSize: 14, fontWeight: 700, fontFamily: 'inherit',
+              }}
+            >
+              ✕ וותר
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Message bar ───────────────────────────── */}
+      {state.msg && (
+        <div className="ga-msg" style={{
+          padding: '6px 12px', textAlign: 'center', fontSize: 13, flexShrink: 0,
+          background: state.msg.startsWith('✓') ? 'rgba(22,101,52,.85)' : 'rgba(127,29,29,.85)',
+          color: CREAM,
+        }}>
+          {state.msg}
+        </div>
+      )}
+
+      {/* ── Status bar ────────────────────────────── */}
+      <div className="ga-status" style={{
+        background: 'rgba(0,0,0,.45)', padding: '5px 12px',
+        color: 'rgba(255,255,255,.7)', fontSize: 12,
+        textAlign: 'center', flexShrink: 0,
+      }}>
+        <span style={{ fontWeight: 600 }}>{phaseLabel()}</span>
+        <span style={{ color: 'rgba(255,255,255,.45)', marginRight: 10 }}>
+          יד: {human.hand.length} • סה״כ: {human.totalScore} נק׳
+        </span>
+      </div>
+
+      </div>{/* /rail */}
+
       {/* ── Board ─────────────────────────────────── */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '6px 10px', minHeight: 0 }}>
+      <div className="ga-board" style={{ padding: '6px 10px' }}>
 
         {/* Staging area — shown only while accumulating groups before requirement is met */}
         {state.staging.length > 0 && (() => {
@@ -867,165 +1132,12 @@ function Game({ state, dispatch }) {
         )}
       </div>
 
-      {/* ── Piles row ─────────────────────────────── */}
-      <div style={{
-        display: 'flex', justifyContent: 'center', alignItems: 'flex-end',
-        gap: 18, padding: '8px 0', flexShrink: 0,
-      }}>
-        {/* Beit card — hidden (blind ANT bet); takeable in draw phase before you've laid */}
-        {(state.beitPresent ?? !!state.beit) && (() => {
-          const canTake = state.phase === 'draw' && isMyTurn && !human.hasLaid;
-          const blocked = state.phase === 'draw' && isMyTurn && human.hasLaid;
-          return (
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ color: GOLD, fontSize: 10, marginBottom: 3 }}>🏠 בית</div>
-              <div
-                onClick={() => canTake && dispatch({ type: 'TAKE_BEIT' })}
-                style={{ cursor: canTake ? 'pointer' : 'default', opacity: blocked ? 0.4 : 1 }}
-                title={blocked ? 'אפשר לקחת בית רק לפני שהורדת (לאנט)' : undefined}
-              >
-                <CardView card={{ id: 'beit' }} back glow={canTake} />
-              </div>
-            </div>
-          );
-        })()}
-
-        {/* Draw pile */}
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ color: 'rgba(255,255,255,.55)', fontSize: 10, marginBottom: 3 }}>
-            חבילה ({state.deckCount ?? state.deck?.length ?? 0})
-          </div>
-          <div
-            onClick={() => state.phase === 'draw' && isMyTurn && dispatch({ type: 'DRAW' })}
-            style={{
-              width: 44, height: 62, borderRadius: 6,
-              background: 'linear-gradient(145deg,#1e3a6e,#0f2245)',
-              border: `2px solid ${state.phase === 'draw' && isMyTurn ? GOLD : '#2d4d8a'}`,
-              cursor: state.phase === 'draw' && isMyTurn ? 'pointer' : 'default',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: state.phase === 'draw' && isMyTurn ? `0 0 14px ${GOLD}88` : '0 2px 8px rgba(0,0,0,.4)',
-              transition: 'box-shadow .2s',
-              backgroundImage: `repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(255,255,255,.04) 3px,rgba(255,255,255,.04) 6px)`,
-            }}
-          >
-            <span style={{ fontSize: 24, color: CREAM }}>🂠</span>
-          </div>
-        </div>
-
-        {/* Discard pile — cumulative; take the top only via the buying offer */}
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ color: 'rgba(255,255,255,.55)', fontSize: 10, marginBottom: 3 }}>
-            אשפה ({state.discard.length})
-          </div>
-          {discard ? (() => {
-            const pile = state.discard;
-            const depth = Math.min(pile.length, 4);
-            const shown = pile.slice(-depth); // oldest → top
-            return (
-              <div style={{ position: 'relative', width: 44 + (depth - 1) * 6, height: 62 + (depth - 1) * 3, margin: '0 auto' }}>
-                {shown.map((c, idx) => {
-                  const isTop = idx === shown.length - 1;
-                  return (
-                    <div
-                      key={c.id}
-                      className="discard-card"
-                      style={{
-                        position: 'absolute', left: idx * 6, bottom: idx * 3, zIndex: idx,
-                        filter: isTop ? 'none' : 'brightness(.82)',
-                      }}
-                    >
-                      <CardView card={c} />
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })() : (
-            <div style={{
-              width: 44, height: 62, borderRadius: 6,
-              border: '2px dashed rgba(255,255,255,.18)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <span style={{ color: 'rgba(255,255,255,.2)', fontSize: 18 }}>∅</span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ── Buying prompt ─────────────────────────── */}
-      {state.phase === 'buying' && humanDecides && (
-        <div style={{
-          background: '#1c2c3e', margin: '0 10px', borderRadius: 14,
-          padding: '11px 14px', color: CREAM, textAlign: 'center',
-          flexShrink: 0, border: '1px solid rgba(255,255,255,.12)',
-        }}>
-          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8 }}>
-            {isFreeOffer
-              ? `קח את ${discard ? cTxt(discard) : '?'} מהאשפה — בחינם?`
-              : `לקנות ${discard ? cTxt(discard) : '?'}? (+קלף קנס מהחבילה)`
-            }
-          </div>
-          {discard && (
-            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
-              <CardView card={discard} />
-            </div>
-          )}
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-            <button
-              onClick={() => isFreeOffer
-                ? dispatch({ type: 'TAKE_FREE' })
-                : dispatch({ type: 'BUY', idx: buy.checker })
-              }
-              style={{
-                padding: '9px 24px', background: '#16a34a', color: 'white',
-                border: 'none', borderRadius: 9, cursor: 'pointer',
-                fontSize: 14, fontWeight: 700, fontFamily: 'inherit',
-              }}
-            >
-              {isFreeOffer ? '✓ קח' : '💰 קנה'}
-            </button>
-            <button
-              onClick={() => dispatch({ type: 'SKIP' })}
-              style={{
-                padding: '9px 24px', background: '#475569', color: 'white',
-                border: 'none', borderRadius: 9, cursor: 'pointer',
-                fontSize: 14, fontWeight: 700, fontFamily: 'inherit',
-              }}
-            >
-              ✕ וותר
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ── Message bar ───────────────────────────── */}
-      {state.msg && (
-        <div style={{
-          padding: '6px 12px', textAlign: 'center', fontSize: 13, flexShrink: 0,
-          background: state.msg.startsWith('✓') ? 'rgba(22,101,52,.85)' : 'rgba(127,29,29,.85)',
-          color: CREAM,
-        }}>
-          {state.msg}
-        </div>
-      )}
-
-      {/* ── Status bar ────────────────────────────── */}
-      <div style={{
-        background: 'rgba(0,0,0,.45)', padding: '5px 12px',
-        color: 'rgba(255,255,255,.7)', fontSize: 12,
-        textAlign: 'center', flexShrink: 0,
-      }}>
-        <span style={{ fontWeight: 600 }}>{phaseLabel()}</span>
-        <span style={{ color: 'rgba(255,255,255,.45)', marginRight: 10 }}>
-          יד: {human.hand.length} • סה״כ: {human.totalScore} נק׳
-        </span>
-      </div>
 
       {/* ── Human hand area — always visible ─────── */}
       {(() => {
         const myTurn = isMyTurn && state.phase !== 'round_end' && state.phase !== 'game_end';
         return (
-      <div style={{
+      <div className="ga-hand" style={{
         background: myTurn
           ? 'linear-gradient(180deg, #7c4a09, #1a1206)'
           : '#0f172a',
@@ -1037,7 +1149,10 @@ function Game({ state, dispatch }) {
 
         {/* Action buttons — only when it's the human's action phase */}
         {isMyTurn && state.phase === 'action' && (
-            <div style={{ display: 'flex', gap: 4, marginBottom: 8, flexWrap: 'wrap' }}>
+            <div style={{
+              display: 'flex', gap: 4, marginBottom: 8, flexWrap: 'wrap',
+              maxWidth: 560, margin: '0 auto 8px',
+            }}>
               <Btn
                 label={!state.canLay ? '🚫 הורד (סבב ראשון)' : '⬇️ הורד'}
                 disabled={selCards.length < (state.mustUseJoker ? 2 : 3) || !state.canLay}
@@ -1073,9 +1188,9 @@ function Game({ state, dispatch }) {
           {isMyTurn && (state.phase === 'action' || state.phase === 'draw') && (
             <div style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              marginBottom: 6,
+              marginBottom: 6, maxWidth: 560, margin: '0 auto 6px',
             }}>
-              <span style={{ color: 'rgba(255,255,255,.4)', fontSize: 11 }}>
+              <span className="hand-hint" style={{ color: 'rgba(255,255,255,.4)', fontSize: 11 }}>
                 לחיצה ארוכה + גרירה לסידור הקלפים
               </span>
               <button
@@ -1132,11 +1247,14 @@ function Game({ state, dispatch }) {
         );
       })()}
 
-      {/* Drag ghost */}
+      </div>{/* /game-grid */}
+
+      {/* Drag ghost — centred on the finger, whatever the current card size */}
       {drag && (
         <div style={{
-          position: 'fixed', left: drag.x - 22, top: drag.y - 31,
-          pointerEvents: 'none', zIndex: 9999, transform: 'scale(1.15)',
+          position: 'fixed', left: drag.x, top: drag.y,
+          pointerEvents: 'none', zIndex: 9999,
+          transform: 'translate(-50%, -50%) scale(1.15)',
         }}>
           <CardView card={drag.card} />
         </div>
