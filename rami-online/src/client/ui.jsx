@@ -230,8 +230,9 @@ function RulesModal({ onClose }) {
           </Section>
 
           <Section title="🏠 קלף הבית">
-            במקום לשלוף, אפשר לקחת את "קלף הבית" (קלף מוסתר) — הימור לניסיון אנט.
-            אם לא הסתדר, אפשר ללחוץ "↩️ החזר בית" כדי להחזיר אותו ולבחור שליפה אחרת.
+            במקום לשלוף, אפשר לקחת את "קלף הבית" — קלף גלוי שכולם רואים, מיועד
+            לניסיון אנט. אם לא הסתדר, אפשר ללחוץ "↩️ החזר בית" כדי להחזיר אותו
+            ולבחור שליפה אחרת.
           </Section>
 
           <Section title="✋ סידור היד">
@@ -879,7 +880,7 @@ function Game({ state, dispatch }) {
         display: 'flex', justifyContent: 'center', alignItems: 'flex-end',
         gap: 18, padding: '8px 0', flexShrink: 0,
       }}>
-        {/* Beit card — hidden (blind ANT bet); takeable in draw phase before you've laid */}
+        {/* Beit card — face up; takeable in draw phase before you've laid (ANT only) */}
         {(state.beitPresent ?? !!state.beit) && (() => {
           const canTake = state.phase === 'draw' && isMyTurn && !human.hasLaid;
           const blocked = state.phase === 'draw' && isMyTurn && human.hasLaid;
@@ -891,7 +892,9 @@ function Game({ state, dispatch }) {
                 style={{ cursor: canTake ? 'pointer' : 'default', opacity: blocked ? 0.4 : 1 }}
                 title={blocked ? 'אפשר לקחת בית רק לפני שהורדת (לאנט)' : undefined}
               >
-                <CardView card={{ id: 'beit' }} back glow={canTake} />
+                {state.beit
+                  ? <CardView card={state.beit} glow={canTake} />
+                  : <CardView card={{ id: 'beit' }} back glow={canTake} />}
               </div>
             </div>
           );
