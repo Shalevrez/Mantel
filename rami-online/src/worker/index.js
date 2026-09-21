@@ -26,9 +26,9 @@ function makeCode() {
 export function viewFor(state, seat) {
   if (!state) return null;
   // `undoBefore` is the server's rollback snapshot of the acting player's turn. It
-  // carries their entire hand — and, for a beit attempt, the whole deck and the face
-  // of the hidden beit card — so it must never go out on the wire. The client only
-  // asks whether an undo is on offer and how big the board was; the board is public.
+  // carries their entire hand — and, for a beit attempt, the whole deck — so it must
+  // never go out on the wire. The client only asks whether an undo is on offer and
+  // how big the board was; the board is public.
   const ub = state.undoBefore;
   const undoBefore = ub ? { fromBeit: !!ub.fromBeit, board: ub.board || [] } : null;
   // Selection and staging are the acting player's private working area: which cards
@@ -36,10 +36,11 @@ export function viewFor(state, seat) {
   const acting = seat === state.cur;
   return {
     ...state,
-    // Never leak the deck contents or the hidden beit card's face
+    // Never leak the deck contents. The beit card itself is public — it's shown
+    // face up so everyone can see what's on offer.
     deck: undefined,
     deckCount: state.deck ? state.deck.length : 0,
-    beit: state.beit ? { hidden: true } : null,
+    beit: state.beit || null,
     beitPresent: !!state.beit,
     undoBefore,
     sel: acting ? (state.sel || []) : [],
