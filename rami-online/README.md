@@ -81,9 +81,17 @@ https://mantel.<שם-החשבון>.workers.dev
 > את זו: פריסה ידנית מה-CLI תוחלף בפריסה האוטומטית הבאה מ-Git אם הגדרות
 > ה-build שם עדיין שגויות. תקנו את ההגדרות בלוח הבקרה, או נתקו את חיבור ה-Git.
 
-> **הערה על Durable Objects:** הם חלק מהתוכנית החינמית של Cloudflare Workers.
-> הפריסה הראשונה יוצרת אוטומטית את מחלקת ה-`Room` (מוגדר ב-`wrangler.toml`
-> תחת `[[migrations]]`).
+> **הערה על Durable Objects:** הפריסה הראשונה יוצרת אוטומטית את מחלקת ה-`Room`
+> (מוגדר ב-`wrangler.toml` תחת `[[migrations]]`).
+>
+> חשוב: `wrangler.toml` משתמש ב-`new_sqlite_classes` ולא ב-`new_classes`.
+> Durable Objects מגובי-KV (`new_classes`) דורשים תוכנית Workers **בתשלום**;
+> הגרסה מגובת-SQLite עובדת גם בתוכנית החינמית, ומחלקת `Room` משתמשת רק
+> ב-`storage.get`/`storage.put` שנתמכים זהה בשתיהן.
+>
+> אי אפשר להחליף בין שני הסוגים על מחלקה שכבר קיימת — wrangler יחזיר
+> `Cannot apply new_sqlite_classes migration to existing class Room`. אם זה
+> קורה, ה-`Room` כבר נוצר כ-KV וצריך למחוק את ה-Worker וליצור אותו מחדש.
 
 ---
 
