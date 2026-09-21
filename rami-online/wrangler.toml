@@ -1,4 +1,8 @@
-name = "rami-online"
+# The Worker name IS the hostname: <name>.<account>.workers.dev.
+# Keep this matching the URL the game is actually shared on, otherwise
+# `npm run deploy` quietly publishes a second Worker on a new URL and the
+# old one keeps serving the broken build.
+name = "mantel"
 main = "src/worker/index.js"
 compatibility_date = "2024-09-01"
 
