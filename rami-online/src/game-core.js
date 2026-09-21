@@ -295,6 +295,7 @@ function G(state, action) {
   }
 
   if (type === 'BUY') {
+    if (state.phase !== 'buying' || !state.buy || !state.players[action.idx]) return state;
     const top = state.discard[state.discard.length - 1];
     const pen = state.deck[0];
     if (!top || !pen) {
@@ -319,6 +320,7 @@ function G(state, action) {
   }
 
   if (type === 'SKIP') {
+    if (state.phase !== 'buying' || !state.buy) return state;
     const n = state.players.length;
     const nc = nextCk(state.buy, n);
     if (nc === state.buy.origNext)
@@ -559,12 +561,30 @@ function G(state, action) {
   // ── AI actions (bypass staging) ───────────────────
   if (type === 'AI_LAY') {
     const p = state.players[state.cur];
-    const { groups } = action;
-    if (!p.hasLaid && !meetsReq(groups, state.mk)) return state;
-    const usedIds = new Set(groups.flatMap(g => g.cards.map(c => c.id)));
+    if (!state.canLay) return state;
+    const groups = Array.isArray(action.groups) ? action.groups : [];
+    if (!groups.length) return state;
+    // Resolve every card against the player's actual hand. The payload's card objects
+    // are never trusted: without this, a crafted AI_LAY lays fabricated groups on the
+    // board and costs the sender nothing, since the hand filter below matches no ids.
+    // Each id must be held, and may be spent only once across all groups.
+    const usedIds = new Set();
+    const resolved = [];
+    for (const g of groups) {
+      const cards = [];
+      for (const c of (g && Array.isArray(g.cards) ? g.cards : [])) {
+        const held = c && c.id ? p.hand.find(h => h.id === c.id) : null;
+        if (!held || usedIds.has(held.id)) return state;
+        usedIds.add(held.id);
+        cards.push(held);
+      }
+      if (!isGroup(cards)) return state; // also enforces the 3-card minimum
+      resolved.push({ cards });
+    }
+    if (!p.hasLaid && !meetsReq(resolved, state.mk)) return state;
     const newHand = p.hand.filter(c => !usedIds.has(c.id));
     if (newHand.length === 0) return state; // must keep a card to discard
-    const newGroups = groups.map(g => ({
+    const newGroups = resolved.map(g => ({
       id: uid(), type: isSeq(g.cards) ? 'seq' : 'set', cards: orderGroup(g.cards),
     }));
     const players = state.players.map((pl, i) =>
@@ -639,12 +659,17 @@ function G(state, action) {
     };
   }
 
-  if (type === 'NEW_HAND') return startHand(state);
-  if (type === 'NEXT_MK') {
-    if (state.mk >= 5) return { ...state, phase: 'game_end' };
+  // ── Round controls ────────────────────────────────
+  // Only valid between rounds. Unguarded, any seat could redeal mid-turn to escape a
+  // bad hand, and two players tapping "next" at round end would advance twice and
+  // skip a mishkakon. Once the first one lands the phase leaves 'round_end', so the
+  // second is a no-op.
+  if (type === 'NEW_HAND' || type === 'NEXT_MK' || type === 'GAME_END') {
+    if (state.phase !== 'round_end') return state;
+    if (type === 'NEW_HAND') return startHand(state);
+    if (type === 'GAME_END' || state.mk >= 5) return { ...state, phase: 'game_end' };
     return startHand({ ...state, mk: state.mk + 1, sivuv: 0 });
   }
-  if (type === 'GAME_END') return { ...state, phase: 'game_end' };
 
   return state;
 }

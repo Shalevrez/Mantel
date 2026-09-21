@@ -23,8 +23,17 @@ function makeCode() {
 // ── Redaction ────────────────────────────────────────
 // Build the view a specific seat is allowed to see: own hand
 // in full, everyone else's hand replaced by its length only.
-function viewFor(state, seat) {
+export function viewFor(state, seat) {
   if (!state) return null;
+  // `undoBefore` is the server's rollback snapshot of the acting player's turn. It
+  // carries their entire hand — and, for a beit attempt, the whole deck and the face
+  // of the hidden beit card — so it must never go out on the wire. The client only
+  // asks whether an undo is on offer and how big the board was; the board is public.
+  const ub = state.undoBefore;
+  const undoBefore = ub ? { fromBeit: !!ub.fromBeit, board: ub.board || [] } : null;
+  // Selection and staging are the acting player's private working area: which cards
+  // they picked up, and the groups they've built but not yet committed.
+  const acting = seat === state.cur;
   return {
     ...state,
     // Never leak the deck contents or the hidden beit card's face
@@ -32,6 +41,9 @@ function viewFor(state, seat) {
     deckCount: state.deck ? state.deck.length : 0,
     beit: state.beit ? { hidden: true } : null,
     beitPresent: !!state.beit,
+    undoBefore,
+    sel: acting ? (state.sel || []) : [],
+    staging: acting ? (state.staging || []) : [],
     players: state.players.map((p, i) => {
       if (i === seat) return { ...p, seat: i, you: true };
       // Opponents: hide hand cards, keep count + public info
@@ -224,7 +236,9 @@ export class Room {
       // Only the current player may act (except buying, where the checker acts)
       const action = msg.action;
       if (!this.actionAllowed(seat, action)) return;
-      this.state = G(this.state, action);
+      // Last line of defence: one bad message must not kill the room for everyone.
+      try { this.state = G(this.state, action); }
+      catch (e) { console.error('action failed', action && action.type, e); return; }
       await this.persist();
       this.broadcastState();
       this.maybeRunAI();
@@ -235,14 +249,23 @@ export class Room {
   // ── Authorization: is this seat allowed to take this action now? ──
   actionAllowed(seat, action) {
     const st = this.state;
-    if (!st) return false;
-    // Buying phase: only the current "checker" seat may TAKE_FREE / BUY / SKIP
-    if (st.phase === 'buying' && st.buy) {
-      if (['TAKE_FREE', 'SKIP'].includes(action.type)) return seat === st.buy.checker;
+    if (!st || !action || typeof action.type !== 'string') return false;
+    // Server-internal actions, never accepted from a client. The AI_* pair skips the
+    // staging/validation path that human actions go through, and __INIT__ would re-deal
+    // the entire game from a client-supplied player list.
+    if (action.type.startsWith('AI_') || action.type === '__INIT__') return false;
+    // Round-end controls: only between rounds. Otherwise any seat could redeal
+    // mid-turn, or two clients tapping "next" could skip a mishkakon between them.
+    if (['NEW_HAND', 'NEXT_MK', 'GAME_END'].includes(action.type))
+      return st.phase === 'round_end';
+    // Buying: only the current "checker" seat, and only while buying is actually open.
+    // Outside that window these are not merely pointless — SKIP dereferences st.buy and
+    // BUY indexes players by a client-supplied idx, so either one crashes the room.
+    if (['TAKE_FREE', 'BUY', 'SKIP'].includes(action.type)) {
+      if (st.phase !== 'buying' || !st.buy) return false;
       if (action.type === 'BUY') return seat === st.buy.checker && action.idx === seat;
+      return seat === st.buy.checker;
     }
-    // Round-end controls (NEW_HAND / NEXT_MK / GAME_END): any seat may advance
-    if (['NEW_HAND', 'NEXT_MK', 'GAME_END'].includes(action.type)) return true;
     // Everything else: only the player whose turn it is
     return seat === st.cur;
   }
@@ -298,7 +321,12 @@ export class Room {
       const { groups } = findAIGroups(cur.hand);
       const usedIds = new Set(groups.flatMap(g => g.cards.map(c => c.id)));
       const spares = cur.hand.filter(c => !usedIds.has(c.id));
-      if (meetsReq(groups, st.mk) && spares.length >= 1) { this.state = G(st, { type: 'AI_LAY', groups }); return; }
+      if (meetsReq(groups, st.mk) && spares.length >= 1) {
+        // AI_LAY re-validates against the real hand and may refuse, returning the
+        // state untouched. Fall through to a discard rather than spinning on it.
+        const laid = G(st, { type: 'AI_LAY', groups });
+        if (laid !== st) { this.state = laid; return; }
+      }
       this.state = G(st, { type: 'DISCARD', cid: aiDiscard(cur.hand).id }); return;
     }
     if (cur.hand.length >= 2) {
