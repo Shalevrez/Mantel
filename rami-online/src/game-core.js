@@ -419,7 +419,7 @@ function G(state, action) {
     const ub = state.undoBefore;
     if (!ub) return state;
     if (ub.fromBeit) {
-      // Beit was a blind ANT attempt: full turn reset — return the beit, restore the
+      // Beit was an ANT attempt: full turn reset — return the beit, restore the
       // deck/discard, undo all lays, and go back to the draw decision.
       const players = state.players.map((pl, i) =>
         i === state.cur ? { ...pl, hand: ub.hand, hasLaid: ub.hasLaid, newIds: [] } : pl
