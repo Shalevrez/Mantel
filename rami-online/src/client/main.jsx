@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, Component } from "react";
 import { createRoot } from "react-dom/client";
 import { FELT, FELTD, GOLD, CREAM } from "../game-core.js";
 import { Game, RoundEnd, GameEnd, RulesModal } from "./ui.jsx";
@@ -352,5 +352,53 @@ const errorStyle = {
   fontSize: 13, textAlign: 'center',
 };
 
+
+// ═══════════════════════════════════════════════════════
+// ERROR BOUNDARY
+// A throw during render unmounts the whole tree, which on this
+// dark-green page looks identical to "nothing happened". Catch it
+// and say so instead.
+// ═══════════════════════════════════════════════════════
+
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { err: null };
+  }
+  static getDerivedStateFromError(err) {
+    return { err };
+  }
+  componentDidCatch(err, info) {
+    console.error('Mantel crashed during render:', err, info);
+  }
+  render() {
+    if (!this.state.err) return this.props.children;
+    return (
+      <Shell>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 44, marginBottom: 6 }}>🃏</div>
+          <h2 style={{ margin: '0 0 6px', color: FELTD, fontSize: 20 }}>משהו השתבש</h2>
+          <p style={{ color: '#57534e', fontSize: 14, lineHeight: 1.6, margin: '0 0 14px' }}>
+            המשחק נתקל בשגיאה בלתי צפויה. טעינה מחדש בדרך כלל פותרת את זה.
+          </p>
+          <button onClick={() => location.reload()} style={primaryBtn}>↻ טען מחדש</button>
+          <code style={{
+            display: 'block', marginTop: 12, padding: '8px 10px', borderRadius: 8,
+            background: '#f5f5f4', color: '#b91c1c', fontSize: 12,
+            direction: 'ltr', textAlign: 'left', whiteSpace: 'pre-wrap',
+            wordBreak: 'break-all', maxHeight: 120, overflow: 'auto',
+          }}>
+            {String(this.state.err && this.state.err.message ? this.state.err.message : this.state.err)}
+          </code>
+        </div>
+      </Shell>
+    );
+  }
+}
+
 // ── Mount ──
-createRoot(document.getElementById('root')).render(<App />);
+createRoot(document.getElementById('root')).render(
+  <ErrorBoundary>
+    <App />
+  </ErrorBoundary>
+);

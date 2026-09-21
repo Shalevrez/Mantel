@@ -32,47 +32,85 @@ rami-online/
 
 ## העלאה — שלב אחר שלב
 
-### 1. העלאת התיקייה לגיטהאב
+> **חשוב — מבנה המאגר.** הפרויקט יושב בתת-תיקייה `rami-online/` בתוך המאגר
+> `mantel`, ולא בשורש המאגר. כל פקודת build/deploy חייבת לרוץ מתוך
+> `rami-online/`. זו הסיבה הנפוצה ביותר לפריסה שבורה: אם ה-build רץ משורש
+> המאגר הוא לא מוצא `package.json`, ה-build לא מתבצע, ומה שמועלה הוא קוד
+> המקור במקום תיקיית `dist` הבנויה — התוצאה היא מסך ירוק ריק.
+
+### 1. העלאה לגיטהאב
 
 ```bash
-cd rami-online
-git init
 git add .
 git commit -m "רמי אקסטרים אונליין"
-git branch -M main
-git remote add origin https://github.com/<שם-המשתמש-שלך>/rami-online.git
-git push -u origin main
+git push
 ```
 
 ### 2. חיבור ל-Cloudflare
 
 יש שתי דרכים. **דרך ב' (CLI) מומלצת** כי היא פשוטה יותר עבור פרויקט עם
-Durable Objects.
+Durable Objects, והיא לא תלויה בהגדרות build בלוח הבקרה.
+
+#### דרך ב' — משורת הפקודה (מומלץ)
+```bash
+cd rami-online            # ← חובה: הפרויקט הוא תת-תיקייה במאגר
+npm install
+npx wrangler login        # פותח דפדפן להתחברות לחשבון Cloudflare
+npm run deploy            # בונה את הלקוח (vite build) ואז פורס (wrangler deploy)
+```
+
+`npm run deploy` הוא `npm run build && wrangler deploy` — הבנייה *חייבת* לרוץ
+לפני הפריסה, כי `wrangler.toml` מגיש את התיקייה `./dist` כקבצים סטטיים
+ו-`dist/` לא נשמר בגיט (הוא ב-`.gitignore`).
+
+בסיום, wrangler ידפיס את הכתובת:
+```
+https://mantel.<שם-החשבון>.workers.dev
+```
 
 #### דרך א' — דרך לוח הבקרה של Cloudflare (Dashboard)
 1. היכנסו ל-[dash.cloudflare.com](https://dash.cloudflare.com) → **Workers & Pages**.
 2. לחצו **Create** → **Workers** → **Connect to Git** ובחרו את המאגר.
-3. הגדרות build:
+3. הגדרות build — שלושתן נדרשות:
+   - **Root directory:** `rami-online` ← בלי זה הפריסה תישבר
    - **Build command:** `npm run build`
    - **Deploy command:** `npx wrangler deploy`
 4. לחצו **Save and Deploy**.
 
-#### דרך ב' — משורת הפקודה (מומלץ)
-```bash
-npm install
-npx wrangler login          # פותח דפדפן להתחברות לחשבון Cloudflare
-npm run deploy              # בונה את הלקוח ופורס את השרת
-```
-
-בסיום, wrangler ידפיס כתובת כמו:
-```
-https://rami-online.<שם-החשבון>.workers.dev
-```
-זו הכתובת של המשחק. שתפו אותה, וכל אחד יכול להיכנס עם קוד חדר. ✓
+> אם הפרויקט כבר מחובר ל-Git בלוח הבקרה, שימו לב ששתי דרכי הפריסה דורסות זו
+> את זו: פריסה ידנית מה-CLI תוחלף בפריסה האוטומטית הבאה מ-Git אם הגדרות
+> ה-build שם עדיין שגויות. תקנו את ההגדרות בלוח הבקרה, או נתקו את חיבור ה-Git.
 
 > **הערה על Durable Objects:** הם חלק מהתוכנית החינמית של Cloudflare Workers.
 > הפריסה הראשונה יוצרת אוטומטית את מחלקת ה-`Room` (מוגדר ב-`wrangler.toml`
 > תחת `[[migrations]]`).
+
+---
+
+## פתרון תקלות
+
+### המסך ירוק וריק ולא קורה כלום
+
+זה אומר ש-`index.html` הוגש בהצלחה אבל חבילת ה-JavaScript לא נטענה, ולכן React
+מעולם לא עלה. הרקע הירוק הוא פשוט ה-`background` של ה-`<body>`.
+
+מאז נוספה לדף בדיקה אוטומטית: אם האפליקציה לא עלתה תוך 6 שניות, מוצגת הודעת
+שגיאה בעברית עם כתובת הקובץ שנכשל — במקום מסך ירוק שקט.
+
+**איך לאמת בוודאות:** פתחו את הכתובת בדפדפן → `F12` → לשונית **Network** →
+רעננו. חפשו את הבקשה ל-JavaScript:
+
+| מה רואים | המשמעות | התיקון |
+|---|---|---|
+| בקשה ל-`/src/client/main.jsx` עם `404` | הועלה קוד המקור, ה-build לא רץ | הריצו `npm run deploy` מתוך `rami-online/` |
+| בקשה ל-`/assets/index-*.js` עם `404` | `dist` ישן/חסר בפריסה | בנו מחדש ופרסו מחדש |
+| `/assets/index-*.js` מחזיר `200` אבל עם `Content-Type: text/html` | הגשת קבצים סטטיים לא מוגדרת נכון | ודאו ש-`[assets] directory = "./dist"` ב-`wrangler.toml` |
+
+### הכתובת שקיבלתי מ-wrangler שונה מהכתובת שאני משתמש בה
+
+שם ה-Worker ב-`wrangler.toml` הוא שם המארח. הוא מוגדר כאן כ-`mantel`, כדי
+שהפריסה תעדכן את `https://mantel.<שם-החשבון>.workers.dev`. אם תשנו את השם,
+תיווצר פריסה חדשה בכתובת אחרת והישנה תמשיך לרוץ.
 
 ---
 

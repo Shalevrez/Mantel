@@ -8,10 +8,95 @@
     <style>
       html, body, #root { height: 100%; margin: 0; padding: 0; background: #0d2e1a; }
       * { -webkit-tap-highlight-color: transparent; }
+
+      /* Boot failure panel — hidden until the watchdog below decides the app never mounted. */
+      #boot-error {
+        display: none;
+        position: fixed; inset: 0; z-index: 9999;
+        align-items: center; justify-content: center;
+        padding: 16px; direction: rtl;
+        font-family: 'Segoe UI', Arial, sans-serif;
+        background: #0d2e1a;
+      }
+      #boot-error.show { display: flex; }
+      #boot-error .card {
+        background: #faf7f0; border-radius: 22px; padding: 26px 24px;
+        max-width: 390px; width: 100%; text-align: center;
+        border: 2px solid #c9a84777; box-shadow: 0 24px 72px rgba(0,0,0,.6);
+      }
+      #boot-error h1 { margin: 0 0 6px; font-size: 20px; color: #0d2e1a; }
+      #boot-error p { margin: 0 0 14px; font-size: 14px; color: #57534e; line-height: 1.6; }
+      #boot-error code {
+        display: block; margin: 10px 0 0; padding: 8px 10px; border-radius: 8px;
+        background: #f5f5f4; color: #b91c1c; font-size: 12px; direction: ltr;
+        text-align: left; white-space: pre-wrap; word-break: break-all; max-height: 120px;
+        overflow: auto;
+      }
+      #boot-error button {
+        width: 100%; padding: 13px 0; background: #14532d; color: #c9a847;
+        border: 2px solid #c9a84788; border-radius: 13px;
+        font-size: 16px; font-weight: 700; cursor: pointer; font-family: inherit;
+      }
     </style>
   </head>
   <body>
     <div id="root"></div>
+
+    <div id="boot-error">
+      <div class="card">
+        <div style="font-size:44px;margin-bottom:6px">🃏</div>
+        <h1>המשחק לא נטען</h1>
+        <p>
+          קבצי האפליקציה לא הגיעו מהשרת, ולכן המסך נשאר ריק.<br />
+          בדרך כלל זה אומר שהאתר הועלה בלי <code style="display:inline;padding:1px 5px;color:#14532d;background:#e7e5e4;direction:ltr">npm run build</code>
+          או שתיקיית <code style="display:inline;padding:1px 5px;color:#14532d;background:#e7e5e4;direction:ltr">dist</code> לא נפרסה.
+        </p>
+        <button onclick="location.reload()">↻ נסה שוב</button>
+        <code id="boot-error-detail" style="display:none"></code>
+      </div>
+    </div>
+
+    <!--
+      Classic (non-module) watchdog: it runs even when the module bundle itself
+      fails to parse or 404s, which is exactly the case a module script cannot
+      report for itself. Without it a broken deploy renders as a silent green page.
+    -->
+    <script>
+      (function () {
+        var detail = '';
+
+        function note(msg) {
+          if (!detail && msg) detail = String(msg).slice(0, 400);
+        }
+
+        // Resource errors (a 404 or wrong MIME on the bundle) do not bubble,
+        // so listen in the capture phase.
+        window.addEventListener('error', function (e) {
+          if (e.target && e.target !== window && e.target.src) note('failed to load: ' + e.target.src);
+          else note(e.message);
+        }, true);
+        window.addEventListener('unhandledrejection', function (e) {
+          note(e.reason && e.reason.message ? e.reason.message : e.reason);
+        });
+
+        function check() {
+          var root = document.getElementById('root');
+          if (root && root.childNodes.length) return; // React mounted — nothing to do.
+          var panel = document.getElementById('boot-error');
+          if (!panel) return;
+          if (detail) {
+            var box = document.getElementById('boot-error-detail');
+            box.textContent = detail;
+            box.style.display = 'block';
+          }
+          panel.className = 'show';
+        }
+
+        // Give the bundle a fair chance on a slow connection before giving up.
+        setTimeout(check, 6000);
+      })();
+    </script>
+
     <script type="module" src="/src/client/main.jsx"></script>
   </body>
 </html>
