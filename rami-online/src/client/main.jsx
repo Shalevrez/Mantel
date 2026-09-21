@@ -290,12 +290,16 @@ function Shell({ children }) {
   );
 }
 
-// ── Small version label, bottom corner, like any other app ──
-function VersionTag({ color = '#a8a29e' }) {
+// ── Small version label pinned to the corner of the screen, like any other app.
+// Fixed to the viewport (not the card), clear of the iOS home indicator, and
+// click-through so it can never swallow a tap. Sits below the rules modal.
+function VersionTag() {
   return (
     <div style={{
-      textAlign: 'center', marginTop: 14, fontSize: 10,
-      color, letterSpacing: 0.5, direction: 'ltr', userSelect: 'text',
+      position: 'fixed', left: 10, bottom: 'calc(8px + env(safe-area-inset-bottom, 0px))',
+      fontSize: 10, color: 'rgba(255,255,255,.45)', letterSpacing: 0.5,
+      direction: 'ltr', pointerEvents: 'none', zIndex: 50,
+      textShadow: '0 1px 2px rgba(0,0,0,.5)',
     }}>
       v{APP_VERSION}
     </div>
@@ -312,7 +316,7 @@ function Splash({ text }) {
       <div style={{ textAlign: 'center' }}>
         <div style={{ fontSize: 44, marginBottom: 10 }}>🃏</div>
         {text}
-        <VersionTag color={`${GOLD}88`} />
+        <VersionTag />
       </div>
     </div>
   );
