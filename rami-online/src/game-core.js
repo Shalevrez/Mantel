@@ -382,10 +382,16 @@ function G(state, action) {
   if (type === 'CLEAR_STAGE') return { ...state, staging: [], sel: [] };
 
   // ── Manual hand arrangement ───────────────────────
+  // Arranging your own hand is private housekeeping: it touches nobody else's
+  // cards and no game rule, so it is allowed at ANY time, not just on your turn.
+  // `action.seat` says whose hand to rearrange (the server stamps the sender's
+  // seat onto the action); it falls back to the current player for local use.
+  const handSeat = Number.isInteger(action.seat) ? action.seat : state.cur;
+
   // Move a card to sit just before another card in the hand (drag-to-reorder).
   if (type === 'REORDER') {
-    const p = state.players[state.cur];
-    if (p.isAI) return state;
+    const p = state.players[handSeat];
+    if (!p || p.isAI) return state;
     const { cid, targetId } = action;
     if (cid === targetId) return state;
     const hand = [...p.hand];
@@ -394,14 +400,16 @@ function G(state, action) {
     const [moved] = hand.splice(from, 1);
     let to = hand.findIndex(c => c.id === targetId);
     if (to < 0) hand.push(moved); else hand.splice(to, 0, moved);
-    const players = state.players.map((pl, i) => i === state.cur ? { ...pl, hand } : pl);
+    const players = state.players.map((pl, i) => i === handSeat ? { ...pl, hand } : pl);
     return { ...state, players };
   }
 
-  // Auto-sort the current player's hand (by suit then value).
+  // Auto-sort a player's own hand (by suit then value).
   if (type === 'SORT') {
+    const p = state.players[handSeat];
+    if (!p || p.isAI) return state;
     const players = state.players.map((pl, i) =>
-      i === state.cur && !pl.isAI ? { ...pl, hand: sortHand(pl.hand) } : pl
+      i === handSeat ? { ...pl, hand: sortHand(pl.hand) } : pl
     );
     return { ...state, players };
   }

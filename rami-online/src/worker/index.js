@@ -71,6 +71,7 @@ export class Room {
     this.code = null;
     this.started = false;
     this.sockets = new Map();      // connId -> ws
+    this.aiPending = false;        // an AI move is already scheduled (see scheduleAI)
   }
 
   // Persisted load (survives DO eviction)
@@ -233,13 +234,24 @@ export class Room {
     // ── A game action ──
     if (msg.t === 'action') {
       if (!this.started || !this.state) return;
-      // Only the current player may act (except buying, where the checker acts)
-      const action = msg.action;
+      // Only the current player may act (except buying, where the checker acts,
+      // and hand arrangement, which every seat may do at any time).
+      // The sender's seat is stamped on server-side so a client can never claim
+      // another seat's identity by putting `seat` in the payload itself.
+      if (!msg.action || typeof msg.action !== 'object') return;
+      const action = { ...msg.action, seat };
       if (!this.actionAllowed(seat, action)) return;
       // Last line of defence: one bad message must not kill the room for everyone.
       try { this.state = G(this.state, action); }
       catch (e) { console.error('action failed', action && action.type, e); return; }
       await this.persist();
+      // Hand arrangement changes nothing anyone else can see and never changes
+      // whose turn it is: push it back to its owner only, and don't poke the AI
+      // (that would queue a second move on top of the one already scheduled).
+      if (action.type === 'REORDER' || action.type === 'SORT') {
+        this.sendState(seat);
+        return;
+      }
       this.broadcastState();
       this.maybeRunAI();
       return;
@@ -254,6 +266,11 @@ export class Room {
     // staging/validation path that human actions go through, and __INIT__ would re-deal
     // the entire game from a client-supplied player list.
     if (action.type.startsWith('AI_') || action.type === '__INIT__') return false;
+    // Arranging your own hand is private and rule-free: allowed from any seat at
+    // any time, including while someone else is playing. The reducer only ever
+    // touches `action.seat`'s hand, and that seat was stamped by the server.
+    if (action.type === 'REORDER' || action.type === 'SORT')
+      return seat >= 0 && seat < st.players.length;
     // Round-end controls: only between rounds. Otherwise any seat could redeal
     // mid-turn, or two clients tapping "next" could skip a mishkakon between them.
     if (['NEW_HAND', 'NEXT_MK', 'GAME_END'].includes(action.type))
@@ -290,7 +307,12 @@ export class Room {
   scheduleAI(fn) {
     // small delay so humans see the AI move; DO alarms would be more robust,
     // but a short setTimeout is fine within a single active request lifetime.
+    // One at a time: maybeRunAI can be reached more than once for the same AI
+    // turn, and without this guard the AI would play its move twice.
+    if (this.aiPending) return;
+    this.aiPending = true;
     setTimeout(async () => {
+      this.aiPending = false;
       try { fn(); await this.persist(); this.broadcastState(); this.maybeRunAI(); }
       catch (e) { /* swallow */ }
     }, 500 + Math.random() * 400);

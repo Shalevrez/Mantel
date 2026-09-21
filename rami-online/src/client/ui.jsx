@@ -11,6 +11,7 @@ import {
   isSeq, isSet, isGroup, orderSeq, orderGroup, jokerValues, attachPos, meetsReq,
   sortHand,
 } from "../game-core.js";
+import { RELEASES } from "../releases.js";
 
 
 function CardView({ card, sel, onClick, sm, back, glow, faded, newCard }) {
@@ -235,8 +236,9 @@ function RulesModal({ onClose }) {
           </Section>
 
           <Section title="✋ סידור היד">
-            אפשר לסדר את הקלפים ביד כרצונך: <b>לחיצה ארוכה + גרירה</b> של קלף על קלף
-            אחר. כפתור <b>🔀 מיין</b> ממיין אוטומטית לפי צורה וערך.
+            אפשר לסדר את הקלפים ביד כרצונך <b>בכל רגע — גם כשזה לא התור שלך</b>:
+            <b> לחיצה ארוכה + גרירה</b> של קלף על קלף אחר. כפתור <b>🔀 מיין</b> ממיין
+            אוטומטית לפי צורה וערך. הסידור שלך נשמר ואף שחקן אחר לא רואה אותו.
           </Section>
         </div>
 
@@ -247,6 +249,123 @@ function RulesModal({ onClose }) {
             border: 'none', borderRadius: 12, fontSize: 16, fontWeight: 700,
             cursor: 'pointer', fontFamily: 'inherit',
           }}>הבנתי, בוא נשחק!</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
+// RELEASE NOTES ("מה חדש")
+// A full screen of what changed, per version. Opens from the
+// home screen and from the in-game header, and pops itself once
+// after an upgrade (see main.jsx).
+// ═══════════════════════════════════════════════════════
+
+function ReleaseNotes({ onClose, current }) {
+  // Newest release is expanded; older ones collapse into a short list.
+  const [openAll, setOpenAll] = useState(false);
+  const shown = openAll ? RELEASES : RELEASES.slice(0, 1);
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 1000,
+        background: 'rgba(0,0,0,.6)', backdropFilter: 'blur(2px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        direction: 'rtl', padding: 14,
+        fontFamily: "'Noto Sans Hebrew','Segoe UI',Arial,sans-serif",
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: CREAM, borderRadius: 20, maxWidth: 440, width: '100%',
+          maxHeight: '88vh', display: 'flex', flexDirection: 'column',
+          border: `2px solid ${GOLD}88`, boxShadow: '0 24px 72px rgba(0,0,0,.6)',
+          overflow: 'hidden',
+        }}
+      >
+        {/* Header */}
+        <div style={{
+          background: FELT, padding: '14px 18px', display: 'flex',
+          alignItems: 'center', justifyContent: 'space-between', flexShrink: 0,
+        }}>
+          <span style={{ color: GOLD, fontSize: 20, fontWeight: 700, fontFamily: 'Georgia,serif' }}>
+            🆕 מה חדש
+          </span>
+          <button onClick={onClose} style={{
+            background: 'rgba(255,255,255,.15)', color: CREAM, border: 'none',
+            borderRadius: 8, width: 30, height: 30, fontSize: 18, cursor: 'pointer',
+            fontWeight: 700, lineHeight: 1,
+          }}>✕</button>
+        </div>
+
+        {/* Scrollable body */}
+        <div style={{ padding: '18px 20px', overflowY: 'auto' }}>
+          {shown.map((rel, idx) => (
+            <div key={rel.version} style={{ marginBottom: 20 }}>
+              <div style={{
+                display: 'flex', alignItems: 'baseline', gap: 8,
+                borderBottom: `2px solid ${GOLD}55`, paddingBottom: 6, marginBottom: 10,
+              }}>
+                <span style={{
+                  background: FELT, color: GOLD, borderRadius: 8,
+                  padding: '3px 9px', fontSize: 13, fontWeight: 700,
+                  direction: 'ltr', fontFamily: 'Georgia,serif',
+                }}>
+                  v{rel.version}
+                </span>
+                <span style={{ fontWeight: 700, color: FELTD, fontSize: 15 }}>{rel.title}</span>
+                <span style={{ marginInlineStart: 'auto', color: '#a8a29e', fontSize: 11 }}>
+                  {rel.date}
+                </span>
+              </div>
+
+              {idx === 0 && current && current !== rel.version && (
+                <div style={{
+                  background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10,
+                  padding: '7px 10px', marginBottom: 10, color: '#92400e', fontSize: 12,
+                }}>
+                  הגרסה שרצה אצלך כרגע היא <b dir="ltr">v{current}</b>. אם משהו כאן חסר —
+                  רעננו את הדף כדי לקבל את הגרסה האחרונה.
+                </div>
+              )}
+
+              {rel.changes.map((ch, i) => (
+                <div key={i} style={{ display: 'flex', gap: 10, marginBottom: 11 }}>
+                  <div style={{ fontSize: 19, lineHeight: 1.2, flexShrink: 0 }}>{ch.icon}</div>
+                  <div>
+                    <div style={{ fontWeight: 700, color: FELTD, fontSize: 14 }}>{ch.title}</div>
+                    <div style={{ color: '#57534e', fontSize: 13, lineHeight: 1.65 }}>{ch.text}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
+
+          {!openAll && RELEASES.length > 1 && (
+            <button
+              onClick={() => setOpenAll(true)}
+              style={{
+                width: '100%', padding: '10px 0', background: 'transparent',
+                color: FELT, border: `2px solid ${FELT}33`, borderRadius: 11,
+                fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              ↓ גרסאות קודמות ({RELEASES.length - 1})
+            </button>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: 14, flexShrink: 0, borderTop: '1px solid #e7e5e4' }}>
+          <button onClick={onClose} style={{
+            width: '100%', padding: '12px 0', background: FELT, color: GOLD,
+            border: 'none', borderRadius: 12, fontSize: 16, fontWeight: 700,
+            cursor: 'pointer', fontFamily: 'inherit',
+          }}>סגור</button>
         </div>
       </div>
     </div>
@@ -547,6 +666,7 @@ function GameEnd({ state, onRestart }) {
 function Game({ state, dispatch }) {
   const [attachMode, setAttachMode] = useState(false);
   const [showRules, setShowRules] = useState(false);
+  const [showNotes, setShowNotes] = useState(false);
   // Long-press drag: { card, x, y } once a drag is active
   const [drag, setDrag] = useState(null);
   const dragRef = useRef({ timer: null, startX: 0, startY: 0, card: null, active: false });
@@ -572,9 +692,10 @@ function Game({ state, dispatch }) {
   const selCards   = human.hand.filter(c => state.sel.includes(c.id) && !stagedIds.has(c.id));
 
   // ── Long-press drag: reorder within hand, or attach to a board group ──
-  const canDragCard = (card) =>
-    (state.phase === 'action' || state.phase === 'draw') &&
-    isMyTurn && !stagedIds.has(card.id);
+  // Rearranging your own hand is allowed at ANY time — also while you're waiting
+  // for someone else to play. Only the "drop on a board group" half of the drag
+  // (an attach) is restricted to your own turn; see endPress.
+  const canDragCard = (card) => !stagedIds.has(card.id);
 
   function startPress(card, e) {
     if (!canDragCard(card)) return;
@@ -608,7 +729,7 @@ function Game({ state, dispatch }) {
       const el = document.elementFromPoint(pt.clientX, pt.clientY);
       const groupEl = el && el.closest('[data-gid]');
       const cardEl = el && el.closest('[data-cardid]');
-      if (groupEl) {
+      if (groupEl && isMyTurn) {
         const gid = groupEl.getAttribute('data-gid');
         // If the dragged card is part of a current multi-card selection, attach the
         // whole selection at once; otherwise attach just the dragged card.
@@ -729,14 +850,22 @@ function Game({ state, dispatch }) {
         }}>
           {state.canLay ? '✓ הורדה' : '⚠ סבב ראשון'}
         </span>
-        <button onClick={() => setShowRules(true)} style={{
-          background: 'rgba(255,255,255,.12)', color: CREAM, border: 'none',
-          borderRadius: 8, fontSize: 12, fontWeight: 700, padding: '3px 9px',
-          cursor: 'pointer', fontFamily: 'inherit',
-        }}>📖 חוקים</button>
+        <span style={{ display: 'flex', gap: 5 }}>
+          <button onClick={() => setShowRules(true)} style={{
+            background: 'rgba(255,255,255,.12)', color: CREAM, border: 'none',
+            borderRadius: 8, fontSize: 12, fontWeight: 700, padding: '3px 9px',
+            cursor: 'pointer', fontFamily: 'inherit',
+          }}>📖 חוקים</button>
+          <button onClick={() => setShowNotes(true)} title="מה חדש בגרסה" style={{
+            background: 'rgba(255,255,255,.12)', color: CREAM, border: 'none',
+            borderRadius: 8, fontSize: 12, fontWeight: 700, padding: '3px 8px',
+            cursor: 'pointer', fontFamily: 'inherit',
+          }}>🆕</button>
+        </span>
       </div>
 
       {showRules && <RulesModal onClose={() => setShowRules(false)} />}
+      {showNotes && <ReleaseNotes onClose={() => setShowNotes(false)} />}
 
       {/* ── Opponents — share the width equally, no horizontal scroll ── */}
       <div style={{
@@ -1076,25 +1205,24 @@ function Game({ state, dispatch }) {
             </div>
           )}
 
-          {/* Hand toolbar: manual sort + reorder hint (human's turn) */}
-          {isMyTurn && (state.phase === 'action' || state.phase === 'draw') && (
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              marginBottom: 6,
-            }}>
-              <span style={{ color: 'rgba(255,255,255,.4)', fontSize: 11 }}>
-                לחיצה ארוכה + גרירה לסידור הקלפים
-              </span>
-              <button
-                onClick={() => dispatch({ type: 'SORT' })}
-                style={{
-                  background: '#1e293b', color: '#cbd5e1', border: '1px solid #334155',
-                  borderRadius: 8, fontSize: 12, fontWeight: 700, padding: '5px 12px',
-                  cursor: 'pointer', fontFamily: 'inherit',
-                }}
-              >🔀 מיין</button>
-            </div>
-          )}
+          {/* Hand toolbar: manual sort + reorder hint.
+              Always available — you may tidy your hand while waiting for others. */}
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            marginBottom: 6,
+          }}>
+            <span style={{ color: 'rgba(255,255,255,.4)', fontSize: 11 }}>
+              לחיצה ארוכה + גרירה לסידור הקלפים
+            </span>
+            <button
+              onClick={() => dispatch({ type: 'SORT' })}
+              style={{
+                background: '#1e293b', color: '#cbd5e1', border: '1px solid #334155',
+                borderRadius: 8, fontSize: 12, fontWeight: 700, padding: '5px 12px',
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >🔀 מיין</button>
+          </div>
 
           {/* Hand cards — wrap to multiple rows to fit screen width (no scroll) */}
           <div
@@ -1152,4 +1280,4 @@ function Game({ state, dispatch }) {
   );
 }
 
-export { CardView, GroupView, RulesModal, Setup, RoundEnd, GameEnd, Game };
+export { CardView, GroupView, RulesModal, ReleaseNotes, Setup, RoundEnd, GameEnd, Game };
