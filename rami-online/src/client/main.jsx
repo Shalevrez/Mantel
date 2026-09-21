@@ -13,6 +13,10 @@ import { createRoom, joinRoom } from "./net.js";
 
 const FONT = "'Noto Sans Hebrew','Segoe UI',Arial,sans-serif";
 
+// Injected by Vite from package.json (see vite.config.js). The fallback keeps
+// the UI sane if the app is ever served without going through the build.
+const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev';
+
 // ── Read ?code= from the URL so a shared link auto-fills the room ──
 function urlCode() {
   const p = new URLSearchParams(location.search);
@@ -280,7 +284,20 @@ function Shell({ children }) {
         border: `2px solid ${GOLD}77`,
       }}>
         {children}
+        <VersionTag />
       </div>
+    </div>
+  );
+}
+
+// ── Small version label, bottom corner, like any other app ──
+function VersionTag({ color = '#a8a29e' }) {
+  return (
+    <div style={{
+      textAlign: 'center', marginTop: 14, fontSize: 10,
+      color, letterSpacing: 0.5, direction: 'ltr', userSelect: 'text',
+    }}>
+      v{APP_VERSION}
     </div>
   );
 }
@@ -295,6 +312,7 @@ function Splash({ text }) {
       <div style={{ textAlign: 'center' }}>
         <div style={{ fontSize: 44, marginBottom: 10 }}>🃏</div>
         {text}
+        <VersionTag color={`${GOLD}88`} />
       </div>
     </div>
   );
