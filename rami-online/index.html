@@ -32,6 +32,17 @@
         text-align: left; white-space: pre-wrap; word-break: break-all; max-height: 120px;
         overflow: auto;
       }
+      #boot-diag {
+        margin-top: 10px; padding: 8px 10px; border-radius: 8px;
+        background: #fafaf9; border: 1px solid #e7e5e4;
+        font-size: 12px; color: #1c1917; line-height: 1.7; text-align: right;
+      }
+      /* Block, not inline: an LTR path inside an RTL panel gets its leading
+         slash reordered to the end unless it sits in its own box. */
+      #boot-diag .raw {
+        display: block; direction: ltr; text-align: left; color: #57534e;
+        font-family: monospace; font-size: 11px;
+      }
       #boot-error button {
         width: 100%; padding: 13px 0; background: #14532d; color: #c9a847;
         border: 2px solid #c9a84788; border-radius: 13px;
@@ -53,6 +64,7 @@
         </p>
         <button onclick="location.reload()">↻ נסה שוב</button>
         <code id="boot-error-detail" style="display:none"></code>
+        <div id="boot-diag" style="display:none"></div>
       </div>
     </div>
 
@@ -79,21 +91,52 @@
           note(e.reason && e.reason.message ? e.reason.message : e.reason);
         });
 
+        // Returns true when the failure panel was shown, false when the app is fine.
         function check() {
           var root = document.getElementById('root');
-          if (root && root.childNodes.length) return; // React mounted — nothing to do.
+          if (root && root.childNodes.length) return false; // React mounted — nothing to do.
           var panel = document.getElementById('boot-error');
-          if (!panel) return;
+          if (!panel) return false;
           if (detail) {
             var box = document.getElementById('boot-error-detail');
             box.textContent = detail;
             box.style.display = 'block';
           }
           panel.className = 'show';
+          return true;
+        }
+
+        // Once we know the page is broken, ask the server two questions whose
+        // answers separate "the Worker is not running at all" from "the Worker
+        // runs but is serving the wrong files". Printed on the page so a
+        // screenshot is enough to tell the two apart.
+        function diagnose() {
+          var box = document.getElementById('boot-diag');
+          if (!box || !window.fetch) return;
+          var lines = [];
+          function draw() { box.innerHTML = lines.join(''); box.style.display = 'block'; }
+
+          function probe(path, cb) {
+            return fetch(path, { cache: 'no-store' }).then(function (r) {
+              return r.text().then(function (t) { cb(r.status, t); });
+            }).catch(function () { cb(0, ''); });
+          }
+
+          probe('/api/new', function (status, body) {
+            var workerUp = status === 200 && body.indexOf('code') !== -1;
+            lines.push('<div>' + (workerUp ? '\u2713 ' : '\u2717 ') + 'שרת המשחק: ' + (workerUp ? 'פעיל' : 'לא פעיל') + '</div>');
+            lines.push('<span class="raw">/api/new &rarr; ' + status + ' ' + body.slice(0, 40) + '</span>');
+            draw();
+            probe('/package.json', function (st2) {
+              lines.push('<div>' + (st2 === 404 ? '\u2713 ' : '\u2717 ') + 'קבצים מוגשים: ' + (st2 === 404 ? 'dist (תקין)' : 'קוד מקור') + '</div>');
+              lines.push('<span class="raw">/package.json &rarr; ' + st2 + '</span>');
+              draw();
+            });
+          });
         }
 
         // Give the bundle a fair chance on a slow connection before giving up.
-        setTimeout(check, 6000);
+        setTimeout(function () { if (check()) diagnose(); }, 6000);
       })();
     </script>
 
