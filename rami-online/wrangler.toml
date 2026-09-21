@@ -18,6 +18,10 @@ name = "ROOMS"
 class_name = "Room"
 
 # Durable Objects must be declared in a migration.
+# SQLite-backed (`new_sqlite_classes`) rather than KV-backed (`new_classes`):
+# KV-backed Durable Objects require a paid Workers plan, while SQLite-backed
+# ones run on the free plan too. The Room class only uses storage.get/put,
+# which both backends support identically.
 [[migrations]]
 tag = "v1"
-new_classes = ["Room"]
+new_sqlite_classes = ["Room"]
