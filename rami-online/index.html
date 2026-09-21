@@ -6,8 +6,26 @@
     <meta name="theme-color" content="#0d2e1a" />
     <title>רמי אקסטרים · אונליין</title>
     <style>
+      /*
+        One font stack for the whole app. `system-ui` resolves to whatever the
+        platform already uses for its own UI — San Francisco on iOS/macOS,
+        Roboto on Android, Segoe UI on Windows, the desktop font on Linux — so
+        every browser gets a font that is installed by definition, with real
+        Hebrew glyphs and no webfont download to wait for (or to be blocked).
+        The names after it are fallbacks for older engines that don't know
+        `system-ui`; Noto Sans Hebrew is last-resort for Linux boxes whose
+        default sans has no Hebrew.
+      */
+      :root {
+        --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+                   "Noto Sans Hebrew", Arial, sans-serif;
+      }
+
       html, body, #root { height: 100%; margin: 0; padding: 0; background: #0d2e1a; }
-      * { -webkit-tap-highlight-color: transparent; }
+      html, body { font-family: var(--font-ui); }
+      /* Form controls don't inherit the page font by default — make them. */
+      button, input, select, textarea { font-family: inherit; }
+      * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
 
       /* Boot failure panel — hidden until the watchdog below decides the app never mounted. */
       #boot-error {
@@ -15,7 +33,6 @@
         position: fixed; inset: 0; z-index: 9999;
         align-items: center; justify-content: center;
         padding: 16px; direction: rtl;
-        font-family: 'Segoe UI', Arial, sans-serif;
         background: #0d2e1a;
       }
       #boot-error.show { display: flex; }
@@ -41,7 +58,7 @@
          slash reordered to the end unless it sits in its own box. */
       #boot-diag .raw {
         display: block; direction: ltr; text-align: left; color: #57534e;
-        font-family: monospace; font-size: 11px;
+        font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px;
       }
       #boot-error button {
         width: 100%; padding: 13px 0; background: #14532d; color: #c9a847;

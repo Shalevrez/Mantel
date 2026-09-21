@@ -43,7 +43,7 @@ function CardView({ card, sel, onClick, sm, back, glow, faded, newCard }) {
         ? { bottom: sm ? 1 : 3, left: sm ? 2 : 4, transform: 'rotate(180deg)' }
         : { top: sm ? 1 : 3, right: sm ? 2 : 4 }),
     }}>
-      <div style={{ fontSize: sm ? 7 : 11, fontWeight: 800, fontFamily: 'Georgia,serif' }}>{vs}</div>
+      <div style={{ fontSize: sm ? 7 : 11, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{vs}</div>
       <div style={{ fontSize: sm ? 6 : 9 }}>{sym}</div>
     </div>
   );
@@ -137,7 +137,6 @@ function RulesModal({ onClose }) {
         background: 'rgba(0,0,0,.6)', backdropFilter: 'blur(2px)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         direction: 'rtl', padding: 14,
-        fontFamily: "'Noto Sans Hebrew','Segoe UI',Arial,sans-serif",
       }}
     >
       <div
@@ -154,7 +153,7 @@ function RulesModal({ onClose }) {
           background: FELT, padding: '14px 18px', display: 'flex',
           alignItems: 'center', justifyContent: 'space-between', flexShrink: 0,
         }}>
-          <span style={{ color: GOLD, fontSize: 20, fontWeight: 700, fontFamily: 'Georgia,serif' }}>
+          <span style={{ color: GOLD, fontSize: 20, fontWeight: 700 }}>
             📖 חוקי רמי אקסטרים
           </span>
           <button onClick={onClose} style={{
@@ -270,11 +269,8 @@ function Setup({ onStart }) {
       background: `radial-gradient(ellipse at 50% 30%, #1f6b3a 0%, ${FELTD} 70%)`,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       direction: 'rtl', padding: 16,
-      fontFamily: "'Noto Sans Hebrew', 'Segoe UI', Arial, sans-serif",
     }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Hebrew:wght@400;600;700&display=swap');
-        *{box-sizing:border-box;} input,select,button{font-family:inherit;}
         ::-webkit-scrollbar{width:4px;} ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.2);border-radius:4px;}
       `}</style>
 
@@ -288,8 +284,8 @@ function Setup({ onStart }) {
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <div style={{ fontSize: 56, marginBottom: 4, filter: 'drop-shadow(0 2px 4px rgba(0,0,0,.2))' }}>🃏</div>
           <h1 style={{
-            margin: 0, fontSize: 32, fontFamily: 'Georgia,serif',
-            color: FELTD, letterSpacing: 2, fontWeight: 400,
+            margin: 0, fontSize: 32,
+            color: FELTD, letterSpacing: 2, fontWeight: 700,
           }}>רמי אקסטרים</h1>
           <div style={{ width: 50, height: 2, background: GOLD, margin: '8px auto' }} />
           <p style={{ color: '#78716c', margin: 0, fontSize: 13 }}>
@@ -403,7 +399,6 @@ function RoundEnd({ state, dispatch }) {
       background: `radial-gradient(ellipse at 50% 30%, #1f6b3a, ${FELTD})`,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       direction: 'rtl', padding: 16,
-      fontFamily: "'Noto Sans Hebrew','Segoe UI',Arial,sans-serif",
     }}>
       <div style={{
         background: CREAM, borderRadius: 22, padding: 24,
@@ -415,7 +410,7 @@ function RoundEnd({ state, dispatch }) {
           <div style={{ fontSize: 42 }}>
             {result.isAnt ? '🎯' : result.empty ? '📦' : '✅'}
           </div>
-          <h2 style={{ margin: '6px 0 4px', color: FELTD, fontFamily: 'Georgia,serif', fontSize: 22, fontWeight: 400 }}>
+          <h2 style={{ margin: '6px 0 4px', color: FELTD, fontSize: 22, fontWeight: 700 }}>
             {result.isAnt ? 'אנט!' : result.empty ? 'החבילה נגמרה' : 'הסיבוב הסתיים'}
           </h2>
           <p style={{ color: '#78716c', margin: 0, fontSize: 13 }}>
@@ -496,7 +491,6 @@ function GameEnd({ state, onRestart }) {
       background: `radial-gradient(ellipse at 50% 30%, #1f6b3a, ${FELTD})`,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       direction: 'rtl', padding: 16,
-      fontFamily: "'Noto Sans Hebrew','Segoe UI',Arial,sans-serif",
     }}>
       <div style={{
         background: CREAM, borderRadius: 22, padding: 28,
@@ -505,7 +499,7 @@ function GameEnd({ state, onRestart }) {
       }}>
         <div style={{ textAlign: 'center', marginBottom: 20 }}>
           <div style={{ fontSize: 56 }}>🏆</div>
-          <h2 style={{ margin: '6px 0 4px', fontFamily: 'Georgia,serif', color: FELTD, fontSize: 28, fontWeight: 400 }}>
+          <h2 style={{ margin: '6px 0 4px', color: FELTD, fontSize: 28, fontWeight: 700 }}>
             סיום המשחק
           </h2>
           <p style={{ color: '#16a34a', fontWeight: 700, fontSize: 20, margin: 0 }}>
@@ -679,7 +673,6 @@ function Game({ state, dispatch }) {
       backgroundColor: FELTD,
       display: 'flex', flexDirection: 'column',
       direction: 'rtl',
-      fontFamily: "'Noto Sans Hebrew','Segoe UI',Arial,sans-serif",
       overflow: 'hidden', userSelect: 'none',
     }}>
       <style>{`
@@ -718,7 +711,7 @@ function Game({ state, dispatch }) {
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         fontSize: 13,
       }}>
-        <span style={{ fontWeight: 700, color: GOLD, fontFamily: 'Georgia,serif' }}>
+        <span style={{ fontWeight: 700, color: GOLD }}>
           {mk.name}
         </span>
         <span style={{ color: 'rgba(255,255,255,.7)' }}>סיבוב {state.sivuv}</span>
