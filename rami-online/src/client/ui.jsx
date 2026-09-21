@@ -14,6 +14,15 @@ import {
 import { RELEASES } from "../releases.js";
 
 
+// Wipe any text selection the browser started on its own. Called when a long
+// press turns into a card drag, and again when the drag ends.
+function clearSelection() {
+  try {
+    const s = window.getSelection && window.getSelection();
+    if (s && s.rangeCount) s.removeAllRanges();
+  } catch { /* nothing selectable — fine */ }
+}
+
 function CardView({ card, sel, onClick, sm, back, glow, faded, newCard }) {
   const w = sm ? 26 : 44, h = sm ? 38 : 62;
 
@@ -705,6 +714,10 @@ function Game({ state, dispatch }) {
     clearTimeout(d.timer);
     d.timer = setTimeout(() => {
       d.active = true;
+      // If the browser managed to start a selection before the press became a
+      // drag, drop it — otherwise the highlight stays on screen for the whole
+      // drag and the card looks like selected text.
+      clearSelection();
       setDrag({ card, x: d.startX, y: d.startY });
     }, 350);
   }
@@ -744,6 +757,7 @@ function Game({ state, dispatch }) {
       }
     }
     d.active = false; d.card = null;
+    clearSelection();
     setDrag(null);
   }
 
@@ -751,13 +765,22 @@ function Game({ state, dispatch }) {
   useEffect(() => {
     const move = (e) => movePress(e);
     const up = (e) => endPress(e);
+    // While a finger is down on a card, refuse to start a text selection at all.
+    // CSS user-select covers most browsers; this catches the rest, and costs
+    // nothing when no card is being pressed.
+    const noSelect = (e) => {
+      const d = dragRef.current;
+      if ((d.card || d.active) && e.cancelable) e.preventDefault();
+    };
     window.addEventListener('pointermove', move, { passive: false });
     window.addEventListener('pointerup', up);
     window.addEventListener('pointercancel', up);
+    window.addEventListener('selectstart', noSelect);
     return () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
       window.removeEventListener('pointercancel', up);
+      window.removeEventListener('selectstart', noSelect);
     };
   });
 
@@ -801,9 +824,21 @@ function Game({ state, dispatch }) {
       display: 'flex', flexDirection: 'column',
       direction: 'rtl',
       fontFamily: "'Noto Sans Hebrew','Segoe UI',Arial,sans-serif",
-      overflow: 'hidden', userSelect: 'none',
+      overflow: 'hidden',
+      userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none',
     }}>
       <style>{`
+        /* Belt and braces for the long-press drag: the card and everything
+           drawn inside it (value, suit, corners) must never become selectable
+           text, or a slow press highlights the card instead of lifting it. */
+        .deal-card, .deal-card * {
+          -webkit-user-select: none;
+          -moz-user-select: none;
+          -ms-user-select: none;
+          user-select: none;
+          -webkit-touch-callout: none;
+          -webkit-user-drag: none;
+        }
         @keyframes newCardPulse {
           0%   { box-shadow: 0 0 0 3px ${GOLD}, 0 0 18px ${GOLD}88; }
           50%  { box-shadow: 0 0 0 5px ${GOLD}, 0 0 28px ${GOLD}cc; }
@@ -1241,8 +1276,18 @@ function Game({ state, dispatch }) {
                   data-cardid={c.id}
                   className="deal-card"
                   onPointerDown={(e) => startPress(c, e)}
+                  // A long press on mobile otherwise pops the copy/lookup menu,
+                  // and on desktop a slow press starts a native HTML5 drag.
+                  onContextMenu={(e) => e.preventDefault()}
+                  onDragStart={(e) => e.preventDefault()}
+                  draggable={false}
                   style={{
-                    touchAction: dragging ? 'none' : 'manipulation',
+                    // Always 'none', not just mid-drag: the browser picks the
+                    // gesture owner at touch-start, so switching once the drag
+                    // has begun is too late to stop a swipe-navigation.
+                    // Nothing scrolls here — the hand is a fixed row — so the
+                    // touch is ours to keep.
+                    touchAction: 'none',
                     opacity: dragging ? 0.3 : 1,
                     zIndex: sel ? 100 : 1,
                     flexShrink: 0,

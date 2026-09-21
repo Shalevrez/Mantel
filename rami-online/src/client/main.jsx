@@ -218,7 +218,10 @@ function Lobby({ lobby, code, error, onStart, onShowNotes }) {
             display: 'inline-block', padding: '10px 26px', borderRadius: 14,
             background: FELT, color: GOLD, fontSize: 34, fontWeight: 700,
             letterSpacing: 10, cursor: 'pointer', fontFamily: 'Georgia,serif',
-            boxShadow: `0 4px 16px ${FELT}66`, userSelect: 'all',
+            // Opts back in to selection (the app disables it globally for the
+            // card drag), so the code can still be long-pressed and copied.
+            boxShadow: `0 4px 16px ${FELT}66`,
+            userSelect: 'all', WebkitUserSelect: 'all', WebkitTouchCallout: 'default',
           }}
           title="העתק קישור הזמנה"
         >
