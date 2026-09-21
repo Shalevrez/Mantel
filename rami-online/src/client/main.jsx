@@ -13,6 +13,10 @@ import { createRoom, joinRoom } from "./net.js";
 
 const FONT = "'Noto Sans Hebrew','Segoe UI',Arial,sans-serif";
 
+// Injected by Vite from package.json (see vite.config.js). The fallback keeps
+// the UI sane if the app is ever served without going through the build.
+const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev';
+
 // ── Read ?code= from the URL so a shared link auto-fills the room ──
 function urlCode() {
   const p = new URLSearchParams(location.search);
@@ -280,7 +284,24 @@ function Shell({ children }) {
         border: `2px solid ${GOLD}77`,
       }}>
         {children}
+        <VersionTag />
       </div>
+    </div>
+  );
+}
+
+// ── Small version label pinned to the corner of the screen, like any other app.
+// Fixed to the viewport (not the card), clear of the iOS home indicator, and
+// click-through so it can never swallow a tap. Sits below the rules modal.
+function VersionTag() {
+  return (
+    <div style={{
+      position: 'fixed', left: 10, bottom: 'calc(8px + env(safe-area-inset-bottom, 0px))',
+      fontSize: 10, color: 'rgba(255,255,255,.45)', letterSpacing: 0.5,
+      direction: 'ltr', pointerEvents: 'none', zIndex: 50,
+      textShadow: '0 1px 2px rgba(0,0,0,.5)',
+    }}>
+      v{APP_VERSION}
     </div>
   );
 }
@@ -295,6 +316,7 @@ function Splash({ text }) {
       <div style={{ textAlign: 'center' }}>
         <div style={{ fontSize: 44, marginBottom: 10 }}>🃏</div>
         {text}
+        <VersionTag />
       </div>
     </div>
   );
