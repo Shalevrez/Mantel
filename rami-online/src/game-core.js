@@ -30,10 +30,28 @@ const MK = [
   { name:'שתי חמישיות',  seqs:2, min:5 },
 ];
 
-const FELT  = '#1a5230';
-const FELTD = '#0d2e1a';
+const FELT  = '#1e3a5f';
+const FELTD = '#13284f';
 const GOLD  = '#c9973a';
 const CREAM = '#fdf8f0';
+// Dark text on the cloth, and a gold that still reads on a light surface.
+const INK   = FELTD;
+const GOLDD = '#8a6418';
+
+// The table is a checkered tablecloth (mantel): very light blue bands on cream,
+// crossing where they overlap so the checks read as gingham. Kept low-contrast
+// so the cards, not the cloth, are what the eye lands on.
+const CLOTH_BASE = '#faf6ee';
+const CLOTH_BAND = 'rgba(173,204,230,.35)';
+const CLOTH =
+  `repeating-linear-gradient(0deg, ${CLOTH_BAND} 0 28px, transparent 28px 56px),` +
+  `repeating-linear-gradient(90deg, ${CLOTH_BAND} 0 28px, transparent 28px 56px),` +
+  CLOTH_BASE;
+
+// The play table itself is plain deep navy, so the cards and the light group
+// mats stand out against it; the gingham stays on the screens around it.
+const TABLE_BASE = FELTD;
+const TABLE = TABLE_BASE;
 
 let _uid = 1;
 const uid = () => `${Date.now()}-${(_uid++).toString(36)}`;
@@ -897,6 +915,7 @@ function aiDiscard(hand, level = 'medium', rnd = Math.random) {
 
 export {
   SUITS, SYM, COL, VD, cSc, cTxt, MK, FELT, FELTD, GOLD, CREAM,
+  INK, GOLDD, CLOTH, CLOTH_BASE, TABLE, TABLE_BASE,
   AI_LEVELS, AI_LEVEL_NAMES, aiLevel, cardAffinity, decksFor,
   uid, sortHand, moveCard, mkCard, makeDeck, shuffle, handScore,
   isSeq, isSet, isGroup, orderSeq, orderGroup, jokerValues, attachPos, meetsReq,

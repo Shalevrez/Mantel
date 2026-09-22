@@ -8,9 +8,19 @@
 import { useState, useReducer, useEffect, useLayoutEffect, useRef } from "react";
 import {
   SUITS, SYM, COL, VD, cSc, cTxt, MK, FELT, FELTD, GOLD, CREAM,
+  INK, GOLDD, CLOTH, CLOTH_BASE, TABLE, TABLE_BASE,
   isSeq, isSet, isGroup, orderSeq, orderGroup, jokerValues, attachPos, meetsReq,
   sortHand, moveCard, handScore,
 } from "../game-core.js";
+
+// Card backs (hands, fans, the draw pile): a classic white back with a navy
+// lattice inside a thin navy frame, so they stand out on the navy table.
+// One background shorthand for all layers, so no later property can override it.
+const BACK_BG = `repeating-linear-gradient(45deg, transparent 0 4px, rgba(30,58,95,.35) 4px 5px),
+                 repeating-linear-gradient(-45deg, transparent 0 4px, rgba(30,58,95,.35) 4px 5px),
+                 #fdf8f0`;
+// A white margin, then the navy frame line, drawn inside the card edge.
+const BACK_FRAME = `inset 0 0 0 3px #fdf8f0, inset 0 0 0 4px ${FELT}`;
 import { RELEASES } from "../releases.js";
 
 
@@ -61,14 +71,12 @@ function CardView({ card, sel, onClick, sm, back, glow, faded, newCard, attached
     <div style={{
       width: w, height: h,
       borderRadius: radius, flexShrink: 0, margin: sm ? '0 1px' : '0 2px',
-      background: 'linear-gradient(145deg,#234a8c 0%,#13284f 60%,#0c1d3c 100%)',
-      border: `1.5px solid #36589c`,
-      backgroundImage: `repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(255,255,255,.05) 3px, rgba(255,255,255,.05) 6px),
-                        radial-gradient(circle at 50% 50%, rgba(201,151,58,.18), transparent 60%)`,
-      boxShadow: 'inset 0 0 0 2px rgba(255,255,255,.04), 0 2px 6px rgba(0,0,0,.45)',
+      background: BACK_BG,
+      border: '1.5px solid #fdf8f0',
+      boxShadow: `${BACK_FRAME}, 0 2px 6px rgba(0,0,0,.45)`,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
-      <span style={{ color: 'rgba(201,151,58,.55)', fontSize: fs(.29) }}>♦</span>
+      <span style={{ color: FELT, fontSize: fs(.29) }}>♦</span>
     </div>
   );
 
@@ -154,8 +162,8 @@ function GroupView({ group, onAttach, canAttach, hot, attBy }) {
     <div onClick={onAttach} data-gid={group.id} className="group-pop" style={{
       position: 'relative',
       display: 'inline-flex', alignItems: 'center',
-      background: hot ? 'rgba(96,165,250,.28)' : seq ? 'rgba(34,197,94,.12)' : 'rgba(251,191,36,.12)',
-      border: `2px solid ${hot || canAttach ? '#60a5fa' : att ? ATT : seq ? 'rgba(34,197,94,.45)' : 'rgba(251,191,36,.45)'}`,
+      background: hot ? 'rgba(96,165,250,.28)' : seq ? 'rgba(220,252,231,.9)' : 'rgba(254,243,199,.9)',
+      border: `2px solid ${hot || canAttach ? '#60a5fa' : att ? ATT : seq ? 'rgba(34,197,94,.55)' : 'rgba(217,119,6,.5)'}`,
       borderRadius: 10, padding: '5px 7px', margin: att ? '11px 3px 3px' : '3px 3px',
       cursor: canAttach ? 'pointer' : 'default',
       boxShadow: hot ? '0 0 0 4px rgba(96,165,250,.6), 0 0 18px rgba(96,165,250,.5)'
@@ -301,7 +309,7 @@ function BoardReveal({ board, empty = 'לא הורדו קבוצות בסיבוב
   const groups = board || [];
   return (
     <div style={{
-      background: `radial-gradient(ellipse at 50% 0%, #1f6b3a, ${FELTD})`,
+      background: `radial-gradient(ellipse at 50% 0%, #2a4d7a, ${FELTD})`,
       borderRadius: 12, border: `1px solid ${GOLD}55`, padding: 8,
       maxHeight: 260, overflowY: 'auto',
     }}>
@@ -446,7 +454,7 @@ function RulesModal({ onClose }) {
           alignItems: 'center', justifyContent: 'space-between', flexShrink: 0,
         }}>
           <span style={{ color: GOLD, fontSize: 20, fontWeight: 700 }}>
-            📖 חוקי רמי אקסטרים
+            📖 חוקי מנטל
           </span>
           <button onClick={onClose} style={{
             background: 'rgba(255,255,255,.15)', color: CREAM, border: 'none',
@@ -678,12 +686,12 @@ function Setup({ onStart }) {
   return (
     <div style={{
       minHeight: '100vh',
-      background: `radial-gradient(ellipse at 50% 30%, #1f6b3a 0%, ${FELTD} 70%)`,
+      background: CLOTH,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       direction: 'rtl', padding: 16,
     }}>
       <style>{`
-        ::-webkit-scrollbar{width:4px;} ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.2);border-radius:4px;}
+        ::-webkit-scrollbar{width:4px;} ::-webkit-scrollbar-thumb{background:rgba(19,40,79,.25);border-radius:4px;}
       `}</style>
 
       <div style={{
@@ -698,7 +706,7 @@ function Setup({ onStart }) {
           <h1 style={{
             margin: 0, fontSize: 32,
             color: FELTD, letterSpacing: 2, fontWeight: 700,
-          }}>רמי אקסטרים</h1>
+          }}>מנטל</h1>
           <div style={{ width: 50, height: 2, background: GOLD, margin: '8px auto' }} />
           <p style={{ color: '#78716c', margin: 0, fontSize: 13 }}>
             2 חפיסות • 4 ג׳וקרים • 6 משחקונים
@@ -811,7 +819,7 @@ function RoundEnd({ state, dispatch }) {
   return (
     <div style={{
       minHeight: '100vh',
-      background: `radial-gradient(ellipse at 50% 30%, #1f6b3a, ${FELTD})`,
+      background: CLOTH,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       direction: 'rtl', padding: 16,
     }}>
@@ -819,7 +827,7 @@ function RoundEnd({ state, dispatch }) {
         background: CREAM, borderRadius: 22, padding: 24,
         maxWidth: 420, width: '100%',
         border: `2px solid ${GOLD}66`,
-        boxShadow: `0 20px 60px rgba(0,0,0,.55)`,
+        boxShadow: `0 12px 40px rgba(19,40,79,.18)`,
         display: 'flex', flexDirection: 'column',
       }}>
         <div style={{ textAlign: 'center', marginBottom: 16, flexShrink: 0 }}>
@@ -932,7 +940,7 @@ function GameEnd({ state, onRestart }) {
   return (
     <div style={{
       minHeight: '100vh',
-      background: `radial-gradient(ellipse at 50% 30%, #1f6b3a, ${FELTD})`,
+      background: CLOTH,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       direction: 'rtl', padding: 16,
     }}>
@@ -1310,8 +1318,8 @@ function Game({ state, dispatch }) {
 
   return (
     <div className="game-shell" style={{
-      background: `radial-gradient(ellipse 120% 70% at 50% -5%, #2c7a4d 0%, ${FELT} 42%, ${FELTD} 100%)`,
-      backgroundColor: FELTD,
+      background: TABLE,
+      backgroundColor: TABLE_BASE,
       direction: 'rtl',
       userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none',
     }}>
@@ -1449,7 +1457,7 @@ function Game({ state, dispatch }) {
 
       {/* ── Header ────────────────────────────────── */}
       <div className="ga-header" style={{
-        background: 'rgba(0,0,0,.5)', padding: '7px 12px',
+        background: 'rgba(6,14,30,.6)', padding: '7px 12px',
         color: CREAM, flexShrink: 0,
         borderBottom: `1px solid ${GOLD}44`,
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -1510,8 +1518,8 @@ function Game({ state, dispatch }) {
               flex: 1, minWidth: 0,
               background: active
                 ? 'linear-gradient(145deg, #b45309, #f59e0b)'
-                : 'rgba(255,255,255,.1)',
-              border: `2px solid ${active ? '#fde68a' : 'transparent'}`,
+                : 'rgba(6,14,30,.45)',
+              border: `2px solid ${active ? '#fde68a' : 'rgba(255,255,255,.12)'}`,
               borderRadius: 11, padding: '6px 6px', color: CREAM,
               textAlign: 'center',
               boxShadow: active ? '0 0 16px rgba(245,158,11,.6)' : 'none',
@@ -1534,11 +1542,11 @@ function Game({ state, dispatch }) {
                   </div>
                 ))}
               </div>
-              <div style={{ fontSize: 11, color: 'rgba(255,255,255,.7)', whiteSpace: 'nowrap' }}>
+              <div style={{ fontSize: 11, color: 'rgba(255,255,255,.75)', whiteSpace: 'nowrap' }}>
                 🃏{handN} · ⭐{p.totalScore}
               </div>
               {active && (
-                <div style={{ fontSize: 10, color: GOLD, marginTop: 2, whiteSpace: 'nowrap' }}>
+                <div style={{ fontSize: 10, color: '#fffbeb', marginTop: 2, whiteSpace: 'nowrap' }}>
                   {state.phase === 'action' ? '🎯 פועל' : state.phase === 'draw' ? '📤 שולף' : '⏳'}
                 </div>
               )}
@@ -1558,7 +1566,7 @@ function Game({ state, dispatch }) {
           const blocked = state.phase === 'draw' && isMyTurn && human.hasLaid;
           return (
             <div style={{ textAlign: 'center' }}>
-              <div style={{ color: GOLD, fontSize: 10, marginBottom: 3 }}>🏠 בית</div>
+              <div style={{ color: GOLD, fontSize: 10, fontWeight: 700, marginBottom: 3 }}>🏠 בית</div>
               <div
                 onClick={() => canTake && drawOnce({ type: 'TAKE_BEIT' })}
                 style={{ cursor: canTake ? 'pointer' : 'default', opacity: blocked ? 0.4 : 1 }}
@@ -1574,7 +1582,7 @@ function Game({ state, dispatch }) {
 
         {/* Draw pile */}
         <div style={{ textAlign: 'center' }}>
-          <div style={{ color: 'rgba(255,255,255,.55)', fontSize: 10, marginBottom: 3 }}>
+          <div style={{ color: 'rgba(255,255,255,.7)', fontSize: 10, marginBottom: 3 }}>
             חבילה ({state.deckCount ?? state.deck?.length ?? 0})
           </div>
           <div
@@ -1582,22 +1590,21 @@ function Game({ state, dispatch }) {
             style={{
               width: 'var(--card-w)', height: 'var(--card-h)',
               borderRadius: 'calc(var(--card-h) * .1)',
-              background: 'linear-gradient(145deg,#1e3a6e,#0f2245)',
-              border: `2px solid ${state.phase === 'draw' && isMyTurn ? GOLD : '#2d4d8a'}`,
+              border: `2px solid ${state.phase === 'draw' && isMyTurn ? GOLD : '#fdf8f0'}`,
               cursor: state.phase === 'draw' && isMyTurn ? 'pointer' : 'default',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: state.phase === 'draw' && isMyTurn ? `0 0 14px ${GOLD}88` : '0 2px 8px rgba(0,0,0,.4)',
+              boxShadow: `${BACK_FRAME}, ` + (state.phase === 'draw' && isMyTurn ? `0 0 14px ${GOLD}88` : '0 2px 8px rgba(0,0,0,.45)'),
               transition: 'box-shadow .12s',
-              backgroundImage: `repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(255,255,255,.04) 3px,rgba(255,255,255,.04) 6px)`,
+              background: BACK_BG,
             }}
           >
-            <span style={{ fontSize: 'calc(var(--card-h) * .39)', color: CREAM }}>🂠</span>
+            <span style={{ fontSize: 'calc(var(--card-h) * .39)', color: FELT }}>🂠</span>
           </div>
         </div>
 
         {/* Discard pile — cumulative; take the top only via the buying offer */}
         <div style={{ textAlign: 'center' }}>
-          <div style={{ color: 'rgba(255,255,255,.55)', fontSize: 10, marginBottom: 3 }}>
+          <div style={{ color: 'rgba(255,255,255,.7)', fontSize: 10, marginBottom: 3 }}>
             אשפה ({state.discard.length})
           </div>
           {discard ? (() => {
@@ -1631,10 +1638,10 @@ function Game({ state, dispatch }) {
             <div style={{
               width: 'var(--card-w)', height: 'var(--card-h)',
               borderRadius: 'calc(var(--card-h) * .1)',
-              border: '2px dashed rgba(255,255,255,.18)',
+              border: '2px dashed rgba(255,255,255,.25)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              <span style={{ color: 'rgba(255,255,255,.2)', fontSize: 18 }}>∅</span>
+              <span style={{ color: 'rgba(255,255,255,.3)', fontSize: 18 }}>∅</span>
             </div>
           )}
         </div>
@@ -1642,12 +1649,12 @@ function Game({ state, dispatch }) {
 
       {/* ── Status bar ────────────────────────────── */}
       <div className="ga-status" style={{
-        background: 'rgba(0,0,0,.45)', padding: '5px 12px',
-        color: 'rgba(255,255,255,.7)', fontSize: 12,
+        background: 'rgba(6,14,30,.6)', padding: '5px 12px',
+        color: 'rgba(255,255,255,.85)', fontSize: 12,
         textAlign: 'center', flexShrink: 0,
       }}>
         <span style={{ fontWeight: 600 }}>{phaseLabel()}</span>
-        <span style={{ color: 'rgba(255,255,255,.45)', marginRight: 10 }}>
+        <span style={{ color: 'rgba(255,255,255,.6)', marginRight: 10 }}>
           יד: {human.hand.length} קלפים · <b style={{ color: GOLD, whiteSpace: 'nowrap' }}>{myPts} נק׳</b>
           {' '}• סה״כ: {human.totalScore}
         </span>
@@ -1721,15 +1728,15 @@ function Game({ state, dispatch }) {
           const reqMet = human.hasLaid || meetsReq(state.staging, state.mk);
           return (
           <div style={{
-            background: 'rgba(251,191,36,.12)',
-            border: '2px dashed rgba(251,191,36,.45)',
+            background: 'rgba(254,243,199,.9)',
+            border: '2px dashed rgba(217,119,6,.55)',
             borderRadius: 12, padding: '7px 9px', marginBottom: 8,
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
-              <span style={{ color: GOLD, fontSize: 12, fontWeight: 700 }}>
+              <span style={{ color: GOLDD, fontSize: 12, fontWeight: 700 }}>
                 ⏳ בתהליך הורדה — {state.staging.length} קבוצ{state.staging.length > 1 ? 'ות' : 'ה'}
               </span>
-              <span style={{ color: 'rgba(255,255,255,.55)', fontSize: 11 }}>
+              <span style={{ color: '#57534e', fontSize: 11 }}>
                 {!reqMet ? `דרוש: ${MK[state.mk].name}` : '✓ מוכן'}
               </span>
             </div>
@@ -1748,8 +1755,8 @@ function Game({ state, dispatch }) {
               onClick={() => dispatch({ type: 'CLEAR_STAGE' })}
               style={{
                 width: '100%', marginTop: 6, padding: '4px 0',
-                background: 'rgba(255,255,255,.07)', color: 'rgba(255,255,255,.45)',
-                border: '1px solid rgba(255,255,255,.12)',
+                background: 'rgba(255,255,255,.7)', color: '#78716c',
+                border: '1px solid rgba(120,113,108,.3)',
                 borderRadius: 7, cursor: 'pointer', fontSize: 11, fontFamily: 'inherit',
               }}
             >
@@ -1763,9 +1770,9 @@ function Game({ state, dispatch }) {
         {state.mustUseJoker && isMyTurn &&
           human.hand.some(c => c.id === state.mustUseJoker) && (
           <div style={{
-            background: 'rgba(124,58,237,.25)', border: '2px solid #7c3aed',
+            background: 'rgba(237,233,254,.92)', border: '2px solid #7c3aed',
             borderRadius: 12, padding: '8px 12px', marginBottom: 8, textAlign: 'center',
-            color: '#ddd6fe', fontSize: 13, fontWeight: 700,
+            color: '#5b21b6', fontSize: 13, fontWeight: 700,
           }}>
             🃏 חובה להשתמש בג׳וקר — הצמד לקבוצה או הורד בקבוצה חדשה עם קלפים מהיד
           </div>
@@ -1795,7 +1802,7 @@ function Game({ state, dispatch }) {
         ) : (
           <div style={{
             textAlign: 'center', padding: '20px 0',
-            color: 'rgba(255,255,255,.25)', fontSize: 14,
+            color: 'rgba(255,255,255,.4)', fontSize: 14,
           }}>
             הלוח ריק
           </div>
@@ -1832,7 +1839,7 @@ function Game({ state, dispatch }) {
               <Btn
                 label={attachMode ? '❌ בטל' : '📌 הצמד'}
                 disabled={!human.hasLaid}
-                bg={attachMode ? '#b45309' : '#0369a1'}
+                bg={attachMode ? GOLD : FELT} col={attachMode ? FELTD : GOLD}
                 onClick={() => setAttachMode(m => !m)}
               />
               {state.undoBefore &&
