@@ -48,6 +48,15 @@ const CLOTH =
   `repeating-linear-gradient(90deg, ${CLOTH_BAND} 0 28px, transparent 28px 56px),` +
   CLOTH_BASE;
 
+// The play table itself is the same gingham in navy: lighter blue bands on a deep
+// navy base, so the cards and the light group mats stand out against it.
+const TABLE_BASE = FELTD;
+const TABLE_BAND = 'rgba(120,160,215,.16)';
+const TABLE =
+  `repeating-linear-gradient(0deg, ${TABLE_BAND} 0 28px, transparent 28px 56px),` +
+  `repeating-linear-gradient(90deg, ${TABLE_BAND} 0 28px, transparent 28px 56px),` +
+  TABLE_BASE;
+
 let _uid = 1;
 const uid = () => `${Date.now()}-${(_uid++).toString(36)}`;
 
@@ -910,7 +919,7 @@ function aiDiscard(hand, level = 'medium', rnd = Math.random) {
 
 export {
   SUITS, SYM, COL, VD, cSc, cTxt, MK, FELT, FELTD, GOLD, CREAM,
-  INK, GOLDD, CLOTH, CLOTH_BASE,
+  INK, GOLDD, CLOTH, CLOTH_BASE, TABLE, TABLE_BASE,
   AI_LEVELS, AI_LEVEL_NAMES, aiLevel, cardAffinity, decksFor,
   uid, sortHand, moveCard, mkCard, makeDeck, shuffle, handScore,
   isSeq, isSet, isGroup, orderSeq, orderGroup, jokerValues, attachPos, meetsReq,

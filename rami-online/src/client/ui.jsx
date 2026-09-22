@@ -8,7 +8,7 @@
 import { useState, useReducer, useEffect, useLayoutEffect, useRef } from "react";
 import {
   SUITS, SYM, COL, VD, cSc, cTxt, MK, FELT, FELTD, GOLD, CREAM,
-  INK, GOLDD, CLOTH, CLOTH_BASE,
+  INK, GOLDD, CLOTH, CLOTH_BASE, TABLE, TABLE_BASE,
   isSeq, isSet, isGroup, orderSeq, orderGroup, jokerValues, attachPos, meetsReq,
   sortHand, moveCard, handScore,
 } from "../game-core.js";
@@ -1311,8 +1311,8 @@ function Game({ state, dispatch }) {
 
   return (
     <div className="game-shell" style={{
-      background: CLOTH,
-      backgroundColor: CLOTH_BASE,
+      background: TABLE,
+      backgroundColor: TABLE_BASE,
       direction: 'rtl',
       userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none',
     }}>
@@ -1450,7 +1450,7 @@ function Game({ state, dispatch }) {
 
       {/* ── Header ────────────────────────────────── */}
       <div className="ga-header" style={{
-        background: FELT, padding: '7px 12px',
+        background: 'rgba(6,14,30,.6)', padding: '7px 12px',
         color: CREAM, flexShrink: 0,
         borderBottom: `1px solid ${GOLD}44`,
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -1511,16 +1511,16 @@ function Game({ state, dispatch }) {
               flex: 1, minWidth: 0,
               background: active
                 ? 'linear-gradient(145deg, #b45309, #f59e0b)'
-                : 'rgba(255,255,255,.8)',
-              border: `2px solid ${active ? '#fde68a' : '#d6e6f3'}`,
-              borderRadius: 11, padding: '6px 6px', color: active ? CREAM : INK,
+                : 'rgba(6,14,30,.45)',
+              border: `2px solid ${active ? '#fde68a' : 'rgba(255,255,255,.12)'}`,
+              borderRadius: 11, padding: '6px 6px', color: CREAM,
               textAlign: 'center',
               boxShadow: active ? '0 0 16px rgba(245,158,11,.6)' : 'none',
               animation: active ? 'turnGlow 1.8s ease-in-out infinite' : 'none',
               transition: 'background .15s, border-color .15s, box-shadow .15s',
             }}>
               <div style={{
-                fontWeight: 700, fontSize: 12, color: active ? '#fffbeb' : INK, marginBottom: 3,
+                fontWeight: 700, fontSize: 12, color: active ? '#fffbeb' : CREAM, marginBottom: 3,
                 whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
               }}>
                 {active ? '▶ ' : ''}{p.name}
@@ -1535,7 +1535,7 @@ function Game({ state, dispatch }) {
                   </div>
                 ))}
               </div>
-              <div style={{ fontSize: 11, color: active ? 'rgba(255,255,255,.85)' : '#57534e', whiteSpace: 'nowrap' }}>
+              <div style={{ fontSize: 11, color: 'rgba(255,255,255,.75)', whiteSpace: 'nowrap' }}>
                 🃏{handN} · ⭐{p.totalScore}
               </div>
               {active && (
@@ -1559,7 +1559,7 @@ function Game({ state, dispatch }) {
           const blocked = state.phase === 'draw' && isMyTurn && human.hasLaid;
           return (
             <div style={{ textAlign: 'center' }}>
-              <div style={{ color: GOLDD, fontSize: 10, fontWeight: 700, marginBottom: 3 }}>🏠 בית</div>
+              <div style={{ color: GOLD, fontSize: 10, fontWeight: 700, marginBottom: 3 }}>🏠 בית</div>
               <div
                 onClick={() => canTake && drawOnce({ type: 'TAKE_BEIT' })}
                 style={{ cursor: canTake ? 'pointer' : 'default', opacity: blocked ? 0.4 : 1 }}
@@ -1575,7 +1575,7 @@ function Game({ state, dispatch }) {
 
         {/* Draw pile */}
         <div style={{ textAlign: 'center' }}>
-          <div style={{ color: '#57534e', fontSize: 10, marginBottom: 3 }}>
+          <div style={{ color: 'rgba(255,255,255,.7)', fontSize: 10, marginBottom: 3 }}>
             חבילה ({state.deckCount ?? state.deck?.length ?? 0})
           </div>
           <div
@@ -1583,10 +1583,10 @@ function Game({ state, dispatch }) {
             style={{
               width: 'var(--card-w)', height: 'var(--card-h)',
               borderRadius: 'calc(var(--card-h) * .1)',
-              border: `2px solid ${state.phase === 'draw' && isMyTurn ? GOLD : '#2d4d8a'}`,
+              border: `2px solid ${state.phase === 'draw' && isMyTurn ? GOLD : '#6b8cc4'}`,
               cursor: state.phase === 'draw' && isMyTurn ? 'pointer' : 'default',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: state.phase === 'draw' && isMyTurn ? `0 0 14px ${GOLD}88` : '0 2px 8px rgba(19,40,79,.3)',
+              boxShadow: state.phase === 'draw' && isMyTurn ? `0 0 14px ${GOLD}88` : '0 2px 8px rgba(0,0,0,.45)',
               transition: 'box-shadow .12s',
               backgroundImage: `repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(255,255,255,.04) 3px,rgba(255,255,255,.04) 6px),
                               linear-gradient(145deg,#1e3a6e,#0f2245)`,
@@ -1598,7 +1598,7 @@ function Game({ state, dispatch }) {
 
         {/* Discard pile — cumulative; take the top only via the buying offer */}
         <div style={{ textAlign: 'center' }}>
-          <div style={{ color: '#57534e', fontSize: 10, marginBottom: 3 }}>
+          <div style={{ color: 'rgba(255,255,255,.7)', fontSize: 10, marginBottom: 3 }}>
             אשפה ({state.discard.length})
           </div>
           {discard ? (() => {
@@ -1632,10 +1632,10 @@ function Game({ state, dispatch }) {
             <div style={{
               width: 'var(--card-w)', height: 'var(--card-h)',
               borderRadius: 'calc(var(--card-h) * .1)',
-              border: '2px dashed rgba(19,40,79,.22)',
+              border: '2px dashed rgba(255,255,255,.25)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              <span style={{ color: 'rgba(19,40,79,.3)', fontSize: 18 }}>∅</span>
+              <span style={{ color: 'rgba(255,255,255,.3)', fontSize: 18 }}>∅</span>
             </div>
           )}
         </div>
@@ -1643,7 +1643,7 @@ function Game({ state, dispatch }) {
 
       {/* ── Status bar ────────────────────────────── */}
       <div className="ga-status" style={{
-        background: FELT, padding: '5px 12px',
+        background: 'rgba(6,14,30,.6)', padding: '5px 12px',
         color: 'rgba(255,255,255,.85)', fontSize: 12,
         textAlign: 'center', flexShrink: 0,
       }}>
@@ -1796,7 +1796,7 @@ function Game({ state, dispatch }) {
         ) : (
           <div style={{
             textAlign: 'center', padding: '20px 0',
-            color: 'rgba(19,40,79,.35)', fontSize: 14,
+            color: 'rgba(255,255,255,.4)', fontSize: 14,
           }}>
             הלוח ריק
           </div>
