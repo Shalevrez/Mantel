@@ -12,8 +12,6 @@ import { createRoom, joinRoom } from "./net.js";
 // connection, the latest redacted state, and the lobby list.
 // ═══════════════════════════════════════════════════════
 
-const FONT = "'Noto Sans Hebrew','Segoe UI',Arial,sans-serif";
-
 // Injected by Vite from package.json (see vite.config.js). The fallback keeps
 // the UI sane if the app is ever served without going through the build.
 const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev';
@@ -133,7 +131,7 @@ function Home({ name, setName, code, setCode, error, connecting, handleCreate, h
     <Shell>
       <div style={{ textAlign: 'center', marginBottom: 22 }}>
         <div style={{ fontSize: 54, marginBottom: 4, filter: 'drop-shadow(0 2px 4px rgba(0,0,0,.2))' }}>🃏</div>
-        <h1 style={{ margin: 0, fontSize: 30, fontFamily: 'Georgia,serif', color: FELTD, letterSpacing: 2, fontWeight: 400 }}>
+        <h1 style={{ margin: 0, fontSize: 30, color: FELTD, letterSpacing: 2, fontWeight: 700 }}>
           רמי אקסטרים
         </h1>
         <div style={{ width: 50, height: 2, background: GOLD, margin: '8px auto' }} />
@@ -204,7 +202,7 @@ function Lobby({ lobby, code, error, onStart, onShowNotes }) {
     <Shell>
       <div style={{ textAlign: 'center', marginBottom: 16 }}>
         <div style={{ fontSize: 40 }}>🎴</div>
-        <h2 style={{ margin: '4px 0', color: FELTD, fontFamily: 'Georgia,serif', fontWeight: 400, fontSize: 22 }}>
+        <h2 style={{ margin: '4px 0', color: FELTD, fontWeight: 700, fontSize: 22 }}>
           חדר המתנה
         </h2>
       </div>
@@ -217,7 +215,7 @@ function Lobby({ lobby, code, error, onStart, onShowNotes }) {
           style={{
             display: 'inline-block', padding: '10px 26px', borderRadius: 14,
             background: FELT, color: GOLD, fontSize: 34, fontWeight: 700,
-            letterSpacing: 10, cursor: 'pointer', fontFamily: 'Georgia,serif',
+            letterSpacing: 10, cursor: 'pointer', fontVariantNumeric: 'tabular-nums',
             // Opts back in to selection (the app disables it globally for the
             // card drag), so the code can still be long-pressed and copied.
             boxShadow: `0 4px 16px ${FELT}66`,
@@ -311,12 +309,8 @@ function Shell({ children }) {
       minHeight: '100dvh',
       background: `radial-gradient(ellipse at 50% 30%, #1f6b3a 0%, ${FELTD} 70%)`,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      direction: 'rtl', padding: 16, fontFamily: FONT,
+      direction: 'rtl', padding: 16,
     }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Hebrew:wght@400;600;700&display=swap');
-        *{box-sizing:border-box;} input,button{font-family:inherit;}
-      `}</style>
       <div style={{
         background: CREAM, borderRadius: 22, padding: '26px 24px',
         maxWidth: 390, width: '100%',
@@ -351,7 +345,7 @@ function Splash({ text }) {
     <div style={{
       minHeight: '100dvh', background: FELTD, color: GOLD,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      direction: 'rtl', fontFamily: FONT, fontSize: 18,
+      direction: 'rtl', fontSize: 18,
     }}>
       <div style={{ textAlign: 'center' }}>
         <div style={{ fontSize: 44, marginBottom: 10 }}>🃏</div>
