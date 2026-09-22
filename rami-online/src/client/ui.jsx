@@ -9,7 +9,7 @@ import { useState, useReducer, useEffect, useRef } from "react";
 import {
   SUITS, SYM, COL, VD, cSc, cTxt, MK, FELT, FELTD, GOLD, CREAM,
   isSeq, isSet, isGroup, orderSeq, orderGroup, jokerValues, attachPos, meetsReq,
-  sortHand,
+  sortHand, handScore,
 } from "../game-core.js";
 import { RELEASES } from "../releases.js";
 
@@ -129,6 +129,224 @@ function GroupView({ group, onAttach, canAttach }) {
       transition: 'box-shadow .15s',
     }}>
       {group.cards.map(c => <CardView key={c.id} card={c} sm />)}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
+// SCOREBOARD — every finished round, side by side
+// ═══════════════════════════════════════════════════════
+
+// A column header has room for a couple of characters, not "שתי שלישיות", so a
+// round's mishkakon is written as its requirement in digits (4+4 = two quartets).
+// The full name rides along on the cell's title.
+const MK_SHORT = ['3', '3+3', '4', '4+4', '5', '5+5'];
+
+const RANK = ['🥇', '🥈', '🥉', '4️⃣'];
+
+// A round score is a penalty — less is better, and an ant is negative — so it's
+// always written with its sign.
+const fmtScore = (n) => n > 0 ? `+${n}` : n < 0 ? String(n) : '0';
+
+// The whole game on one grid: a row per player, a column per finished round,
+// and the running total. Fed by `state.history`, which the server appends to
+// as each round is scored, so every client sees the same table.
+function Leaderboard({ state, note }) {
+  const players = state.players || [];
+  const history = state.history || [];
+  // Lowest total wins, so the standings are ascending — as on every other screen.
+  const order = players
+    .map((p, seat) => ({ p, seat }))
+    .sort((a, b) => a.p.totalScore - b.p.totalScore);
+
+  const th = {
+    padding: '6px 4px', background: FELT, color: GOLD, fontSize: 11,
+    fontWeight: 700, whiteSpace: 'nowrap', textAlign: 'center',
+  };
+  const td = {
+    padding: '7px 4px', fontSize: 13, textAlign: 'center',
+    borderBottom: '1px solid #e7e5e4', fontVariantNumeric: 'tabular-nums',
+  };
+  // A signed number inside a right-to-left page is reordered by the browser:
+  // "+15" comes out as "15+" and "−50" as "50−". The cells that hold one are
+  // their own little left-to-right island so the sign stays in front.
+  const numCell = { ...td, direction: 'ltr', unicodeBidi: 'isolate' };
+
+  return (
+    <div>
+      {/* Six mishkakonim and a few extra deals make for more columns than a
+          phone is wide; the table scrolls sideways instead of squeezing. */}
+      <div style={{ overflowX: 'auto', borderRadius: 10, border: '1px solid #e7e5e4' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', background: 'white' }}>
+          <thead>
+            <tr>
+              <th style={{ ...th, textAlign: 'right', paddingInlineStart: 8 }}>שחקן</th>
+              {history.map(h => (
+                <th key={h.n} style={th} title={`${h.mkName} • סיבוב ${h.sivuv}`}>
+                  <div>{h.n}</div>
+                  <div style={{ fontSize: 9, opacity: .75, fontWeight: 400 }}>{MK_SHORT[h.mk] || ''}</div>
+                </th>
+              ))}
+              <th style={{ ...th, background: FELTD }}>סה״כ</th>
+            </tr>
+          </thead>
+          <tbody>
+            {order.map(({ p, seat }, rank) => (
+              <tr key={seat}>
+                <td style={{
+                  ...td, textAlign: 'right', paddingInlineStart: 8,
+                  fontWeight: 700, whiteSpace: 'nowrap',
+                  background: rank === 0 ? '#fefce8' : 'transparent',
+                }}>
+                  {RANK[rank]} {p.name}{p.you ? ' (אתה)' : ''}
+                </td>
+                {history.map(h => {
+                  const s = h.scores[seat] ?? 0;
+                  const won = h.w === seat;
+                  return (
+                    <td key={h.n}
+                      title={won ? (h.isAnt ? 'אנט!' : 'סיים ראשון') : undefined}
+                      style={{
+                        ...numCell,
+                        color: s > 0 ? '#b91c1c' : '#15803d',
+                        fontWeight: won ? 700 : 400,
+                        background: won ? (h.isAnt ? '#f5f3ff' : '#f0fdf4') : 'transparent',
+                      }}>
+                      {won ? (h.isAnt ? '🎯' : '🏆') : ''}{fmtScore(s)}
+                    </td>
+                  );
+                })}
+                <td style={{
+                  ...numCell, fontWeight: 700, fontSize: 15, color: FELTD,
+                  background: rank === 0 ? '#fefce8' : '#fafaf9',
+                }}>
+                  {p.totalScore}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {history.length === 0 && (
+        <div style={{ color: '#78716c', fontSize: 12, textAlign: 'center', marginTop: 8 }}>
+          עדיין לא הסתיים אף סיבוב — הטבלה תתמלא בסוף הסיבוב הראשון.
+        </div>
+      )}
+      {note}
+      <div style={{ color: '#a8a29e', fontSize: 11, textAlign: 'center', marginTop: 8 }}>
+        כמה שפחות נקודות — יותר טוב · 🎯 אנט · 🏆 סיים ראשון
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
+// BOARD REVEAL — what was laid down, after the round is over
+// ═══════════════════════════════════════════════════════
+
+// The groups keep their felt background here: their green/amber tints are drawn
+// for the table, and on the cream end-of-round card they'd wash out.
+function BoardReveal({ board, empty = 'לא הורדו קבוצות בסיבוב הזה' }) {
+  const groups = board || [];
+  return (
+    <div style={{
+      background: `radial-gradient(ellipse at 50% 0%, #1f6b3a, ${FELTD})`,
+      borderRadius: 12, border: `1px solid ${GOLD}55`, padding: 8,
+      maxHeight: 260, overflowY: 'auto',
+    }}>
+      {groups.length ? (
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center' }}>
+          {groups.map(g => <GroupView key={g.id} group={g} />)}
+        </div>
+      ) : (
+        <div style={{
+          textAlign: 'center', color: 'rgba(255,255,255,.5)',
+          fontSize: 13, padding: '18px 0',
+        }}>{empty}</div>
+      )}
+    </div>
+  );
+}
+
+// A row of segmented buttons — the end-of-round card is too small to stack the
+// round summary, the table and the board on top of each other.
+function SegTabs({ tabs, active, onPick }) {
+  return (
+    <div style={{
+      display: 'flex', gap: 4, background: '#e7e5e4',
+      borderRadius: 10, padding: 3, marginBottom: 12,
+    }}>
+      {tabs.map(t => (
+        <button key={t.key} onClick={() => onPick(t.key)} style={{
+          flex: 1, padding: '7px 2px', borderRadius: 8, border: 'none',
+          cursor: 'pointer', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit',
+          background: active === t.key ? FELT : 'transparent',
+          color: active === t.key ? GOLD : '#57534e',
+        }}>{t.label}</button>
+      ))}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
+// SCORE MODAL — the table, mid-game
+// ═══════════════════════════════════════════════════════
+
+function ScoreModal({ state, onClose }) {
+  const me = state.players.find(p => p.you);
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 1000,
+        background: 'rgba(0,0,0,.6)', backdropFilter: 'blur(2px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        direction: 'rtl', padding: 14,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="rules-card"
+        style={{
+          background: CREAM, borderRadius: 20, maxWidth: 440, width: '100%',
+          display: 'flex', flexDirection: 'column',
+          border: `2px solid ${GOLD}88`, boxShadow: '0 24px 72px rgba(0,0,0,.6)',
+          overflow: 'hidden',
+        }}
+      >
+        <div style={{
+          background: FELT, padding: '14px 18px', display: 'flex',
+          alignItems: 'center', justifyContent: 'space-between', flexShrink: 0,
+        }}>
+          <span style={{ color: GOLD, fontSize: 20, fontWeight: 700 }}>
+            🏆 טבלת ניקוד
+          </span>
+          <button onClick={onClose} style={{
+            background: 'rgba(255,255,255,.15)', color: CREAM, border: 'none',
+            borderRadius: 8, width: 30, height: 30, fontSize: 18, cursor: 'pointer',
+            fontWeight: 700, lineHeight: 1,
+          }}>✕</button>
+        </div>
+
+        <div style={{ padding: '16px 16px 20px', overflowY: 'auto' }}>
+          <Leaderboard
+            state={state}
+            note={me && me.hand ? (
+              <div style={{
+                marginTop: 10, padding: '9px 12px', borderRadius: 10,
+                background: '#fffbeb', border: '1px solid #fde68a',
+                color: '#92400e', fontSize: 13, textAlign: 'center', fontWeight: 700,
+              }}>
+                ✋ היד שלך כרגע: {handScore(me.hand)} נק׳ ({me.hand.length} קלפים)
+                <div style={{ fontWeight: 400, fontSize: 11.5, marginTop: 3 }}>
+                  זה מה שייזקף לך אם הסיבוב ייגמר ברגע זה
+                </div>
+              </div>
+            ) : null}
+          />
+        </div>
+      </div>
     </div>
   );
 }
@@ -535,6 +753,9 @@ function RoundEnd({ state, dispatch }) {
   const { result, players, mk, sivuv } = state;
   const winner = result.w !== null ? players[result.w] : null;
   const sorted = [...players].sort((a, b) => a.totalScore - b.totalScore);
+  // This round's own tally opens first. The cross-round table and the cards that
+  // were laid down are one tap away, and stay there until somebody deals again.
+  const [tab, setTab] = useState('round');
 
   return (
     <div style={{
@@ -543,13 +764,14 @@ function RoundEnd({ state, dispatch }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       direction: 'rtl', padding: 16,
     }}>
-      <div style={{
+      <div className="rules-card" style={{
         background: CREAM, borderRadius: 22, padding: 24,
-        maxWidth: 380, width: '100%',
+        maxWidth: 420, width: '100%',
         border: `2px solid ${GOLD}66`,
         boxShadow: `0 20px 60px rgba(0,0,0,.55)`,
+        display: 'flex', flexDirection: 'column',
       }}>
-        <div style={{ textAlign: 'center', marginBottom: 16 }}>
+        <div style={{ textAlign: 'center', marginBottom: 16, flexShrink: 0 }}>
           <div style={{ fontSize: 42 }}>
             {result.isAnt ? '🎯' : result.empty ? '📦' : '✅'}
           </div>
@@ -567,13 +789,23 @@ function RoundEnd({ state, dispatch }) {
             background: result.isAnt ? '#f5f3ff' : '#f0fdf4',
             border: `2px solid ${result.isAnt ? '#a78bfa' : '#86efac'}`,
             color: result.isAnt ? '#5b21b6' : '#15803d', fontWeight: 700, fontSize: 16,
+            flexShrink: 0,
           }}>
             {winner.name} {result.isAnt ? 'אנט! (−50 נק׳) 🎯' : 'סיים ראשון! 🏆'}
           </div>
         )}
 
-        <div style={{ marginBottom: 16 }}>
-          {sorted.map((p, i) => {
+        <SegTabs
+          active={tab} onPick={setTab}
+          tabs={[
+            { key: 'round', label: '📋 הסיבוב' },
+            { key: 'table', label: '🏆 טבלה' },
+            { key: 'board', label: '🃏 הורדות' },
+          ]}
+        />
+
+        <div style={{ marginBottom: 16, overflowY: 'auto' }}>
+          {tab === 'round' && sorted.map((p, i) => {
             const ls = p.lastScore ?? 0;
             return (
               <div key={p.id} style={{
@@ -583,10 +815,13 @@ function RoundEnd({ state, dispatch }) {
                 border: `2px solid ${p.id === result.w ? '#86efac' : '#e7e5e4'}`,
               }}>
                 <span style={{ fontWeight: 700 }}>
-                  {['🥇', '🥈', '🥉', '4️⃣'][i]} {p.name}
+                  {RANK[i]} {p.name}
                 </span>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                  <span style={{ fontSize: 12, color: ls > 0 ? '#dc2626' : '#16a34a' }}>
+                  <span style={{
+                    fontSize: 12, color: ls > 0 ? '#dc2626' : '#16a34a',
+                    direction: 'ltr', unicodeBidi: 'isolate',
+                  }}>
                     {ls > 0 ? `+${ls}` : ls < 0 ? ls : '±0'}
                   </span>
                   <span style={{ fontWeight: 700, fontSize: 16, color: FELTD }}>
@@ -596,9 +831,20 @@ function RoundEnd({ state, dispatch }) {
               </div>
             );
           })}
+
+          {tab === 'table' && <Leaderboard state={state} />}
+
+          {tab === 'board' && (
+            <>
+              <BoardReveal board={state.board} />
+              <div style={{ color: '#a8a29e', fontSize: 11, textAlign: 'center', marginTop: 8 }}>
+                כל הקבוצות שהורדו לשולחן בסיבוב הזה
+              </div>
+            </>
+          )}
         </div>
 
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
           <button onClick={() => dispatch({ type: 'NEW_HAND' })} style={{
             flex: 1, padding: '11px 0', background: '#e7e5e4',
             color: '#57534e', border: '2px solid #d6d3d1',
@@ -628,6 +874,10 @@ function RoundEnd({ state, dispatch }) {
 
 function GameEnd({ state, onRestart }) {
   const sorted = [...state.players].sort((a, b) => a.totalScore - b.totalScore);
+  // The final table is the point of this screen, so it opens on the standings;
+  // the round-by-round grid and the last board are behind the other two tabs.
+  const [tab, setTab] = useState('final');
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -635,12 +885,13 @@ function GameEnd({ state, onRestart }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       direction: 'rtl', padding: 16,
     }}>
-      <div style={{
+      <div className="rules-card" style={{
         background: CREAM, borderRadius: 22, padding: 28,
-        maxWidth: 380, width: '100%',
+        maxWidth: 420, width: '100%',
         border: `2px solid ${GOLD}`, boxShadow: `0 24px 72px rgba(0,0,0,.6)`,
+        display: 'flex', flexDirection: 'column',
       }}>
-        <div style={{ textAlign: 'center', marginBottom: 20 }}>
+        <div style={{ textAlign: 'center', marginBottom: 20, flexShrink: 0 }}>
           <div style={{ fontSize: 56 }}>🏆</div>
           <h2 style={{ margin: '6px 0 4px', color: FELTD, fontSize: 28, fontWeight: 700 }}>
             סיום המשחק
@@ -649,25 +900,49 @@ function GameEnd({ state, onRestart }) {
             {sorted[0].name} ניצח!
           </p>
         </div>
-        {sorted.map((p, i) => (
-          <div key={p.id} style={{
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            padding: '12px 14px', borderRadius: 12, marginBottom: 8,
-            background: i === 0 ? '#fefce8' : '#fafaf9',
-            border: i === 0 ? `2px solid ${GOLD}` : '2px solid #e7e5e4',
-          }}>
-            <span style={{ fontWeight: 700, fontSize: 15 }}>
-              {['🥇', '🥈', '🥉', '4️⃣'][i]} {p.name}
-            </span>
-            <span style={{ fontWeight: 700, fontSize: 20, color: FELTD }}>
-              {p.totalScore}<span style={{ fontSize: 12, color: '#78716c', fontWeight: 400 }}> נק׳</span>
-            </span>
-          </div>
-        ))}
+
+        <SegTabs
+          active={tab} onPick={setTab}
+          tabs={[
+            { key: 'final', label: '🏁 סופי' },
+            { key: 'table', label: '🏆 טבלה' },
+            { key: 'board', label: '🃏 הורדות' },
+          ]}
+        />
+
+        <div style={{ overflowY: 'auto' }}>
+          {tab === 'final' && sorted.map((p, i) => (
+            <div key={p.id} style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '12px 14px', borderRadius: 12, marginBottom: 8,
+              background: i === 0 ? '#fefce8' : '#fafaf9',
+              border: i === 0 ? `2px solid ${GOLD}` : '2px solid #e7e5e4',
+            }}>
+              <span style={{ fontWeight: 700, fontSize: 15 }}>
+                {RANK[i]} {p.name}
+              </span>
+              <span style={{ fontWeight: 700, fontSize: 20, color: FELTD }}>
+                {p.totalScore}<span style={{ fontSize: 12, color: '#78716c', fontWeight: 400 }}> נק׳</span>
+              </span>
+            </div>
+          ))}
+
+          {tab === 'table' && <Leaderboard state={state} />}
+
+          {tab === 'board' && (
+            <>
+              <BoardReveal board={state.board} empty="לא נשארו קבוצות על השולחן" />
+              <div style={{ color: '#a8a29e', fontSize: 11, textAlign: 'center', marginTop: 8 }}>
+                הקבוצות שהורדו בסיבוב האחרון
+              </div>
+            </>
+          )}
+        </div>
+
         <button onClick={onRestart} style={{
           width: '100%', padding: '14px 0', background: FELT, color: GOLD,
           border: `2px solid ${GOLD}`, borderRadius: 13,
-          fontSize: 17, fontWeight: 700, cursor: 'pointer', marginTop: 12,
+          fontSize: 17, fontWeight: 700, cursor: 'pointer', marginTop: 12, flexShrink: 0,
         }}>
           🎮 משחק חדש
         </button>
@@ -685,6 +960,7 @@ function Game({ state, dispatch }) {
   const [attachMode, setAttachMode] = useState(false);
   const [showRules, setShowRules] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
+  const [showScores, setShowScores] = useState(false);
   // Long-press drag: { card, x, y } once a drag is active
   const [drag, setDrag] = useState(null);
   const dragRef = useRef({ timer: null, startX: 0, startY: 0, card: null, active: false });
@@ -697,6 +973,10 @@ function Game({ state, dispatch }) {
   // to "is it my turn": UI controls light up only on my own turn.
   const human   = me;
   const discard = state.discard[state.discard.length - 1];
+  // What the hand is worth right now — the penalty this player takes if the
+  // round ends on someone else's card. Recomputed every render, so it tracks
+  // every draw, lay and discard without the server having to send it.
+  const myPts   = handScore(human.hand);
   const mk      = MK[state.mk];
   const buy     = state.buy;
 
@@ -942,6 +1222,14 @@ function Game({ state, dispatch }) {
           .hand-hint { display: none; }
         }
 
+        /* ── A small phone (or a narrow split view). The header carries four
+           controls now, so the buttons drop their words and keep their icons,
+           and the hand's drag hint gives up its room to the points chip. ── */
+        @media (max-width: 380px) {
+          .hdr-label { display: none; }
+          .hand-hint { display: none; }
+        }
+
         @keyframes newCardPulse {
           0%   { box-shadow: 0 0 0 3px ${GOLD}, 0 0 18px ${GOLD}88; }
           50%  { box-shadow: 0 0 0 5px ${GOLD}, 0 0 28px ${GOLD}cc; }
@@ -982,7 +1270,7 @@ function Game({ state, dispatch }) {
         <span style={{ fontWeight: 700, color: GOLD }}>
           {mk.name}
         </span>
-        <span style={{ color: 'rgba(255,255,255,.7)' }}>סיבוב {state.sivuv}</span>
+        <span style={{ color: 'rgba(255,255,255,.7)', whiteSpace: 'nowrap' }}>סיבוב {state.sivuv}</span>
         <span style={{
           fontSize: 11, padding: '2px 9px', borderRadius: 20,
           background: state.canLay ? 'rgba(34,197,94,.25)' : 'rgba(251,191,36,.25)',
@@ -995,7 +1283,12 @@ function Game({ state, dispatch }) {
             background: 'rgba(255,255,255,.12)', color: CREAM, border: 'none',
             borderRadius: 8, fontSize: 12, fontWeight: 700, padding: '3px 9px',
             cursor: 'pointer', fontFamily: 'inherit',
-          }}>📖 חוקים</button>
+          }}>📖<span className="hdr-label"> חוקים</span></button>
+          <button onClick={() => setShowScores(true)} title="טבלת ניקוד" style={{
+            background: 'rgba(255,255,255,.12)', color: CREAM, border: 'none',
+            borderRadius: 8, fontSize: 12, fontWeight: 700, padding: '3px 9px',
+            cursor: 'pointer', fontFamily: 'inherit',
+          }}>🏆<span className="hdr-label"> ניקוד</span></button>
           <button onClick={() => setShowNotes(true)} title="מה חדש בגרסה" style={{
             background: 'rgba(255,255,255,.12)', color: CREAM, border: 'none',
             borderRadius: 8, fontSize: 12, fontWeight: 700, padding: '3px 8px',
@@ -1006,6 +1299,7 @@ function Game({ state, dispatch }) {
 
       {showRules && <RulesModal onClose={() => setShowRules(false)} />}
       {showNotes && <ReleaseNotes onClose={() => setShowNotes(false)} />}
+      {showScores && <ScoreModal state={state} onClose={() => setShowScores(false)} />}
 
       {/* Opponents, piles and the status line. In portrait each one falls into
           its own grid area; in landscape they stack into the side rail. */}
@@ -1164,7 +1458,8 @@ function Game({ state, dispatch }) {
       }}>
         <span style={{ fontWeight: 600 }}>{phaseLabel()}</span>
         <span style={{ color: 'rgba(255,255,255,.45)', marginRight: 10 }}>
-          יד: {human.hand.length} • סה״כ: {human.totalScore} נק׳
+          יד: {human.hand.length} קלפים · <b style={{ color: GOLD, whiteSpace: 'nowrap' }}>{myPts} נק׳</b>
+          {' '}• סה״כ: {human.totalScore}
         </span>
       </div>
 
@@ -1376,6 +1671,20 @@ function Game({ state, dispatch }) {
             <span className="hand-hint" style={{ color: 'rgba(255,255,255,.4)', fontSize: 11 }}>
               לחיצה ארוכה + גרירה לסידור הקלפים
             </span>
+            {/* The live cost of whatever is still in the hand. Tapping it opens
+                the full table, so the number is never a dead end. */}
+            <button
+              onClick={() => setShowScores(true)}
+              title="כמה נקודות ייזקפו לך אם הסיבוב ייגמר עכשיו"
+              style={{
+                background: 'rgba(251,191,36,.14)', color: GOLD,
+                border: `1px solid ${GOLD}55`, borderRadius: 8,
+                fontSize: 12, fontWeight: 700, padding: '5px 10px',
+                cursor: 'pointer', fontFamily: 'inherit',
+                marginInlineStart: 'auto', marginInlineEnd: 6,
+                fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
+              }}
+            >✋ {myPts} נק׳ ביד</button>
             <button
               onClick={() => dispatch({ type: 'SORT' })}
               style={{
@@ -1455,4 +1764,8 @@ function Game({ state, dispatch }) {
   );
 }
 
-export { CardView, GroupView, RulesModal, ReleaseNotes, Setup, RoundEnd, GameEnd, Game };
+export {
+  CardView, GroupView, RulesModal, ReleaseNotes, Setup,
+  Leaderboard, BoardReveal, ScoreModal,
+  RoundEnd, GameEnd, Game,
+};

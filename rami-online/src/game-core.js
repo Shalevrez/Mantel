@@ -16,6 +16,11 @@ const VD    = v => ({ 1:'A', 11:'J', 12:'Q', 13:'K' }[v] ?? String(v));
 const cSc   = c => c.j ? 10 : (c.v === 1 || c.v >= 11 ? 10 : c.v);
 const cTxt  = c => c.j ? 'JK' : VD(c.v) + SYM[c.suit];
 
+// What a hand is worth right now: the penalty its holder takes if the round
+// ends here. The same sum the round-end scoring does, so the live counter on
+// the game screen and the scoreboard can never disagree.
+const handScore = hand => (hand || []).reduce((sum, c) => sum + cSc(c), 0);
+
 const MK = [
   { name:'שלישייה',      seqs:1, min:3 },
   { name:'שתי שלישיות',  seqs:2, min:3 },
@@ -223,23 +228,43 @@ function initGame(configs) {
     id: i, name: c.name, isAI: c.isAI, ai: c.ai || 'medium',
     hand: [], hasLaid: false, totalScore: 0,
   }));
-  return startHand({ players, mk: 0, sivuv: 0, log: ['🃏 המשחק התחיל!'] });
+  return startHand({ players, mk: 0, sivuv: 0, history: [], log: ['🃏 המשחק התחיל!'] });
 }
 
 // ═══════════════════════════════════════════════════════
 // REDUCER HELPERS
 // ═══════════════════════════════════════════════════════
 
+// One finished round, kept for the scoreboard. Only the numbers a leaderboard
+// needs — never a card — so this rides out to every client with the state.
+// `players` are the already-scored players, so a row can never drift from the
+// totals the round-end screen shows.
+function roundRecord(state, players, result) {
+  return {
+    n: (state.history || []).length + 1,
+    mk: state.mk,
+    mkName: MK[state.mk].name,
+    sivuv: state.sivuv,
+    w: result.w,
+    isAnt: result.isAnt,
+    empty: result.empty,
+    scores: players.map(p => p.lastScore ?? 0),
+    totals: players.map(p => p.totalScore),
+  };
+}
+
 function endWin(state, players, board, isAnt) {
   const w = state.cur;
   const up = players.map((p, i) => {
-    const hs = p.hand.reduce((s, c) => s + cSc(c), 0);
+    const hs = handScore(p.hand);
     const bonus = (i === w && isAnt) ? -50 : 0;
     return { ...p, totalScore: p.totalScore + hs + bonus, lastScore: hs + bonus };
   });
+  const result = { w, isAnt, empty: false };
   return {
     ...state, phase: 'round_end', board, players: up, staging: [], sel: [], msg: '',
-    result: { w, isAnt, empty: false },
+    result,
+    history: [...(state.history || []), roundRecord(state, up, result)],
     log: [...state.log, `✓ ${state.players[w].name} ${isAnt ? 'אנט! (−50)' : 'סיים!'}`],
   };
 }
@@ -247,12 +272,14 @@ function endWin(state, players, board, isAnt) {
 function endDeck(state) {
   const up = state.players.map(p => ({
     ...p,
-    totalScore: p.totalScore + p.hand.reduce((s, c) => s + cSc(c), 0),
-    lastScore: p.hand.reduce((s, c) => s + cSc(c), 0),
+    totalScore: p.totalScore + handScore(p.hand),
+    lastScore: handScore(p.hand),
   }));
+  const result = { w: null, isAnt: false, empty: true };
   return {
     ...state, phase: 'round_end', players: up, staging: [], sel: [], msg: '',
-    result: { w: null, isAnt: false, empty: true },
+    result,
+    history: [...(state.history || []), roundRecord(state, up, result)],
     log: [...state.log, '📦 החבילה נגמרה'],
   };
 }
@@ -774,8 +801,8 @@ function aiDiscard(hand) {
 
 export {
   SUITS, SYM, COL, VD, cSc, cTxt, MK, FELT, FELTD, GOLD, CREAM,
-  uid, sortHand, mkCard, makeDeck, shuffle,
+  uid, sortHand, mkCard, makeDeck, shuffle, handScore,
   isSeq, isSet, isGroup, orderSeq, orderGroup, jokerValues, attachPos, meetsReq,
-  startHand, initGame, endWin, endDeck, nextCk,
+  startHand, initGame, endWin, endDeck, nextCk, roundRecord,
   G, aiWantCard, findAIGroups, aiDiscard,
 };
