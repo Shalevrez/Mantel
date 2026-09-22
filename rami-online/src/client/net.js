@@ -38,16 +38,23 @@ export async function createRoom() {
 }
 
 // Open a live connection to a room. Returns a small controller.
-// callbacks: { onLobby, onState, onError, onOpen, onClose, onRoomClosed }
-export function joinRoom({ code, name, host = false }, callbacks = {}) {
+// callbacks: { onLobby, onState, onError, onOpen, onClose, onRoomClosed, onNoSeat }
+// `resume` asks only for a seat this player already holds (a page reloaded
+// mid-game); the server answers 'noseat' instead of seating anyone new.
+export function joinRoom({ code, name, host = false, resume = false }, callbacks = {}) {
   let ws = null;
   let closedByUs = false;
   let retry = 0;
+  // Once the server has seated us, every reconnect is a resume: if the room is
+  // gone by then, landing in a brand-new empty room under the same code would
+  // be worse than being told there's nothing to go back to.
+  let seated = false;
 
   const url = () =>
     `${wsBase()}/api/room?code=${encodeURIComponent(code)}` +
     `&name=${encodeURIComponent(name)}&host=${host ? 1 : 0}` +
-    `&pid=${encodeURIComponent(playerId())}`;
+    `&pid=${encodeURIComponent(playerId())}` +
+    (resume || seated ? '&resume=1' : '');
 
   function connect() {
     ws = new WebSocket(url());
@@ -57,7 +64,7 @@ export function joinRoom({ code, name, host = false }, callbacks = {}) {
     ws.onmessage = (evt) => {
       let msg;
       try { msg = JSON.parse(evt.data); } catch { return; }
-      if (msg.t === 'lobby')  callbacks.onLobby && callbacks.onLobby(msg);
+      if (msg.t === 'lobby') { seated = true; callbacks.onLobby && callbacks.onLobby(msg); }
       else if (msg.t === 'state') callbacks.onState && callbacks.onState(msg.state);
       else if (msg.t === 'error') callbacks.onError && callbacks.onError(msg.msg);
       else if (msg.t === 'closed') {
@@ -66,6 +73,11 @@ export function joinRoom({ code, name, host = false }, callbacks = {}) {
         // room under the same code instead of telling the player it's over.
         closedByUs = true;
         callbacks.onRoomClosed && callbacks.onRoomClosed(msg.reason);
+      }
+      else if (msg.t === 'noseat') {
+        // Resume found no seat of ours in this room — nothing to reconnect to.
+        closedByUs = true;
+        callbacks.onNoSeat && callbacks.onNoSeat();
       }
     };
 
