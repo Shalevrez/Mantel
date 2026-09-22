@@ -329,7 +329,12 @@ function G(state, action) {
   }
 
   // ── Draw ──────────────────────────────────────────
+  // Drawing is only ever valid while the draw decision is still open. Without this
+  // guard a double-tap on the pile sends two DRAWs — the second still looks legal
+  // (same player, still their turn), so they'd draw twice and play the turn holding
+  // an extra card. Every other turn action already refuses a repeat this way.
   if (type === 'DRAW') {
+    if (state.phase !== 'draw') return state;
     if (!state.deck.length) return endDeck(state);
     const card = state.deck[0];
     const p = state.players[state.cur];

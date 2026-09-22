@@ -350,6 +350,12 @@ export class Room {
       if (action.type === 'BUY') return seat === st.buy.checker && action.idx === seat;
       return seat === st.buy.checker;
     }
+    // The draw decision — pull from the pile, or take the beit — is open only in the
+    // 'draw' phase, and each player makes it once per turn. A double-tap on the pile
+    // arrives as two DRAWs, because the client can't know the first one landed until
+    // the new state comes back, so anything past the first is dropped here.
+    if (['DRAW', 'TAKE_BEIT'].includes(action.type))
+      return seat === st.cur && st.phase === 'draw';
     // Everything else: only the player whose turn it is
     return seat === st.cur;
   }

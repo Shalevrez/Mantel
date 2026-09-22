@@ -705,6 +705,21 @@ function Game({ state, dispatch }) {
   const humanDecides  = buy && buy.checker === mySeat;
   const isFreeOffer   = buy && buy.checker === buy.origNext;
 
+  // ── One draw per turn, even on a double-tap ──────────────────────────────
+  // The pile stays lit until the server's next state arrives, so two fast taps would
+  // both pass the `phase === 'draw'` test on the pile and send two DRAWs. The server
+  // now drops the second, but don't fire it at all: latch the draw decision (pile or
+  // beit) to the state object it was made on. Every state the server pushes — a new
+  // turn, an undone beit, a reconnect resync — is a fresh object, so the latch clears
+  // itself and a dropped message can never leave the player unable to draw.
+  const drawLatch = useRef({ state: null, sent: false });
+  if (drawLatch.current.state !== state) drawLatch.current = { state, sent: false };
+  const drawOnce = (action) => {
+    if (drawLatch.current.sent) return;
+    drawLatch.current.sent = true;
+    dispatch(action);
+  };
+
   const stagedIds  = new Set(state.staging.flatMap(g => g.cards.map(c => c.id)));
   // selCards = selected but not yet staged
   const selCards   = human.hand.filter(c => state.sel.includes(c.id) && !stagedIds.has(c.id));
@@ -1061,7 +1076,7 @@ function Game({ state, dispatch }) {
             <div style={{ textAlign: 'center' }}>
               <div style={{ color: GOLD, fontSize: 10, marginBottom: 3 }}>🏠 בית</div>
               <div
-                onClick={() => canTake && dispatch({ type: 'TAKE_BEIT' })}
+                onClick={() => canTake && drawOnce({ type: 'TAKE_BEIT' })}
                 style={{ cursor: canTake ? 'pointer' : 'default', opacity: blocked ? 0.4 : 1 }}
                 title={blocked ? 'אפשר לקחת בית רק לפני שהורדת (לאנט)' : undefined}
               >
@@ -1079,7 +1094,7 @@ function Game({ state, dispatch }) {
             חבילה ({state.deckCount ?? state.deck?.length ?? 0})
           </div>
           <div
-            onClick={() => state.phase === 'draw' && isMyTurn && dispatch({ type: 'DRAW' })}
+            onClick={() => state.phase === 'draw' && isMyTurn && drawOnce({ type: 'DRAW' })}
             style={{
               width: 'var(--card-w)', height: 'var(--card-h)',
               borderRadius: 'calc(var(--card-h) * .1)',
