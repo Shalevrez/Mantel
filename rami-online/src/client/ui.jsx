@@ -13,8 +13,14 @@ import {
   sortHand, moveCard, handScore,
 } from "../game-core.js";
 
-// Card backs (hands, fans, the draw pile): burgundy with gold trim, to stand out on the navy table.
-const BACK_GRAD = 'linear-gradient(145deg,#8a1c2e 0%,#5e1020 60%,#3f0a15 100%)';
+// Card backs (hands, fans, the draw pile): a classic white back with a navy
+// lattice inside a thin navy frame, so they stand out on the navy table.
+// One background shorthand for all layers, so no later property can override it.
+const BACK_BG = `repeating-linear-gradient(45deg, transparent 0 4px, rgba(30,58,95,.35) 4px 5px),
+                 repeating-linear-gradient(-45deg, transparent 0 4px, rgba(30,58,95,.35) 4px 5px),
+                 #fdf8f0`;
+// A white margin, then the navy frame line, drawn inside the card edge.
+const BACK_FRAME = `inset 0 0 0 3px #fdf8f0, inset 0 0 0 4px ${FELT}`;
 import { RELEASES } from "../releases.js";
 
 
@@ -65,16 +71,12 @@ function CardView({ card, sel, onClick, sm, back, glow, faded, newCard, attached
     <div style={{
       width: w, height: h,
       borderRadius: radius, flexShrink: 0, margin: sm ? '0 1px' : '0 2px',
-      // One backgroundImage for all layers: a separate `background` gradient
-      // would be overridden by it and leave the back see-through.
-      backgroundImage: `repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(255,255,255,.05) 3px, rgba(255,255,255,.05) 6px),
-                        radial-gradient(circle at 50% 50%, rgba(201,151,58,.22), transparent 60%),
-                        ${BACK_GRAD}`,
-      border: `1.5px solid ${GOLD}`,
-      boxShadow: 'inset 0 0 0 2px rgba(201,151,58,.35), 0 2px 6px rgba(0,0,0,.45)',
+      background: BACK_BG,
+      border: '1.5px solid #fdf8f0',
+      boxShadow: `${BACK_FRAME}, 0 2px 6px rgba(0,0,0,.45)`,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
-      <span style={{ color: 'rgba(201,151,58,.8)', fontSize: fs(.29) }}>♦</span>
+      <span style={{ color: FELT, fontSize: fs(.29) }}>♦</span>
     </div>
   );
 
@@ -1588,16 +1590,15 @@ function Game({ state, dispatch }) {
             style={{
               width: 'var(--card-w)', height: 'var(--card-h)',
               borderRadius: 'calc(var(--card-h) * .1)',
-              border: `2px solid ${state.phase === 'draw' && isMyTurn ? GOLD : GOLD + '99'}`,
+              border: `2px solid ${state.phase === 'draw' && isMyTurn ? GOLD : '#fdf8f0'}`,
               cursor: state.phase === 'draw' && isMyTurn ? 'pointer' : 'default',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: state.phase === 'draw' && isMyTurn ? `0 0 14px ${GOLD}88` : '0 2px 8px rgba(0,0,0,.45)',
+              boxShadow: `${BACK_FRAME}, ` + (state.phase === 'draw' && isMyTurn ? `0 0 14px ${GOLD}88` : '0 2px 8px rgba(0,0,0,.45)'),
               transition: 'box-shadow .12s',
-              backgroundImage: `repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(255,255,255,.04) 3px,rgba(255,255,255,.04) 6px),
-                              ${BACK_GRAD}`,
+              background: BACK_BG,
             }}
           >
-            <span style={{ fontSize: 'calc(var(--card-h) * .39)', color: CREAM }}>🂠</span>
+            <span style={{ fontSize: 'calc(var(--card-h) * .39)', color: FELT }}>🂠</span>
           </div>
         </div>
 
