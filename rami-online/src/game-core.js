@@ -46,6 +46,23 @@ const sortHand = hand =>
     return so !== 0 ? so : a.v - b.v;
   });
 
+// Move card `cid` next to card `targetId` — in front of it, or right after it
+// when `after` is set (the only way to reach the last slot). Returns the same
+// array when nothing moves, so callers can tell a no-op drop from a real one.
+// Shared by the reducer and the client, which applies a drop at once instead
+// of waiting for the server to echo it back.
+const moveCard = (hand, cid, targetId, after = false) => {
+  if (cid === targetId) return hand;
+  const from = hand.findIndex(c => c.id === cid);
+  if (from < 0) return hand;
+  const rest = hand.filter(c => c.id !== cid);
+  const at = rest.findIndex(c => c.id === targetId);
+  const to = at < 0 ? rest.length : at + (after ? 1 : 0);
+  if (to === from) return hand;
+  rest.splice(to, 0, hand[from]);
+  return rest;
+};
+
 // ═══════════════════════════════════════════════════════
 // CARD UTILS
 // ═══════════════════════════════════════════════════════
@@ -430,14 +447,8 @@ function G(state, action) {
   if (type === 'REORDER') {
     const p = state.players[handSeat];
     if (!p || p.isAI) return state;
-    const { cid, targetId } = action;
-    if (cid === targetId) return state;
-    const hand = [...p.hand];
-    const from = hand.findIndex(c => c.id === cid);
-    if (from < 0) return state;
-    const [moved] = hand.splice(from, 1);
-    let to = hand.findIndex(c => c.id === targetId);
-    if (to < 0) hand.push(moved); else hand.splice(to, 0, moved);
+    const hand = moveCard(p.hand, action.cid, action.targetId, !!action.after);
+    if (hand === p.hand) return state;
     const players = state.players.map((pl, i) => i === handSeat ? { ...pl, hand } : pl);
     return { ...state, players };
   }
@@ -869,7 +880,7 @@ function aiDiscard(hand, level = 'medium', rnd = Math.random) {
 export {
   SUITS, SYM, COL, VD, cSc, cTxt, MK, FELT, FELTD, GOLD, CREAM,
   AI_LEVELS, AI_LEVEL_NAMES, aiLevel, cardAffinity, decksFor,
-  uid, sortHand, mkCard, makeDeck, shuffle, handScore,
+  uid, sortHand, moveCard, mkCard, makeDeck, shuffle, handScore,
   isSeq, isSet, isGroup, orderSeq, orderGroup, jokerValues, attachPos, meetsReq,
   startHand, initGame, endWin, endDeck, nextCk, roundRecord,
   G, aiWantCard, findAIGroups, aiDiscard,
