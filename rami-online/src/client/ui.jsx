@@ -22,8 +22,15 @@ const CARD_H    = 'var(--card-h, 62px)';
 const CARD_W_SM = 'var(--card-w-sm, 26px)';
 const CARD_H_SM = 'var(--card-h-sm, 38px)';
 
-// Wipe any text selection the browser started on its own. Called when a long
-// press turns into a card drag, and again when the drag ends.
+// ── How fast a press on a card turns into a drag ──────────────────────────
+// Two ways in, whichever happens first: hold the card still for HOLD_MS, or
+// simply start moving it (more than DRAG_SLOP pixels). Keeping both short is
+// what makes rearranging the hand feel direct rather than like a ceremony.
+const HOLD_MS   = 130;
+const DRAG_SLOP = 6;
+
+// Wipe any text selection the browser started on its own. Called when a press
+// turns into a card drag, and again when the drag ends.
 function clearSelection() {
   try {
     const s = window.getSelection && window.getSelection();
@@ -88,7 +95,7 @@ function CardView({ card, sel, onClick, sm, back, glow, faded, newCard }) {
       boxShadow: sel ? '0 11px 22px rgba(96,165,250,.55)'
         : newCard ? `0 0 0 3px ${GOLD}, 0 0 18px ${GOLD}88`
         : glow ? `0 0 12px ${GOLD}aa` : '0 2px 5px rgba(0,0,0,.32)',
-      transition: 'transform .16s cubic-bezier(.34,1.56,.64,1), box-shadow .16s',
+      transition: 'transform .11s cubic-bezier(.34,1.56,.64,1), box-shadow .11s',
       opacity: faded ? 0.38 : 1,
       animation: newCard ? 'newCardPulse 1.6s ease-in-out infinite' : 'none',
     }}>
@@ -126,7 +133,7 @@ function GroupView({ group, onAttach, canAttach }) {
       borderRadius: 10, padding: '5px 7px', margin: '3px 3px',
       cursor: canAttach ? 'pointer' : 'default',
       boxShadow: canAttach ? '0 0 0 3px rgba(96,165,250,.35)' : 'none',
-      transition: 'box-shadow .15s',
+      transition: 'box-shadow .1s',
     }}>
       {group.cards.map(c => <CardView key={c.id} card={c} sm />)}
     </div>
@@ -669,7 +676,7 @@ function Setup({ onStart }) {
                 background: n === x ? FELT : '#e7e5e4',
                 color: n === x ? GOLD : '#57534e',
                 boxShadow: n === x ? `0 3px 12px ${FELT}66` : 'none',
-                transition: 'all .2s',
+                transition: 'all .12s',
               }}>{x} שחקנים</button>
             ))}
           </div>
@@ -717,7 +724,7 @@ function Setup({ onStart }) {
                     fontSize: 12, cursor: 'pointer', fontWeight: p.ai === k ? 700 : 400,
                     background: p.ai === k ? FELT : '#e7e5e4',
                     color: p.ai === k ? GOLD : '#78716c',
-                    transition: 'all .15s',
+                    transition: 'all .12s',
                   }}>{label}</button>
                 ))}
               </div>
@@ -965,7 +972,7 @@ function Game({ state, dispatch }) {
   const [showRules, setShowRules] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
   const [showScores, setShowScores] = useState(false);
-  // Long-press drag: { card, x, y } once a drag is active
+  // Card drag: { card, x, y } once a drag is active
   const [drag, setDrag] = useState(null);
   const dragRef = useRef({ timer: null, startX: 0, startY: 0, card: null, active: false });
   // Online: "me" is the seat the server marked with you:true.
@@ -1008,11 +1015,24 @@ function Game({ state, dispatch }) {
   // selCards = selected but not yet staged
   const selCards   = human.hand.filter(c => state.sel.includes(c.id) && !stagedIds.has(c.id));
 
-  // ── Long-press drag: reorder within hand, or attach to a board group ──
+  // ── Card drag: reorder within hand, or attach to a board group ──
   // Rearranging your own hand is allowed at ANY time — also while you're waiting
   // for someone else to play. Only the "drop on a board group" half of the drag
   // (an attach) is restricted to your own turn; see endPress.
   const canDragCard = (card) => !stagedIds.has(card.id);
+
+  // Lift the pressed card and let it follow the pointer from here on.
+  function liftCard(x, y) {
+    const d = dragRef.current;
+    if (d.active || !d.card) return;
+    clearTimeout(d.timer);
+    d.active = true;
+    // If the browser managed to start a selection before the press became a
+    // drag, drop it — otherwise the highlight stays on screen for the whole
+    // drag and the card looks like selected text.
+    clearSelection();
+    setDrag({ card: d.card, x, y });
+  }
 
   function startPress(card, e) {
     if (!canDragCard(card)) return;
@@ -1020,24 +1040,22 @@ function Game({ state, dispatch }) {
     const d = dragRef.current;
     d.startX = pt.clientX; d.startY = pt.clientY; d.card = card; d.active = false;
     clearTimeout(d.timer);
-    d.timer = setTimeout(() => {
-      d.active = true;
-      // If the browser managed to start a selection before the press became a
-      // drag, drop it — otherwise the highlight stays on screen for the whole
-      // drag and the card looks like selected text.
-      clearSelection();
-      setDrag({ card, x: d.startX, y: d.startY });
-    }, 350);
+    // A press that never moves still lifts, just from the hold alone.
+    d.timer = setTimeout(() => liftCard(d.startX, d.startY), HOLD_MS);
   }
   function movePress(e) {
     const d = dragRef.current;
+    if (!d.card) return;
     const pt = e.touches ? e.touches[0] : e;
     if (!d.active) {
-      // Moved before long-press fired → treat as scroll, cancel
-      if (Math.abs(pt.clientX - d.startX) > 8 || Math.abs(pt.clientY - d.startY) > 8) {
-        clearTimeout(d.timer);
-      }
-      return;
+      // Moving off the card means a drag, not a scroll: the hand row keeps the
+      // touch to itself (touch-action: none) and nothing under it scrolls, so
+      // there is nothing else the gesture could have meant. Lift at once
+      // instead of waiting out the hold — this is what makes the drag feel
+      // immediate, and it is why the hold can be as short as it is.
+      if (Math.abs(pt.clientX - d.startX) > DRAG_SLOP || Math.abs(pt.clientY - d.startY) > DRAG_SLOP)
+        liftCard(pt.clientX, pt.clientY);
+      else return;
     }
     if (e.cancelable) e.preventDefault(); // block scroll while dragging
     setDrag({ card: d.card, x: pt.clientX, y: pt.clientY });
@@ -1103,7 +1121,7 @@ function Game({ state, dispatch }) {
       color: disabled ? '#6b7280' : col,
       border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700,
       cursor: disabled ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
-      opacity: disabled ? 0.55 : 1, transition: 'opacity .1s',
+      opacity: disabled ? 0.55 : 1, transition: 'opacity .08s',
     }}>{label}</button>
   );
 
@@ -1132,7 +1150,7 @@ function Game({ state, dispatch }) {
       userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none',
     }}>
       <style>{`
-        /* Belt and braces for the long-press drag: the card and everything
+        /* Belt and braces for the card drag: the card and everything
            drawn inside it (value, suit, corners) must never become selectable
            text, or a slow press highlights the card instead of lifting it. */
         .deal-card, .deal-card * {
@@ -1256,9 +1274,9 @@ function Game({ state, dispatch }) {
           0%,100% { box-shadow: 0 0 0 0 ${GOLD}00; }
           50%     { box-shadow: 0 0 0 2px ${GOLD}aa; }
         }
-        .deal-card { animation: dealIn .32s cubic-bezier(.34,1.4,.64,1) both; }
-        .group-pop { animation: popIn .34s cubic-bezier(.34,1.56,.64,1) both; }
-        .discard-card { animation: discardDrop .3s ease-out both; }
+        .deal-card { animation: dealIn .18s cubic-bezier(.34,1.4,.64,1) both; }
+        .group-pop { animation: popIn .2s cubic-bezier(.34,1.56,.64,1) both; }
+        .discard-card { animation: discardDrop .18s ease-out both; }
       `}</style>
 
       <div className="game-grid">
@@ -1332,7 +1350,7 @@ function Game({ state, dispatch }) {
               textAlign: 'center',
               boxShadow: active ? '0 0 16px rgba(245,158,11,.6)' : 'none',
               animation: active ? 'turnGlow 1.8s ease-in-out infinite' : 'none',
-              transition: 'background .3s, border-color .3s, box-shadow .3s',
+              transition: 'background .15s, border-color .15s, box-shadow .15s',
             }}>
               <div style={{
                 fontWeight: 700, fontSize: 12, color: active ? '#fffbeb' : CREAM, marginBottom: 3,
@@ -1403,7 +1421,7 @@ function Game({ state, dispatch }) {
               cursor: state.phase === 'draw' && isMyTurn ? 'pointer' : 'default',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               boxShadow: state.phase === 'draw' && isMyTurn ? `0 0 14px ${GOLD}88` : '0 2px 8px rgba(0,0,0,.4)',
-              transition: 'box-shadow .2s',
+              transition: 'box-shadow .12s',
               backgroundImage: `repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(255,255,255,.04) 3px,rgba(255,255,255,.04) 6px)`,
             }}
           >
@@ -1628,7 +1646,7 @@ function Game({ state, dispatch }) {
         padding: '8px 10px 10px', flexShrink: 0,
         borderTop: myTurn ? '3px solid #f59e0b' : '3px solid transparent',
         boxShadow: myTurn ? 'inset 0 8px 24px -8px rgba(245,158,11,.5)' : 'none',
-        transition: 'background .3s, border-color .3s, box-shadow .3s',
+        transition: 'background .15s, border-color .15s, box-shadow .15s',
       }}>
 
         {/* Action buttons — only when it's the human's action phase */}
@@ -1675,7 +1693,7 @@ function Game({ state, dispatch }) {
             margin: '0 auto 6px', maxWidth: 560,
           }}>
             <span className="hand-hint" style={{ color: 'rgba(255,255,255,.4)', fontSize: 11 }}>
-              לחיצה ארוכה + גרירה לסידור הקלפים
+              גררו קלף כדי לסדר את היד
             </span>
             {/* The live cost of whatever is still in the hand. Tapping it opens
                 the full table, so the number is never a dead end. */}
