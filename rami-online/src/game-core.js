@@ -47,9 +47,15 @@ const sortHand = hand =>
 
 const mkCard = (suit, v) => ({ id: uid(), suit, v: suit === 'j' ? 0 : v, j: suit === 'j' });
 
-function makeDeck() {
+// How many 54-card decks (52 + 2 jokers) a table of `n` players plays with.
+// Two decks are 108 cards; at five or six players, fourteen cards each leaves
+// barely twenty in the pile and every round ends with "the deck ran out"
+// before anyone can go out. A third deck keeps the pile alive.
+const decksFor = n => (n >= 5 ? 3 : 2);
+
+function makeDeck(copies = 2) {
   const d = [];
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < copies; i++) {
     for (const s of SUITS) for (let v = 1; v <= 13; v++) d.push(mkCard(s, v));
     d.push(mkCard('j', 0));
     d.push(mkCard('j', 0));
@@ -191,8 +197,8 @@ function meetsReq(groups, mIdx) {
 // ═══════════════════════════════════════════════════════
 
 function startHand(base) {
-  const deck = shuffle(makeDeck());
   const n = base.players.length;
+  const deck = shuffle(makeDeck(decksFor(n)));
   const hands = Array.from({ length: n }, () => []);
   for (let i = 0; i < 14; i++)
     for (let p = 0; p < n; p++) hands[p].push(deck.shift());
@@ -691,16 +697,61 @@ function G(state, action) {
 // AI LOGIC
 // ═══════════════════════════════════════════════════════
 
-function aiWantCard(hand, card) {
-  if (!card || card.j) return false;
-  // Only worth taking if the card actually joins/forms a real group (3+),
-  // not merely sits "near" another card. This prevents grabbing the discard
-  // every turn only to throw it back.
+// ── Difficulty ───────────────────────────────────────
+// The host picks one level for every computer player in the room. It is not a
+// label: the three levels genuinely play differently, in the three decisions an
+// AI turn is made of — whether to take the discard, how hard it works the
+// board, and which card it throws.
+//
+//   easy   — takes only what obviously completes a group (and not always),
+//            never pays to buy, never attaches to the board, throws a random
+//            spare card, and will even throw a joker.
+//   medium — the game's long-standing behaviour: takes what completes a group,
+//            buys now and then, attaches one card a turn, throws its most
+//            expensive spare card. Keeps its jokers.
+//   hard   — also picks up cards that pair with what it holds, buys whenever
+//            the card fits, attaches everything it can before discarding, and
+//            throws the spare card its hand can least use (points break ties).
+const AI_LEVELS = ['easy', 'medium', 'hard'];
+const AI_LEVEL_NAMES = { easy: 'קל', medium: 'בינוני', hard: 'קשה' };
+// Anything unknown (an old saved room, a hand-crafted message) plays as medium.
+const aiLevel = l => (AI_LEVELS.includes(l) ? l : 'medium');
+
+// How much material a hand holds for a given card: same value in another suit,
+// or the same suit within two of it. Higher means "this card has partners here".
+// A joker partners with everything, so it always scores at the top.
+function cardAffinity(hand, card) {
+  if (!card) return 0;
+  if (card.j) return 99;
+  let n = 0;
+  for (const c of hand) {
+    if (c.id === card.id) continue;
+    if (c.j) { n += 1; continue; }
+    if (c.v === card.v) { if (c.suit !== card.suit) n += 2; continue; }
+    if (c.suit !== card.suit) continue;
+    const d = Math.abs(c.v - card.v);
+    if (d === 1) n += 2;
+    else if (d === 2) n += 1;
+  }
+  return n;
+}
+
+function aiWantCard(hand, card, level = 'medium') {
+  const lv = aiLevel(level);
+  if (!card) return false;
+  // A joker fits anywhere later; only a beginner leaves one on the pile.
+  if (card.j) return lv !== 'easy';
+  // Worth taking if the card actually joins/forms a real group (3+), not merely
+  // sits "near" another card. This prevents grabbing the discard every turn
+  // only to throw it back.
   const before = findAIGroups(hand).groups.reduce((n, g) => n + g.cards.length, 0);
   const withCard = findAIGroups([...hand, card]);
   const after = withCard.groups.reduce((n, g) => n + g.cards.length, 0);
   const used = withCard.groups.some(g => g.cards.some(c => c.id === card.id));
-  return used && (after - before) >= 2;
+  if (used && (after - before) >= 2) return true;
+  // A sharp AI also plays one move ahead: a card that pairs up with what it
+  // already holds is worth having even before it completes anything.
+  return lv === 'hard' && cardAffinity(hand, card) >= 3;
 }
 
 function findAIGroups(hand) {
@@ -762,10 +813,26 @@ function findAIGroups(hand) {
   return { groups, unused };
 }
 
-function aiDiscard(hand) {
+// `rnd` is injectable so the easy level's coin flips can be pinned in tests.
+function aiDiscard(hand, level = 'medium', rnd = Math.random) {
+  const lv = aiLevel(level);
   const { unused } = findAIGroups(hand);
-  const cands = unused.length ? hand.filter(c => unused.includes(c.id)) : hand;
-  return cands.sort((a, b) => cSc(b) - cSc(a))[0] || hand[0];
+  let cands = unused.length ? hand.filter(c => unused.includes(c.id)) : [...hand];
+  // Holding a joker is almost always right — only a beginner throws one away.
+  if (lv !== 'easy') {
+    const real = cands.filter(c => !c.j);
+    if (real.length) cands = real;
+  }
+  if (!cands.length) cands = [...hand];
+  // Easy: no plan beyond getting rid of something, so it regularly throws a
+  // card that was one step away from a group.
+  if (lv === 'easy') return cands[Math.floor(rnd() * cands.length)] || hand[0];
+  // Hard: throw what the hand can least use; points only break the tie.
+  if (lv === 'hard')
+    return [...cands].sort((a, b) =>
+      (cardAffinity(hand, a) - cardAffinity(hand, b)) || (cSc(b) - cSc(a)))[0] || hand[0];
+  // Medium: the most expensive spare card.
+  return [...cands].sort((a, b) => cSc(b) - cSc(a))[0] || hand[0];
 }
 
 // ═══════════════════════════════════════════════════════
@@ -774,6 +841,7 @@ function aiDiscard(hand) {
 
 export {
   SUITS, SYM, COL, VD, cSc, cTxt, MK, FELT, FELTD, GOLD, CREAM,
+  AI_LEVELS, AI_LEVEL_NAMES, aiLevel, cardAffinity, decksFor,
   uid, sortHand, mkCard, makeDeck, shuffle,
   isSeq, isSet, isGroup, orderSeq, orderGroup, jokerValues, attachPos, meetsReq,
   startHand, initGame, endWin, endDeck, nextCk,

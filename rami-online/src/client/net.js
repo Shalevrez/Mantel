@@ -93,6 +93,19 @@ export function joinRoom({ code, name, host = false }, callbacks = {}) {
       if (ws && ws.readyState === WebSocket.OPEN)
         ws.send(JSON.stringify({ t: 'start', ...opts }));
     },
+    // Host: seat one more computer player, free a chair, or set the difficulty
+    // every computer player in the room plays at. The server answers with a
+    // fresh lobby (or an 'error' when a limit is hit), so there is no local
+    // copy of the room to keep in step.
+    addAI() {
+      if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ t: 'addAI' }));
+    },
+    removeAI(seat) {
+      if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ t: 'removeAI', seat }));
+    },
+    setAILevel(level) {
+      if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ t: 'aiLevel', level }));
+    },
     close() {
       closedByUs = true;
       if (ws) try { ws.close(); } catch {}

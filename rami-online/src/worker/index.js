@@ -8,9 +8,17 @@
 // ═══════════════════════════════════════════════════════
 
 import {
-  G, initGame, cSc, MK,
+  G, initGame, cSc, MK, aiLevel as normLevel,
   aiWantCard, findAIGroups, meetsReq, attachPos, aiDiscard,
 } from '../game-core.js';
+
+// ── Table size ───────────────────────────────────────
+// Six chairs, of which at most three may be computer players: the host decides
+// how many to add in the lobby, and they sit down there and then. A computer
+// player never keeps a person out — if a human joins a full room before the
+// game starts, the newest bot gives up its chair (see handleSocket).
+const MAX_SEATS = 6;
+const MAX_AI = 3;
 
 // How long the host keeps the crown after their connection drops. A refresh,
 // a phone locking itself or a flaky network all look like a disconnect, so the
@@ -87,6 +95,7 @@ export class Room {
     this.hostUid = null;
     this.code = null;
     this.started = false;
+    this.aiLevel = 'medium';       // difficulty the host picked, for every bot in the room
     this.sockets = new Map();      // connId -> ws
     this.aiPending = false;        // an AI move is already scheduled (see scheduleAI)
     this.closing = false;          // shutting down — see closeRoom
@@ -110,6 +119,7 @@ export class Room {
       this.hostUid = saved.hostUid || null;
       this.code = saved.code;
       this.started = saved.started;
+      this.aiLevel = normLevel(saved.aiLevel);
       this.lastSeen = saved.lastSeen || Date.now();
       this.emptySince = saved.emptySince || null;
       this.endedAt = saved.endedAt || null;
@@ -126,11 +136,12 @@ export class Room {
       state: this.state,
       seats: this.seats.map(s => ({
         name: s.name, uid: s.uid, connId: s.connId,
-        isAI: s.isAI, ai: s.ai, downAt: s.downAt || 0,
+        isAI: s.isAI, ai: s.ai, botNum: s.botNum, downAt: s.downAt || 0,
       })),
       hostUid: this.hostUid,
       code: this.code,
       started: this.started,
+      aiLevel: this.aiLevel,
       lastSeen: this.lastSeen,
       emptySince: this.emptySince,
       endedAt: this.endedAt,
@@ -270,12 +281,16 @@ export class Room {
     if (seat === -1) seat = this.seats.findIndex(s => !s.isAI && s.name === name && !s.connected);
 
     if (seat === -1) {
-      if (this.seats.length >= 4 || this.started) {
+      // A full room still has room for a person as long as a bot is sitting in
+      // one of the chairs: the newest one gets up. The host can always add it
+      // back, and nobody is turned away from a game that hasn't started.
+      if (!this.started && this.seats.length >= MAX_SEATS) this.removeAISeat(-1);
+      if (this.seats.length >= MAX_SEATS || this.started) {
         // Room full or already started with no seat for this player. Drop it from
         // the socket map on the way out, or this dead connection would keep the
         // room looking occupied and it would never hit the empty-room deadline.
         this.sockets.delete(connId);
-        ws.send(JSON.stringify({ t: 'error', msg: this.started ? 'המשחק כבר התחיל' : 'החדר מלא (4 שחקנים)' }));
+        ws.send(JSON.stringify({ t: 'error', msg: this.started ? 'המשחק כבר התחיל' : `החדר מלא (${MAX_SEATS} שחקנים)` }));
         ws.close(1008, 'no seat');
         return;
       }
@@ -298,9 +313,12 @@ export class Room {
     // uid, so reconnecting never has to re-claim it.
     if (wantHost && this.hostUid == null) this.hostUid = uid;
 
-    ws.addEventListener('message', (evt) => this.onMessage(connId, seat, evt));
-    ws.addEventListener('close', () => this.onClose(connId, seat));
-    ws.addEventListener('error', () => this.onClose(connId, seat));
+    // The seat is looked up per event, never captured: removing a bot from the
+    // lobby shifts every seat after it, and a stale index would answer for — or
+    // silence — the wrong player.
+    ws.addEventListener('message', (evt) => this.onMessage(connId, evt));
+    ws.addEventListener('close', () => this.onClose(connId));
+    ws.addEventListener('error', () => this.onClose(connId));
 
     this.touch();
     this.noteConnections();
@@ -318,12 +336,52 @@ export class Room {
     if (old) { try { old.close(4000, 'replaced'); } catch {} }
   }
 
-  onClose(connId, seat) {
+  // Which seat this socket is sitting in right now, or -1 if it has none.
+  seatOf(connId) {
+    return this.seats.findIndex(s => s.connId === connId);
+  }
+
+  // ── Computer players ─────────────────────────────────
+  aiCount() { return this.seats.filter(s => s.isAI).length; }
+
+  // Seat one more bot. Returns why it couldn't, or null when it sat down.
+  addAISeat() {
+    if (this.started) return 'המשחק כבר התחיל';
+    if (this.aiCount() >= MAX_AI) return `אפשר להוסיף עד ${MAX_AI} שחקני מחשב`;
+    if (this.seats.length >= MAX_SEATS) return `החדר מלא (${MAX_SEATS} שחקנים)`;
+    // Lowest free number, so removing "מחשב 2" and adding another gives back a
+    // מחשב 2 rather than a מחשב 4 at a three-bot table.
+    const taken = new Set(this.seats.filter(s => s.isAI).map(s => s.botNum));
+    let n = 1;
+    while (taken.has(n)) n++;
+    this.seats.push({
+      name: `מחשב ${n}`, botNum: n, uid: `ai:${crypto.randomUUID()}`, connId: null,
+      ws: null, connected: false, isAI: true, ai: this.aiLevel, downAt: 0,
+    });
+    return null;
+  }
+
+  // Remove one bot: the given seat, or (seat < 0) the one added most recently.
+  // Seats after it shift down by one, which is why nothing captures an index.
+  removeAISeat(seat) {
+    if (this.started) return false;
+    let i = seat;
+    if (!(i >= 0 && i < this.seats.length && this.seats[i].isAI)) {
+      i = -1;
+      for (let k = this.seats.length - 1; k >= 0; k--) if (this.seats[k].isAI) { i = k; break; }
+    }
+    if (i === -1) return false;
+    this.seats.splice(i, 1);
+    return true;
+  }
+
+  onClose(connId) {
     this.sockets.delete(connId);
     if (this.closing) return;   // the room is being retired; nothing left to update
     // Only the seat's *current* socket closing means the player left; a stale
     // one closing after a reconnect must not mark them away again.
-    if (this.seats[seat] && this.seats[seat].connId === connId) {
+    const seat = this.seatOf(connId);
+    if (seat !== -1) {
       this.seats[seat].connected = false;
       this.seats[seat].ws = null;
       this.seats[seat].downAt = Date.now();
@@ -365,8 +423,15 @@ export class Room {
       t: 'lobby',
       code: this.code,
       started: this.started,
+      // Room rules the lobby screen needs: how many chairs there are, how many
+      // of them may hold a bot, and the difficulty they all play at.
+      maxSeats: MAX_SEATS,
+      maxAI: MAX_AI,
+      aiLevel: this.aiLevel,
+      aiCount: this.aiCount(),
       players: this.seats.map((s, i) => ({
         seat: i, name: s.name, connected: s.connected, isAI: s.isAI,
+        ai: s.isAI ? normLevel(s.ai) : null,
         host: i === hostSeat,
       })),
     };
@@ -374,6 +439,13 @@ export class Room {
       const seat = this.seats.findIndex(s => s.connId === connId);
       try { ws.send(JSON.stringify({ ...lobby, youSeat: seat, youHost: seat !== -1 && seat === hostSeat })); } catch {}
     }
+  }
+
+  // A message meant for one player — why their request was refused.
+  sendError(seat, text) {
+    const s = this.seats[seat];
+    if (!s || !s.ws || !s.connected) return;
+    try { s.ws.send(JSON.stringify({ t: 'error', msg: text })); } catch {}
   }
 
   // ── Push redacted state to one seat, or all ──
@@ -386,10 +458,34 @@ export class Room {
     for (let i = 0; i < this.seats.length; i++) this.sendState(i);
   }
 
-  async onMessage(connId, seat, evt) {
+  async onMessage(connId, evt) {
     let msg;
     try { msg = JSON.parse(evt.data); } catch { return; }
+    const seat = this.seatOf(connId);
+    if (seat === -1) return;      // a socket with no chair has nothing to say
     this.touch();
+
+    // ── Host sets up the computer players (lobby only) ──
+    // Adding, removing and the difficulty are all the host's call, and all three
+    // are refused once the game is under way — the seats are dealt in by then.
+    if (msg.t === 'addAI' || msg.t === 'removeAI' || msg.t === 'aiLevel') {
+      if (seat !== this.hostSeat()) return;
+      if (this.started) return;
+      if (msg.t === 'addAI') {
+        const why = this.addAISeat();
+        if (why) { this.sendError(seat, why); return; }
+      } else if (msg.t === 'removeAI') {
+        if (!this.removeAISeat(Number.isInteger(msg.seat) ? msg.seat : -1)) return;
+      } else {
+        this.aiLevel = normLevel(msg.level);
+        for (const s of this.seats) if (s.isAI) s.ai = this.aiLevel;
+      }
+      // Announce first, store after: everyone in the lobby sees the chair
+      // change straight away, and the write is only the crash insurance.
+      this.broadcastLobby();
+      await this.persist();
+      return;
+    }
 
     // ── Host starts the game ──
     if (msg.t === 'start') {
@@ -397,21 +493,20 @@ export class Room {
       // Checked against the seat, not the connection: the host that reconnected
       // is still the host, even though this socket is a different one.
       if (seat !== this.hostSeat()) return;
-      // Optionally fill empty seats with AI if host requested
-      const fillAI = !!msg.fillAI;
-      if (fillAI) {
-        while (this.seats.length < (msg.minPlayers || 2)) {
-          this.seats.push({
-            name: `מחשב ${this.seats.length}`, uid: `ai:${this.seats.length}`, connId: null,
-            ws: null, connected: false, isAI: true, ai: 'medium', downAt: 0,
-          });
-        }
+      // The host seats the bots in the lobby now, so by here the table is
+      // already set. `fillAI` is the old client's way of asking for one on the
+      // way in — still honoured, so a cached tab can start a game.
+      if (msg.fillAI) {
+        const want = Math.min(Math.max(msg.minPlayers || 2, 2), MAX_SEATS);
+        while (this.seats.length < want && !this.addAISeat()) { /* addAISeat stops at the caps */ }
       }
       if (this.seats.length < 2) {
-        this.seats[seat]?.ws?.send(JSON.stringify({ t: 'error', msg: 'צריך לפחות 2 שחקנים' }));
+        this.sendError(seat, 'צריך לפחות 2 שחקנים');
         return;
       }
-      const configs = this.seats.map(s => ({ name: s.name, isAI: s.isAI, ai: s.ai || 'medium' }));
+      const configs = this.seats.map(s => ({
+        name: s.name, isAI: s.isAI, ai: s.isAI ? normLevel(s.ai || this.aiLevel) : 'medium',
+      }));
       this.state = initGame(configs);
       this.started = true;
       await this.persist();
@@ -518,15 +613,28 @@ export class Room {
     }, 500 + Math.random() * 400);
   }
 
+  // How sharply a given AI seat plays. Falls back to the room's level for a seat
+  // saved before the host could choose one.
+  levelOf(seat) {
+    return normLevel(this.seats[seat]?.ai || this.aiLevel);
+  }
+
   aiBuy() {
     const st = this.state, buy = st.buy;
+    const lv = this.levelOf(buy.checker);
     const checker = st.players[buy.checker];
     const top = st.discard[st.discard.length - 1];
     if (buy.checker === buy.origNext) {
-      const want = top && aiWantCard(checker.hand, top) && (this.seats[buy.checker].ai !== 'easy');
+      // First refusal, and free: the only cost is picking up a card it doesn't
+      // need. A beginner still lets good cards go by now and then.
+      const want = !!top && aiWantCard(checker.hand, top, lv) &&
+                   (lv !== 'easy' || Math.random() > 0.4);
       this.state = G(st, { type: want ? 'TAKE_FREE' : 'SKIP' });
     } else {
-      const want = top && aiWantCard(checker.hand, top) && Math.random() > 0.55;
+      // Buying out of turn costs a penalty card from the deck, so each level
+      // has its own appetite for it — and the beginner never pays at all.
+      const odds = lv === 'hard' ? 0.2 : lv === 'medium' ? 0.55 : 1;
+      const want = !!top && aiWantCard(checker.hand, top, lv) && Math.random() > odds;
       this.state = G(st, { type: want ? 'BUY' : 'SKIP', idx: buy.checker });
     }
   }
@@ -536,27 +644,47 @@ export class Room {
   }
 
   aiAction() {
-    const st = this.state;
-    const cur = st.players[st.cur];
-    if (!st.canLay) { this.state = G(st, { type: 'DISCARD', cid: aiDiscard(cur.hand).id }); return; }
-    if (!cur.hasLaid) {
-      const { groups } = findAIGroups(cur.hand);
+    let st = this.state;
+    const seat = st.cur;
+    const lv = this.levelOf(seat);
+
+    // 1. Lay down, if the mishkakon is covered and a card is left to throw.
+    if (st.canLay && !st.players[seat].hasLaid) {
+      const { groups } = findAIGroups(st.players[seat].hand);
       const usedIds = new Set(groups.flatMap(g => g.cards.map(c => c.id)));
-      const spares = cur.hand.filter(c => !usedIds.has(c.id));
+      const spares = st.players[seat].hand.filter(c => !usedIds.has(c.id));
       if (meetsReq(groups, st.mk) && spares.length >= 1) {
         // AI_LAY re-validates against the real hand and may refuse, returning the
         // state untouched. Fall through to a discard rather than spinning on it.
         const laid = G(st, { type: 'AI_LAY', groups });
-        if (laid !== st) { this.state = laid; return; }
+        if (laid !== st) st = laid;
       }
-      this.state = G(st, { type: 'DISCARD', cid: aiDiscard(cur.hand).id }); return;
     }
-    if (cur.hand.length >= 2) {
-      for (const c of cur.hand)
-        for (const g of st.board)
-          if (attachPos(g.cards, c)) { this.state = G(st, { type: 'AI_ATTACH', cid: c.id, gid: g.id }); return; }
+
+    // 2. Attach to the board. This is where the levels part company: a beginner
+    // never bothers, medium places one card a turn, and a sharp AI empties
+    // everything it can (AI_ATTACH refuses to leave it with nothing to throw,
+    // which is what stops the loop).
+    if (st.players[seat].hasLaid && lv !== 'easy') {
+      const passes = lv === 'hard' ? 14 : 1;
+      for (let i = 0; i < passes; i++) {
+        const before = st;
+        for (const c of st.players[seat].hand) {
+          let placed = false;
+          for (const g of st.board) {
+            if (!attachPos(g.cards, c)) continue;
+            const next = G(st, { type: 'AI_ATTACH', cid: c.id, gid: g.id });
+            if (next !== st) { st = next; placed = true; break; }
+          }
+          if (placed) break;
+        }
+        if (st === before) break;   // nothing left to place
+      }
     }
-    this.state = G(st, { type: 'DISCARD', cid: aiDiscard(cur.hand).id });
+
+    // 3. Throw a card — which is also how an AI goes out.
+    const hand = st.players[seat].hand;
+    this.state = G(st, { type: 'DISCARD', cid: aiDiscard(hand, lv).id });
   }
 }
 

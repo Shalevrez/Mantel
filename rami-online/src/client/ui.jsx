@@ -196,8 +196,9 @@ function RulesModal({ onClose }) {
           </Section>
 
           <Section title="🃏 הקלפים">
-            משחקים עם 2 חפיסות + 4 ג׳וקרים (108 קלפים). אס יכול לשמש כ־1 (לפני 2)
-            או כ־14 (אחרי מלך). הג׳וקר מחליף כל קלף.
+            משחקים עם 2 חפיסות + 4 ג׳וקרים (108 קלפים), ומחמישה שחקנים ומעלה עם
+            3 חפיסות + 6 ג׳וקרים (162 קלפים) — אחרת החבילה נגמרת לפני שמישהו מספיק
+            לסיים. אס יכול לשמש כ־1 (לפני 2) או כ־14 (אחרי מלך). הג׳וקר מחליף כל קלף.
           </Section>
 
           <Section title="🔢 ערך הקלפים (לניקוד)">
@@ -1020,7 +1021,9 @@ function Game({ state, dispatch }) {
           if (i === mySeat) return null; // don't render myself as an opponent
           const active = i === state.cur;
           const handN = p.handCount ?? p.hand?.length ?? 0;
-          const miniN = Math.min(handN, 6);
+          // Five opponents share the width four used to; a shorter fan keeps
+          // each tile readable instead of squeezing the name out.
+          const miniN = Math.min(handN, state.players.length > 4 ? 3 : 6);
           return (
             <div key={i} style={{
               flex: 1, minWidth: 0,
