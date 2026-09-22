@@ -808,13 +808,14 @@ function Setup({ onStart }) {
 // ROUND END
 // ═══════════════════════════════════════════════════════
 
-function RoundEnd({ state, dispatch }) {
+function RoundEnd({ state, dispatch, onLeave }) {
   const { result, players, mk, sivuv } = state;
   const winner = result.w !== null ? players[result.w] : null;
   const sorted = [...players].sort((a, b) => a.totalScore - b.totalScore);
   // This round's own tally opens first. The cross-round table and the cards that
   // were laid down are one tap away, and stay there until somebody deals again.
   const [tab, setTab] = useState('round');
+  const [showLeave, setShowLeave] = useState(false);
 
   return (
     <div style={{
@@ -922,7 +923,17 @@ function RoundEnd({ state, dispatch }) {
             {mk >= 5 ? '🏆 סיום' : `→ ${MK[mk + 1]?.name}`}
           </button>
         </div>
+        {onLeave && (
+          <button onClick={() => setShowLeave(true)} style={{
+            width: '100%', marginTop: 10, padding: '8px 0', background: 'transparent',
+            color: '#b91c1c', border: 'none', fontSize: 13, fontWeight: 700,
+            cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0,
+          }}>
+            🚪 יציאה מהחדר
+          </button>
+        )}
       </div>
+      {showLeave && <LeaveConfirm started onConfirm={onLeave} onClose={() => setShowLeave(false)} />}
     </div>
   );
 }
@@ -1011,15 +1022,72 @@ function GameEnd({ state, onRestart }) {
 }
 
 // ═══════════════════════════════════════════════════════
+// LEAVE ROOM — "are you sure?" before giving up the seat
+// Leaving is for good: the chair is freed (or, mid-game, handed to
+// a computer player), so a stray tap must not do it on its own.
+// ═══════════════════════════════════════════════════════
+
+function LeaveConfirm({ started, onConfirm, onClose }) {
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 1000,
+        background: 'rgba(0,0,0,.6)', backdropFilter: 'blur(2px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        direction: 'rtl', padding: 14,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: CREAM, borderRadius: 20, maxWidth: 360, width: '100%',
+          padding: '22px 20px', textAlign: 'center',
+          border: `2px solid ${GOLD}88`, boxShadow: '0 24px 72px rgba(0,0,0,.6)',
+        }}
+      >
+        <div style={{ fontSize: 40, marginBottom: 4 }}>🚪</div>
+        <div style={{ color: FELTD, fontSize: 19, fontWeight: 700, marginBottom: 6 }}>
+          לצאת מהחדר?
+        </div>
+        <p style={{ color: '#57534e', fontSize: 14, lineHeight: 1.6, margin: '0 0 16px' }}>
+          {started
+            ? 'המחשב ימשיך לשחק במקומך, ולא תוכלו לחזור למשחק הזה.'
+            : 'הכיסא שלך יתפנה. אפשר להצטרף שוב עם קוד החדר.'}
+        </p>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={onClose} style={{
+            flex: 1, padding: '11px 0', background: '#e7e5e4',
+            color: '#57534e', border: '2px solid #d6d3d1',
+            borderRadius: 11, fontSize: 14, cursor: 'pointer', fontWeight: 600,
+            fontFamily: 'inherit',
+          }}>
+            הישאר
+          </button>
+          <button onClick={onConfirm} style={{
+            flex: 1, padding: '11px 0', background: '#b91c1c', color: '#fff',
+            border: '2px solid #991b1b', borderRadius: 11,
+            fontSize: 14, cursor: 'pointer', fontWeight: 700, fontFamily: 'inherit',
+          }}>
+            🚪 יציאה
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
 // MAIN GAME SCREEN
 // ═══════════════════════════════════════════════════════
 
 
-function Game({ state, dispatch }) {
+function Game({ state, dispatch, onLeave }) {
   const [attachMode, setAttachMode] = useState(false);
   const [showRules, setShowRules] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
   const [showScores, setShowScores] = useState(false);
+  const [showLeave, setShowLeave] = useState(false);
   // Card drag. `drag` is { card, touch } while a card is lifted and only changes
   // when a drag starts or ends; the pointer position, the insertion slot and the
   // ghost's placement live in dragRef and go straight to the DOM, so following
@@ -1490,9 +1558,17 @@ function Game({ state, dispatch }) {
             borderRadius: 8, fontSize: 12, fontWeight: 700, padding: '3px 8px',
             cursor: 'pointer', fontFamily: 'inherit',
           }}>🆕</button>
+          {onLeave && (
+            <button onClick={() => setShowLeave(true)} title="יציאה מהחדר" style={{
+              background: 'rgba(185,28,28,.35)', color: CREAM, border: 'none',
+              borderRadius: 8, fontSize: 12, fontWeight: 700, padding: '3px 9px',
+              cursor: 'pointer', fontFamily: 'inherit',
+            }}>🚪<span className="hdr-label"> יציאה</span></button>
+          )}
         </span>
       </div>
 
+      {showLeave && <LeaveConfirm started onConfirm={onLeave} onClose={() => setShowLeave(false)} />}
       {showRules && <RulesModal onClose={() => setShowRules(false)} />}
       {showNotes && <ReleaseNotes onClose={() => setShowNotes(false)} />}
       {showScores && <ScoreModal state={state} onClose={() => setShowScores(false)} />}
@@ -1979,6 +2055,6 @@ function Game({ state, dispatch }) {
 
 export {
   CardView, GroupView, RulesModal, ReleaseNotes, Setup,
-  Leaderboard, BoardReveal, ScoreModal,
+  Leaderboard, BoardReveal, ScoreModal, LeaveConfirm,
   RoundEnd, GameEnd, Game,
 };

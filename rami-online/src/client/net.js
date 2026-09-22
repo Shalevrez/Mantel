@@ -118,6 +118,22 @@ export function joinRoom({ code, name, host = false, resume = false }, callbacks
     setAILevel(level) {
       if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ t: 'aiLevel', level }));
     },
+    // Give up the seat for good (see leaveSeat on the server), then hang up.
+    // Resolves once the server has hung up on us (or after a short wait), so a
+    // page navigating away right after doesn't cut the message off in flight.
+    leave() {
+      closedByUs = true;
+      return new Promise((resolve) => {
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+          if (ws) try { ws.close(); } catch {}
+          return resolve();
+        }
+        const done = () => { clearTimeout(timer); resolve(); };
+        const timer = setTimeout(done, 800);
+        ws.addEventListener('close', done);
+        ws.send(JSON.stringify({ t: 'leave' }));
+      });
+    },
     close() {
       closedByUs = true;
       if (ws) try { ws.close(); } catch {}

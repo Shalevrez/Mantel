@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, Component } from "react";
 import { createRoot } from "react-dom/client";
 import { FELT, FELTD, GOLD, CREAM, CLOTH, AI_LEVELS, AI_LEVEL_NAMES } from "../game-core.js";
-import { Game, RoundEnd, GameEnd, RulesModal, ReleaseNotes } from "./ui.jsx";
+import { Game, RoundEnd, GameEnd, RulesModal, ReleaseNotes, LeaveConfirm } from "./ui.jsx";
 import { LATEST_RELEASE } from "../releases.js";
 import { createRoom, joinRoom } from "./net.js";
 
@@ -161,6 +161,14 @@ function App() {
     connect(code.trim().toUpperCase(), false);
   }
 
+  // Give up the seat for good and go back to a clean home screen.
+  const handleLeave = useCallback(async () => {
+    const conn = connRef.current;
+    connRef.current = null;
+    if (conn) await conn.leave();
+    leaveRoom();
+  }, []);
+
   // Dispatch = send an action to the server
   const dispatch = useCallback((action) => {
     connRef.current && connRef.current.action(action);
@@ -186,13 +194,14 @@ function App() {
                     onAddAI={() => connRef.current?.addAI()}
                     onRemoveAI={(seat) => connRef.current?.removeAI(seat)}
                     onAILevel={(lv) => connRef.current?.setAILevel(lv)}
+                    onLeave={handleLeave}
                     onShowNotes={() => setNotes(true)} />;
 
     // screen === 'game'
     if (!state) return <Splash text="טוען משחק..." />;
     if (state.phase === 'game_end') return <GameEnd state={state} onRestart={leaveRoom} />;
-    if (state.phase === 'round_end') return <RoundEnd state={state} dispatch={dispatch} />;
-    return <Game state={state} dispatch={dispatch} />;
+    if (state.phase === 'round_end') return <RoundEnd state={state} dispatch={dispatch} onLeave={handleLeave} />;
+    return <Game state={state} dispatch={dispatch} onLeave={handleLeave} />;
   })();
 
   return (
@@ -274,8 +283,9 @@ function Home({ name, setName, code, setCode, error, connecting, handleCreate, h
 // LOBBY — waiting room; host starts the game
 // ═══════════════════════════════════════════════════════
 
-function Lobby({ lobby, code, error, onStart, onAddAI, onRemoveAI, onAILevel, onShowNotes }) {
+function Lobby({ lobby, code, error, onStart, onAddAI, onRemoveAI, onAILevel, onLeave, onShowNotes }) {
   const [copied, setCopied] = useState(false);
+  const [showLeave, setShowLeave] = useState(false);
   if (!lobby) return <Splash text="מתחבר לחדר..." />;
 
   const shareLink = `${location.origin}${location.pathname}?code=${lobby.code || code}`;
@@ -444,9 +454,13 @@ function Lobby({ lobby, code, error, onStart, onAddAI, onRemoveAI, onAILevel, on
 
       {error && <div style={errorStyle}>{error}</div>}
 
-      <button onClick={onShowNotes} style={{ ...linkBtn, fontSize: 13, color: '#78716c' }}>
+      <button onClick={() => setShowLeave(true)} style={{ ...linkBtn, color: '#b91c1c' }}>
+        🚪 יציאה מהחדר
+      </button>
+      <button onClick={onShowNotes} style={{ ...linkBtn, marginTop: 0, fontSize: 13, color: '#78716c' }}>
         🆕 מה חדש בגרסה {LATEST_RELEASE.version}
       </button>
+      {showLeave && <LeaveConfirm started={false} onConfirm={onLeave} onClose={() => setShowLeave(false)} />}
     </Shell>
   );
 }
