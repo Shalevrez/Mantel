@@ -12,6 +12,9 @@ import {
   isSeq, isSet, isGroup, orderSeq, orderGroup, jokerValues, attachPos, meetsReq,
   sortHand, moveCard, handScore,
 } from "../game-core.js";
+
+// Card backs (hands, fans, the draw pile): burgundy with gold trim, to stand out on the navy table.
+const BACK_GRAD = 'linear-gradient(145deg,#8a1c2e 0%,#5e1020 60%,#3f0a15 100%)';
 import { RELEASES } from "../releases.js";
 
 
@@ -62,14 +65,16 @@ function CardView({ card, sel, onClick, sm, back, glow, faded, newCard, attached
     <div style={{
       width: w, height: h,
       borderRadius: radius, flexShrink: 0, margin: sm ? '0 1px' : '0 2px',
-      background: 'linear-gradient(145deg,#234a8c 0%,#13284f 60%,#0c1d3c 100%)',
-      border: `1.5px solid #36589c`,
+      // One backgroundImage for all layers: a separate `background` gradient
+      // would be overridden by it and leave the back see-through.
       backgroundImage: `repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(255,255,255,.05) 3px, rgba(255,255,255,.05) 6px),
-                        radial-gradient(circle at 50% 50%, rgba(201,151,58,.18), transparent 60%)`,
-      boxShadow: 'inset 0 0 0 2px rgba(255,255,255,.04), 0 2px 6px rgba(0,0,0,.45)',
+                        radial-gradient(circle at 50% 50%, rgba(201,151,58,.22), transparent 60%),
+                        ${BACK_GRAD}`,
+      border: `1.5px solid ${GOLD}`,
+      boxShadow: 'inset 0 0 0 2px rgba(201,151,58,.35), 0 2px 6px rgba(0,0,0,.45)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
-      <span style={{ color: 'rgba(201,151,58,.55)', fontSize: fs(.29) }}>♦</span>
+      <span style={{ color: 'rgba(201,151,58,.8)', fontSize: fs(.29) }}>♦</span>
     </div>
   );
 
@@ -1583,13 +1588,13 @@ function Game({ state, dispatch }) {
             style={{
               width: 'var(--card-w)', height: 'var(--card-h)',
               borderRadius: 'calc(var(--card-h) * .1)',
-              border: `2px solid ${state.phase === 'draw' && isMyTurn ? GOLD : '#6b8cc4'}`,
+              border: `2px solid ${state.phase === 'draw' && isMyTurn ? GOLD : GOLD + '99'}`,
               cursor: state.phase === 'draw' && isMyTurn ? 'pointer' : 'default',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               boxShadow: state.phase === 'draw' && isMyTurn ? `0 0 14px ${GOLD}88` : '0 2px 8px rgba(0,0,0,.45)',
               transition: 'box-shadow .12s',
               backgroundImage: `repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(255,255,255,.04) 3px,rgba(255,255,255,.04) 6px),
-                              linear-gradient(145deg,#1e3a6e,#0f2245)`,
+                              ${BACK_GRAD}`,
             }}
           >
             <span style={{ fontSize: 'calc(var(--card-h) * .39)', color: CREAM }}>🂠</span>
@@ -1833,7 +1838,7 @@ function Game({ state, dispatch }) {
               <Btn
                 label={attachMode ? '❌ בטל' : '📌 הצמד'}
                 disabled={!human.hasLaid}
-                bg={attachMode ? '#b45309' : '#0369a1'}
+                bg={attachMode ? GOLD : FELT} col={attachMode ? FELTD : GOLD}
                 onClick={() => setAttachMode(m => !m)}
               />
               {state.undoBefore &&
