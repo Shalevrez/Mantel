@@ -19,7 +19,7 @@ export async function createRoom() {
 }
 
 // Open a live connection to a room. Returns a small controller.
-// callbacks: { onLobby, onState, onError, onOpen, onClose }
+// callbacks: { onLobby, onState, onError, onOpen, onClose, onRoomClosed }
 export function joinRoom({ code, name, host = false }, callbacks = {}) {
   let ws = null;
   let closedByUs = false;
@@ -40,6 +40,13 @@ export function joinRoom({ code, name, host = false }, callbacks = {}) {
       if (msg.t === 'lobby')  callbacks.onLobby && callbacks.onLobby(msg);
       else if (msg.t === 'state') callbacks.onState && callbacks.onState(msg.state);
       else if (msg.t === 'error') callbacks.onError && callbacks.onError(msg.msg);
+      else if (msg.t === 'closed') {
+        // The server retired the room (game over, or nobody playing). Stop the
+        // auto-reconnect below — reconnecting would silently open a new, empty
+        // room under the same code instead of telling the player it's over.
+        closedByUs = true;
+        callbacks.onRoomClosed && callbacks.onRoomClosed(msg.reason);
+      }
     };
 
     ws.onclose = () => {

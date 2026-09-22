@@ -12,6 +12,15 @@ import {
   aiWantCard, findAIGroups, meetsReq, attachPos, aiDiscard,
 } from '../game-core.js';
 
+// ── Room lifetime ────────────────────────────────────
+// Nothing ever closed a room: a finished or abandoned game kept its Durable
+// Object — and the hands stored inside it — alive forever. These three
+// deadlines retire it instead. Whichever comes first wins; see expiryReason.
+const MINUTE = 60_000;
+const FINISHED_MS =  5 * MINUTE; // game over — long enough to read the final scores
+const EMPTY_MS    = 10 * MINUTE; // nobody connected (never started, or everyone left)
+const IDLE_MS     = 45 * MINUTE; // connected, but not a single move in all that time
+
 // 4-char room codes, no ambiguous chars (no 0/O/1/I).
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 function makeCode() {
@@ -73,6 +82,10 @@ export class Room {
     this.started = false;
     this.sockets = new Map();      // connId -> ws
     this.aiPending = false;        // an AI move is already scheduled (see scheduleAI)
+    this.closing = false;          // shutting down — see closeRoom
+    this.lastSeen = Date.now();    // last message/connection — the idle clock
+    this.emptySince = null;        // when the last socket left (null while someone is on)
+    this.endedAt = null;           // when the game reached game_end
   }
 
   // Persisted load (survives DO eviction)
@@ -85,18 +98,113 @@ export class Room {
       this.hostConn = saved.hostConn;
       this.code = saved.code;
       this.started = saved.started;
+      this.lastSeen = saved.lastSeen || Date.now();
+      this.emptySince = saved.emptySince || null;
+      this.endedAt = saved.endedAt || null;
     }
     this._loaded = true;
+    // Coming back from eviction (or from an alarm) there are no live sockets, so
+    // the room counts as empty until one attaches a moment later.
+    this.noteConnections();
   }
 
   async persist() {
+    if (this.closing) return;   // never write the room back after it was wiped
     await this.ctx.storage.put('room', {
       state: this.state,
       seats: this.seats.map(s => ({ name: s.name, connId: s.connId, isAI: s.isAI })),
       hostConn: this.hostConn,
       code: this.code,
       started: this.started,
+      lastSeen: this.lastSeen,
+      emptySince: this.emptySince,
+      endedAt: this.endedAt,
     });
+  }
+
+  // ── Lifetime bookkeeping ─────────────────────────────
+  // Anything that counts as the room being used: a connection, a message, a move.
+  touch(now = Date.now()) {
+    this.lastSeen = now;
+    if (this.state && this.state.phase === 'game_end') {
+      if (!this.endedAt) this.endedAt = now;
+    } else {
+      this.endedAt = null;        // a fresh game revives a room that had finished
+    }
+  }
+
+  // Keep the "nobody here" clock in step with who is actually connected.
+  noteConnections(now = Date.now()) {
+    if (this.sockets.size > 0) this.emptySince = null;
+    else if (!this.emptySince) this.emptySince = now;
+  }
+
+  // Why this room should close right now, or null to keep it.
+  expiryReason(now = Date.now()) {
+    // A blank object (never created, never joined, or already closed) owns nothing.
+    if (!this.code && !this.started && this.seats.length === 0) return null;
+    if (this.endedAt && now - this.endedAt >= FINISHED_MS) return 'finished';
+    if (this.emptySince && now - this.emptySince >= EMPTY_MS) return 'empty';
+    if (now - this.lastSeen >= IDLE_MS) return 'idle';
+    return null;
+  }
+
+  // The earliest moment any of the three deadlines could come due.
+  nextDeadline() {
+    if (!this.code && !this.started && this.seats.length === 0) return null;
+    let t = this.lastSeen + IDLE_MS;
+    if (this.endedAt) t = Math.min(t, this.endedAt + FINISHED_MS);
+    if (this.emptySince) t = Math.min(t, this.emptySince + EMPTY_MS);
+    return t;
+  }
+
+  // Keep an alarm standing for the nearest deadline. An alarm that is already
+  // earlier than needed is left alone: it fires, finds nothing due, and re-arms.
+  async armAlarm() {
+    if (this.closing) return;
+    const t = this.nextDeadline();
+    if (t == null) return;
+    const cur = await this.ctx.storage.getAlarm();
+    if (cur == null || cur > t) await this.ctx.storage.setAlarm(t);
+  }
+
+  // Fired by the deadline set in armAlarm. Survives eviction: the DO is woken
+  // up for it, so a room abandoned hours ago still gets cleaned up.
+  async alarm() {
+    await this.load();
+    const reason = this.expiryReason();
+    if (reason) return this.closeRoom(reason);
+    await this.armAlarm();
+  }
+
+  // Say goodbye, hang up, and delete everything this room stored.
+  async closeRoom(reason) {
+    if (this.closing) return;
+    // Hanging up fires each socket's close handler, which would otherwise
+    // persist the room again and re-arm an alarm behind our back.
+    this.closing = true;
+    const bye = JSON.stringify({ t: 'closed', reason });
+    for (const ws of this.sockets.values()) {
+      // Tell the client first: without this it would just auto-reconnect and
+      // land in a brand-new empty room under the same code.
+      try { ws.send(bye); } catch {}
+      try { ws.close(1000, 'room closed'); } catch {}
+    }
+    this.sockets.clear();
+    this.seats = [];
+    this.state = null;
+    this.started = false;
+    this.hostConn = null;
+    this.code = null;
+    this.endedAt = null;
+    this.emptySince = null;
+    this.lastSeen = Date.now();
+    // deleteAll() leaves the alarm behind on SQLite-backed Durable Objects, so
+    // drop it explicitly — otherwise the empty object wakes itself up again.
+    await this.ctx.storage.deleteAlarm();
+    await this.ctx.storage.deleteAll();
+    // The object itself lives on: whoever dials this code next gets a fresh room.
+    this.closing = false;
   }
 
   async fetch(request) {
@@ -117,7 +225,10 @@ export class Room {
     // HTTP: create room (host) — assigns a code
     if (url.pathname.endsWith('/create')) {
       if (!this.code) this.code = url.searchParams.get('code') || makeCode();
+      this.touch();
       await this.persist();
+      // A room nobody ever joins is cleaned up by the same alarm as any other.
+      await this.armAlarm();
       return Response.json({ code: this.code });
     }
 
@@ -145,7 +256,10 @@ export class Room {
     }
 
     if (seat === -1) {
-      // Room full or already started with no seat for this player
+      // Room full or already started with no seat for this player. Drop it from
+      // the socket map on the way out, or this dead connection would keep the
+      // room looking occupied and it would never hit the empty-room deadline.
+      this.sockets.delete(connId);
       ws.send(JSON.stringify({ t: 'error', msg: this.started ? 'המשחק כבר התחיל' : 'החדר מלא (4 שחקנים)' }));
       ws.close(1008, 'no seat');
       return;
@@ -160,17 +274,25 @@ export class Room {
     ws.addEventListener('close', () => this.onClose(connId, seat));
     ws.addEventListener('error', () => this.onClose(connId, seat));
 
+    this.touch();
+    this.noteConnections();
     this.persist();
+    this.armAlarm();
     this.broadcastLobby();
     if (this.started) this.sendState(seat);
   }
 
   onClose(connId, seat) {
     this.sockets.delete(connId);
+    if (this.closing) return;   // the room is being retired; nothing left to update
     if (this.seats[seat] && this.seats[seat].connId === connId) {
       this.seats[seat].connected = false;
       this.seats[seat].ws = null;
     }
+    // The last player leaving starts the empty-room clock.
+    this.noteConnections();
+    this.persist();
+    this.armAlarm();
     this.broadcastLobby();
   }
 
@@ -204,6 +326,7 @@ export class Room {
   async onMessage(connId, seat, evt) {
     let msg;
     try { msg = JSON.parse(evt.data); } catch { return; }
+    this.touch();
 
     // ── Host starts the game ──
     if (msg.t === 'start') {
@@ -245,7 +368,11 @@ export class Room {
       // Last line of defence: one bad message must not kill the room for everyone.
       try { this.state = G(this.state, action); }
       catch (e) { console.error('action failed', action && action.type, e); return; }
+      // Re-read the clock against the new state: the move that ends the game
+      // starts the countdown to closing the room.
+      this.touch();
       await this.persist();
+      await this.armAlarm();
       // Hand arrangement changes nothing anyone else can see and never changes
       // whose turn it is: push it back to its owner only, and don't poke the AI
       // (that would queue a second move on top of the one already scheduled).
@@ -314,7 +441,7 @@ export class Room {
     this.aiPending = true;
     setTimeout(async () => {
       this.aiPending = false;
-      try { fn(); await this.persist(); this.broadcastState(); this.maybeRunAI(); }
+      try { fn(); this.touch(); await this.persist(); await this.armAlarm(); this.broadcastState(); this.maybeRunAI(); }
       catch (e) { /* swallow */ }
     }, 500 + Math.random() * 400);
   }
