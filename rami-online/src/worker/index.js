@@ -245,7 +245,8 @@ export class Room {
       const code = url.searchParams.get('code') || '';
       const wantHost = url.searchParams.get('host') === '1';
       const pid = url.searchParams.get('pid') || '';
-      this.handleSocket(server, name, code, wantHost, pid);
+      const resume = url.searchParams.get('resume') === '1';
+      this.handleSocket(server, name, code, wantHost, pid, resume);
       return new Response(null, { status: 101, webSocket: client });
     }
 
@@ -262,7 +263,7 @@ export class Room {
     return new Response('Room DO', { status: 200 });
   }
 
-  handleSocket(ws, name, code, wantHost, pid) {
+  handleSocket(ws, name, code, wantHost, pid, resume = false) {
     ws.accept();
     const connId = crypto.randomUUID();
     this.sockets.set(connId, ws);
@@ -279,6 +280,18 @@ export class Room {
     let seat = this.seats.findIndex(s => !s.isAI && s.uid === uid);
     // Older clients that reconnect without an id still match by name.
     if (seat === -1) seat = this.seats.findIndex(s => !s.isAI && s.name === name && !s.connected);
+
+    // A resume is a page that reloaded mid-game and is looking for the seat it
+    // already had — never a request to sit down. With no seat to hand back (the
+    // room closed and this code now names a blank object, or this player never
+    // sat here) say so and touch nothing, rather than opening a fresh, empty
+    // room under the old code. The client then falls back to its home screen.
+    if (seat === -1 && resume) {
+      this.sockets.delete(connId);
+      try { ws.send(JSON.stringify({ t: 'noseat' })); } catch {}
+      try { ws.close(1000, 'no seat'); } catch {}
+      return;
+    }
 
     if (seat === -1) {
       // A full room still has room for a person as long as a bot is sitting in

@@ -51,8 +51,26 @@ function lastRoom() {
   return readStore(LAST_ROOM_KEY).toUpperCase();
 }
 
+// The room this browser is sitting in right now — set once the server seats
+// us, cleared when the room closes or the player heads home. A reload (to pick
+// up a new version, or by accident) finds it here and goes straight back to
+// the table instead of the home screen; the server hands the same seat back
+// (see playerId in net.js). An invite link to a different room wins over it.
+const ACTIVE_ROOM_KEY = 'rami_active_room';
+function roomToResume() {
+  const active = readStore(ACTIVE_ROOM_KEY).toUpperCase();
+  const invited = urlCode();
+  return active && (!invited || invited === active) ? active : '';
+}
+function leaveRoom() {
+  writeStore(ACTIVE_ROOM_KEY, '');
+  // A clean home screen: drop the ?code= so the old room isn't pre-filled.
+  location.href = location.pathname;
+}
+
 function App() {
-  const [screen, setScreen] = useState('home'); // home | lobby | game
+  const [resumeCode] = useState(roomToResume);
+  const [screen, setScreen] = useState(() => resumeCode ? 'resume' : 'home'); // home | resume | lobby | game
   const [name, setName] = useState(() => readStore(NAME_KEY));
   const [code, setCode] = useState(() => urlCode() || lastRoom());
   const [lobby, setLobby] = useState(null);
@@ -82,24 +100,44 @@ function App() {
     writeStore(SEEN_RELEASE_KEY, LATEST_RELEASE.version);
   }, []);
 
-  const connect = useCallback((roomCode, asHost) => {
+  const connect = useCallback((roomCode, asHost, resume = false) => {
     setConnecting(true);
     setError('');
     setClosed(null);
     writeStore(LAST_ROOM_KEY, roomCode);
     const conn = joinRoom(
-      { code: roomCode, name: name.trim() || 'שחקן', host: asHost },
+      { code: roomCode, name: name.trim() || 'שחקן', host: asHost, resume },
       {
         onOpen:  () => { setConnecting(false); },
-        onLobby: (l) => { setLobby(l); if (!l.started) setScreen('lobby'); },
+        onLobby: (l) => {
+          writeStore(ACTIVE_ROOM_KEY, roomCode);
+          setLobby(l);
+          if (!l.started) setScreen('lobby');
+        },
         onState: (s) => { setState(s); setScreen('game'); },
         onError: (m) => { setError(m); },
         onClose: () => { /* auto-reconnect handled in net.js */ },
-        onRoomClosed: (reason) => { setConnecting(false); setClosed(reason || 'idle'); },
+        onRoomClosed: (reason) => {
+          writeStore(ACTIVE_ROOM_KEY, '');
+          setConnecting(false);
+          setClosed(reason || 'idle');
+        },
+        // The room we were resuming no longer has a seat for us (it closed
+        // while we were away). Nothing to go back to — show the home screen.
+        onNoSeat: () => {
+          writeStore(ACTIVE_ROOM_KEY, '');
+          setConnecting(false);
+          setScreen('home');
+        },
       }
     );
     connRef.current = conn;
   }, [name]);
+
+  // Back to the table after a reload. Runs once, on mount.
+  useEffect(() => {
+    if (resumeCode) connect(resumeCode, false, true);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Clean up on unmount
   useEffect(() => () => { connRef.current && connRef.current.close(); }, []);
@@ -136,6 +174,8 @@ function App() {
     if (closed && !(screen === 'game' && state && state.phase === 'game_end'))
       return <RoomClosed reason={closed} />;
 
+    if (screen === 'resume') return <Splash text="חוזרים למשחק..." />;
+
     if (screen === 'home')
       return <Home {...{ name, setName, code, setCode, error, connecting, handleCreate, handleJoin }}
                    onShowNotes={() => setNotes(true)} />;
@@ -150,7 +190,7 @@ function App() {
 
     // screen === 'game'
     if (!state) return <Splash text="טוען משחק..." />;
-    if (state.phase === 'game_end') return <GameEnd state={state} onRestart={() => location.reload()} />;
+    if (state.phase === 'game_end') return <GameEnd state={state} onRestart={leaveRoom} />;
     if (state.phase === 'round_end') return <RoundEnd state={state} dispatch={dispatch} />;
     return <Game state={state} dispatch={dispatch} />;
   })();
@@ -435,9 +475,9 @@ const CLOSED_TEXT = {
 
 function RoomClosed({ reason }) {
   const t = CLOSED_TEXT[reason] || CLOSED_TEXT.idle;
-  // Back to a clean home screen: drop the ?code= so the dead room isn't
-  // pre-filled and tapping "הצטרף" doesn't look like it should still work.
-  const home = () => { location.href = location.pathname; };
+  // Back to a clean home screen, so the dead room isn't pre-filled and tapping
+  // "הצטרף" doesn't look like it should still work.
+  const home = leaveRoom;
   return (
     <Shell>
       <div style={{ textAlign: 'center' }}>
