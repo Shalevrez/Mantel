@@ -23,7 +23,9 @@ rami-online/
 │       ├── ui.jsx        ← רכיבי התצוגה (הקלפים, השולחן, החוקים)
 │       └── net.js        ← חיבור WebSocket לשרת
 └── tests/
-    └── host-reconnect.mjs ← בדיקות חיבור מחדש (מארח, כיסאות). `npm test`
+    ├── fake-storage.mjs   ← חיקוי אחסון ה-Durable Object לבדיקות
+    ├── host-reconnect.mjs ← בדיקות חיבור מחדש (מארח, כיסאות). `npm test`
+    └── room-lifetime.mjs  ← בדיקות סגירת חדר (סיום, ריק, ללא פעילות)
 ```
 
 **למה שרת?** בגרסה מקומית כל דפדפן מחזיק את כל החבילה — כלומר כל שחקן "רואה"

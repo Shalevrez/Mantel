@@ -43,6 +43,7 @@ function App() {
   const [error, setError] = useState('');
   const [connecting, setConnecting] = useState(false);
   const [notes, setNotes] = useState(false);
+  const [closed, setClosed] = useState(null); // why the server retired the room
   const connRef = useRef(null);
 
   // Persist the chosen name for next time
@@ -65,6 +66,7 @@ function App() {
   const connect = useCallback((roomCode, asHost) => {
     setConnecting(true);
     setError('');
+    setClosed(null);
     try { localStorage.setItem(LAST_ROOM_KEY, roomCode); } catch {}
     const conn = joinRoom(
       { code: roomCode, name: name.trim() || 'שחקן', host: asHost },
@@ -74,6 +76,7 @@ function App() {
         onState: (s) => { setState(s); setScreen('game'); },
         onError: (m) => { setError(m); },
         onClose: () => { /* auto-reconnect handled in net.js */ },
+        onRoomClosed: (reason) => { setConnecting(false); setClosed(reason || 'idle'); },
       }
     );
     connRef.current = conn;
@@ -108,6 +111,12 @@ function App() {
 
   // ── Screens ──
   const screenEl = (() => {
+    // The server retires a room once the game is over or it has gone quiet.
+    // The final scoreboard needs no server, so it stays on screen; every other
+    // screen has nothing left to talk to.
+    if (closed && !(screen === 'game' && state && state.phase === 'game_end'))
+      return <RoomClosed reason={closed} />;
+
     if (screen === 'home')
       return <Home {...{ name, setName, code, setCode, error, connecting, handleCreate, handleJoin }}
                    onShowNotes={() => setNotes(true)} />;
@@ -305,6 +314,38 @@ function Lobby({ lobby, code, error, onStart, onShowNotes }) {
       <button onClick={onShowNotes} style={{ ...linkBtn, fontSize: 13, color: '#78716c' }}>
         🆕 מה חדש בגרסה {LATEST_RELEASE.version}
       </button>
+    </Shell>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
+// ROOM CLOSED — the server retired the room
+// Rooms don't live forever: one closes a few minutes after the
+// game ends, once everyone has left, or after a long silence.
+// ═══════════════════════════════════════════════════════
+
+const CLOSED_TEXT = {
+  finished: { icon: '🏁', title: 'המשחק הסתיים',
+              text: 'החדר נסגר אחרי סיום המשחק. פתחו חדר חדש כדי לשחק שוב.' },
+  empty:    { icon: '🚪', title: 'החדר נסגר',
+              text: 'כל השחקנים יצאו מהחדר, אז הוא נסגר. אפשר לפתוח חדר חדש בכל רגע.' },
+  idle:     { icon: '💤', title: 'החדר נסגר',
+              text: 'לא הייתה פעילות בחדר במשך זמן רב, אז הוא נסגר. פתחו חדר חדש כדי להמשיך.' },
+};
+
+function RoomClosed({ reason }) {
+  const t = CLOSED_TEXT[reason] || CLOSED_TEXT.idle;
+  // Back to a clean home screen: drop the ?code= so the dead room isn't
+  // pre-filled and tapping "הצטרף" doesn't look like it should still work.
+  const home = () => { location.href = location.pathname; };
+  return (
+    <Shell>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontSize: 44, marginBottom: 6 }}>{t.icon}</div>
+        <h2 style={{ margin: '0 0 6px', color: FELTD, fontSize: 20 }}>{t.title}</h2>
+        <p style={{ color: '#57534e', fontSize: 14, lineHeight: 1.6, margin: '0 0 16px' }}>{t.text}</p>
+        <button onClick={home} style={primaryBtn}>🏠 חזרה למסך הבית</button>
+      </div>
     </Shell>
   );
 }

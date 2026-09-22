@@ -9,6 +9,7 @@
 // connection id and a reconnect always mints a new one.
 // ═══════════════════════════════════════════════════════
 import { Room } from '../src/worker/index.js';
+import { fakeStorage } from './fake-storage.mjs';
 
 class FakeWS {
   constructor(tag) { this.tag = tag; this.sent = []; this.listeners = {}; this.closed = false; }
@@ -23,7 +24,7 @@ class FakeWS {
 
 function makeRoom() {
   const store = new Map();
-  const ctx = { storage: { get: async k => store.get(k), put: async (k, v) => void store.set(k, v) } };
+  const ctx = { storage: fakeStorage(store) };
   const r = new Room(ctx, {});
   r.code = 'ABCD';
   return { room: r, store };
@@ -121,7 +122,7 @@ function check(label, cond) {
   await room.persist();
   host1.close();
 
-  const ctx2 = { storage: { get: async k => store.get(k), put: async (k, v) => void store.set(k, v) } };
+  const ctx2 = { storage: fakeStorage(store) };
   const revived = new Room(ctx2, {});
   await revived.load();
   const host2 = join(revived, { name: 'שלו', pid: 'p-host' });
