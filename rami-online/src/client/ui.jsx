@@ -5,11 +5,11 @@
 // arrives already-redacted and `dispatch` sends actions to it.
 // ═══════════════════════════════════════════════════════
 
-import { useState, useReducer, useEffect, useRef } from "react";
+import { useState, useReducer, useEffect, useLayoutEffect, useRef } from "react";
 import {
   SUITS, SYM, COL, VD, cSc, cTxt, MK, FELT, FELTD, GOLD, CREAM,
   isSeq, isSet, isGroup, orderSeq, orderGroup, jokerValues, attachPos, meetsReq,
-  sortHand, handScore,
+  sortHand, moveCard, handScore,
 } from "../game-core.js";
 import { RELEASES } from "../releases.js";
 
@@ -22,12 +22,20 @@ const CARD_H    = 'var(--card-h, 62px)';
 const CARD_W_SM = 'var(--card-w-sm, 26px)';
 const CARD_H_SM = 'var(--card-h-sm, 38px)';
 
-// ── How fast a press on a card turns into a drag ──────────────────────────
-// Two ways in, whichever happens first: hold the card still for HOLD_MS, or
-// simply start moving it (more than DRAG_SLOP pixels). Keeping both short is
-// what makes rearranging the hand feel direct rather than like a ceremony.
-const HOLD_MS   = 130;
-const DRAG_SLOP = 6;
+// ── When a press on a card turns into a drag ──────────────────────────────
+// Only movement lifts a card: past DRAG_SLOP pixels it follows the pointer, and
+// anything shorter stays a tap (select). There is no hold-to-lift any more — it
+// flashed a ghost card on every slightly slow tap or click. A finger jitters
+// more than a mouse, so touch gets a little more room before it counts.
+const DRAG_SLOP_MOUSE = 4;
+const DRAG_SLOP_TOUCH = 7;
+// On touch the finger would hide the card it's carrying, so the ghost rides
+// this far above the contact point (as a fraction of the card's height), and
+// the drop lands where the ghost is, not where the finger is.
+const TOUCH_LIFT = 0.85;
+// How far above the hand a drop still counts as "in the hand" rather than
+// on the board — a forgiving strip, so a drop that's a bit high still sorts.
+const HAND_ZONE_SLACK = 28;
 
 // Wipe any text selection the browser started on its own. Called when a press
 // turns into a card drag, and again when the drag ends.
@@ -123,17 +131,20 @@ function CardView({ card, sel, onClick, sm, back, glow, faded, newCard }) {
 // GROUP ON BOARD
 // ═══════════════════════════════════════════════════════
 
-function GroupView({ group, onAttach, canAttach }) {
+// `hot`: a card is being dragged over this group and will attach on release.
+function GroupView({ group, onAttach, canAttach, hot }) {
   const seq = group.type === 'seq';
   return (
     <div onClick={onAttach} data-gid={group.id} className="group-pop" style={{
       display: 'inline-flex', alignItems: 'center',
-      background: seq ? 'rgba(34,197,94,.12)' : 'rgba(251,191,36,.12)',
-      border: `2px solid ${canAttach ? '#60a5fa' : seq ? 'rgba(34,197,94,.45)' : 'rgba(251,191,36,.45)'}`,
+      background: hot ? 'rgba(96,165,250,.28)' : seq ? 'rgba(34,197,94,.12)' : 'rgba(251,191,36,.12)',
+      border: `2px solid ${hot || canAttach ? '#60a5fa' : seq ? 'rgba(34,197,94,.45)' : 'rgba(251,191,36,.45)'}`,
       borderRadius: 10, padding: '5px 7px', margin: '3px 3px',
       cursor: canAttach ? 'pointer' : 'default',
-      boxShadow: canAttach ? '0 0 0 3px rgba(96,165,250,.35)' : 'none',
-      transition: 'box-shadow .1s',
+      boxShadow: hot ? '0 0 0 4px rgba(96,165,250,.6), 0 0 18px rgba(96,165,250,.5)'
+        : canAttach ? '0 0 0 3px rgba(96,165,250,.35)' : 'none',
+      transform: hot ? 'scale(1.04)' : 'none',
+      transition: 'box-shadow .1s, transform .1s, background .1s',
     }}>
       {group.cards.map(c => <CardView key={c.id} card={c} sm />)}
     </div>
@@ -489,7 +500,7 @@ function RulesModal({ onClose }) {
 
           <Section title="✋ סידור היד">
             אפשר לסדר את הקלפים ביד כרצונך <b>בכל רגע — גם כשזה לא התור שלך</b>:
-            <b> לחיצה ארוכה + גרירה</b> של קלף על קלף אחר. כפתור <b>🔀 מיין</b> ממיין
+            פשוט <b>גוררים</b> קלף למקום החדש — קו זהב מראה בדיוק איפה הוא ינחת. כפתור <b>🔀 מיין</b> ממיין
             אוטומטית לפי צורה וערך. הסידור שלך נשמר ואף שחקן אחר לא רואה אותו.
           </Section>
         </div>
@@ -972,9 +983,29 @@ function Game({ state, dispatch }) {
   const [showRules, setShowRules] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
   const [showScores, setShowScores] = useState(false);
-  // Card drag: { card, x, y } once a drag is active
+  // Card drag. `drag` is { card, touch } while a card is lifted and only changes
+  // when a drag starts or ends; the pointer position, the insertion slot and the
+  // ghost's placement live in dragRef and go straight to the DOM, so following
+  // the finger never re-renders the whole table.
   const [drag, setDrag] = useState(null);
-  const dragRef = useRef({ timer: null, startX: 0, startY: 0, card: null, active: false });
+  // The board group the dragged card is over, if releasing would attach it.
+  const [hotGid, setHotGid] = useState(null);
+  const dragRef = useRef({
+    card: null, active: false, pointerId: null, touch: false,
+    startX: 0, startY: 0, x: 0, y: 0, lift: 0, slop: DRAG_SLOP_MOUSE,
+    slot: null, gid: null,
+  });
+  const ghostRef  = useRef(null);
+  const markerRef = useRef(null);
+  const handRowRef = useRef(null);
+  const handAreaRef = useRef(null);
+  // A drag that ends over its own card would otherwise also count as a click
+  // on it and toggle its selection.
+  const swallowClick = useRef(false);
+  // A dropped card goes where it was dropped at once; the server's copy of the
+  // hand catches up a round-trip later. `pendingOrder` is the order we showed,
+  // kept until the server's hand matches it (or changes under us).
+  const [pendingOrder, setPendingOrder] = useState(null);
   // Online: "me" is the seat the server marked with you:true.
   const mySeat  = state.players.findIndex(p => p.you);
   const me      = mySeat >= 0 ? state.players[mySeat] : state.players[0];
@@ -1021,76 +1052,175 @@ function Game({ state, dispatch }) {
   // (an attach) is restricted to your own turn; see endPress.
   const canDragCard = (card) => !stagedIds.has(card.id);
 
-  // Lift the pressed card and let it follow the pointer from here on.
-  function liftCard(x, y) {
+  // The hand as drawn: the server's order, or the order of a drop the server
+  // hasn't confirmed yet. A pending order only applies while it holds exactly
+  // the same cards — after a draw or a discard the server's hand is the truth.
+  const sameCards = (order, hand) =>
+    order && order.length === hand.length && hand.every(c => order.includes(c.id));
+  const hand = sameCards(pendingOrder, human.hand)
+    ? pendingOrder.map(id => human.hand.find(c => c.id === id))
+    : human.hand;
+  useEffect(() => {
+    if (!pendingOrder) return;
+    // Confirmed (the server's order caught up) or superseded (the cards changed).
+    const confirmed = human.hand.every((c, i) => c.id === pendingOrder[i]);
+    if (confirmed || !sameCards(pendingOrder, human.hand)) setPendingOrder(null);
+  }, [state]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Where the dragged card would land if released at (x, y), worked out from
+  // the cards' boxes rather than from whatever element is under the point, so
+  // gaps between cards, the ends of a row and the space after the last card
+  // are all valid drops. Returns { targetId, after, bar } — bar is the gold
+  // insertion line's screen box — or null when (x, y) is not over the hand.
+  function slotAt(x, y, dragId) {
+    const row = handRowRef.current, area = handAreaRef.current;
+    if (!row || !area) return null;
+    const a = area.getBoundingClientRect();
+    if (y < a.top - HAND_ZONE_SLACK || x < a.left || x > a.right) return null;
+    const rtl = getComputedStyle(row).direction === 'rtl';
+    const items = [...row.querySelectorAll('[data-cardid]')]
+      .filter(el => el.getAttribute('data-cardid') !== dragId)
+      .map(el => ({ id: el.getAttribute('data-cardid'), r: el.getBoundingClientRect() }));
+    if (!items.length) return null;
+
+    // The hand wraps, so first find the row (cards sharing a top edge) whose
+    // band is nearest the point, then the gap within that row.
+    const rows = [];
+    for (const it of items) {
+      const last = rows[rows.length - 1];
+      if (last && Math.abs(last[0].r.top - it.r.top) < it.r.height / 2) last.push(it);
+      else rows.push([it]);
+    }
+    const band = (rw) => {
+      const top = rw[0].r.top, bottom = rw[0].r.bottom;
+      return y < top ? top - y : y > bottom ? y - bottom : 0;
+    };
+    const line = rows.reduce((best, rw) => band(rw) < band(best) ? rw : best, rows[0]);
+
+    // DOM order within a row is reading order: right-to-left on this page.
+    const past = (r) => rtl ? x < r.left + r.width / 2 : x > r.left + r.width / 2;
+    const idx = line.findIndex(it => !past(it.r));
+    const r0 = line[0].r;
+    if (idx >= 0) {
+      const r = line[idx].r;
+      return { targetId: line[idx].id, after: false,
+               bar: { x: rtl ? r.right + 1 : r.left - 1, top: r.top, h: r.height } };
+    }
+    const r = line[line.length - 1].r;
+    return { targetId: line[line.length - 1].id, after: true,
+             bar: { x: rtl ? r.left - 1 : r.right + 1, top: r0.top, h: r.height } };
+  }
+
+  // The board group under (x, y), if dropping there is an attach we may try.
+  function groupAt(x, y) {
+    if (!isMyTurn || state.phase !== 'action') return null;
+    const el = document.elementFromPoint(x, y);
+    const g = el && el.closest('[data-gid]');
+    return g ? g.getAttribute('data-gid') : null;
+  }
+
+  // Put the ghost and the insertion bar where dragRef says, straight on the DOM.
+  function paintDrag() {
     const d = dragRef.current;
-    if (d.active || !d.card) return;
-    clearTimeout(d.timer);
-    d.active = true;
-    // If the browser managed to start a selection before the press became a
-    // drag, drop it — otherwise the highlight stays on screen for the whole
-    // drag and the card looks like selected text.
-    clearSelection();
-    setDrag({ card: d.card, x, y });
+    if (ghostRef.current)
+      ghostRef.current.style.transform =
+        `translate(${d.x}px, ${d.y - d.lift}px) translate(-50%, -50%) scale(1.12)`;
+    const m = markerRef.current;
+    if (m) {
+      const b = d.slot && d.slot.bar;
+      m.style.display = b ? 'block' : 'none';
+      if (b) m.style.transform = `translate(${b.x - 2}px, ${b.top - 4}px)`;
+      if (b) m.style.height = `${b.h + 8}px`;
+    }
+  }
+
+  function track(x, y) {
+    const d = dragRef.current;
+    d.x = x; d.y = y;
+    // The drop point is the ghost's centre: on touch that's above the finger.
+    const hx = x, hy = y - d.lift;
+    d.slot = slotAt(hx, hy, d.card.id);
+    d.gid = d.slot ? null : groupAt(hx, hy);
+    setHotGid(g => g === d.gid ? g : d.gid);
+    paintDrag();
   }
 
   function startPress(card, e) {
     if (!canDragCard(card)) return;
-    const pt = e.touches ? e.touches[0] : e;
+    if (!e.isPrimary || (e.pointerType === 'mouse' && e.button !== 0)) return;
     const d = dragRef.current;
-    d.startX = pt.clientX; d.startY = pt.clientY; d.card = card; d.active = false;
-    clearTimeout(d.timer);
-    // A press that never moves still lifts, just from the hold alone.
-    d.timer = setTimeout(() => liftCard(d.startX, d.startY), HOLD_MS);
+    const touch = e.pointerType !== 'mouse';
+    const h = e.currentTarget.getBoundingClientRect().height;
+    Object.assign(d, {
+      card, active: false, pointerId: e.pointerId, touch,
+      startX: e.clientX, startY: e.clientY, x: e.clientX, y: e.clientY,
+      slop: touch ? DRAG_SLOP_TOUCH : DRAG_SLOP_MOUSE,
+      lift: touch ? h * TOUCH_LIFT : 0,
+      slot: null, gid: null,
+    });
   }
   function movePress(e) {
     const d = dragRef.current;
-    if (!d.card) return;
-    const pt = e.touches ? e.touches[0] : e;
+    if (!d.card || e.pointerId !== d.pointerId) return;
     if (!d.active) {
-      // Moving off the card means a drag, not a scroll: the hand row keeps the
-      // touch to itself (touch-action: none) and nothing under it scrolls, so
-      // there is nothing else the gesture could have meant. Lift at once
-      // instead of waiting out the hold — this is what makes the drag feel
-      // immediate, and it is why the hold can be as short as it is.
-      if (Math.abs(pt.clientX - d.startX) > DRAG_SLOP || Math.abs(pt.clientY - d.startY) > DRAG_SLOP)
-        liftCard(pt.clientX, pt.clientY);
-      else return;
+      // The hand row keeps the touch to itself (touch-action: none), so a press
+      // that travels can only mean a drag. Anything shorter is still a tap.
+      if (Math.hypot(e.clientX - d.startX, e.clientY - d.startY) < d.slop) return;
+      d.active = true;
+      // If the browser managed to start a selection before the press became a
+      // drag, drop it — otherwise the highlight stays on screen for the whole
+      // drag and the card looks like selected text.
+      clearSelection();
+      setDrag({ card: d.card, touch: d.touch });
     }
     if (e.cancelable) e.preventDefault(); // block scroll while dragging
-    setDrag({ card: d.card, x: pt.clientX, y: pt.clientY });
+    track(e.clientX, e.clientY);
   }
-  function endPress(e) {
+  function finish(drop) {
     const d = dragRef.current;
-    clearTimeout(d.timer);
     if (d.active && d.card) {
-      const pt = e.changedTouches ? e.changedTouches[0] : e;
-      const el = document.elementFromPoint(pt.clientX, pt.clientY);
-      const groupEl = el && el.closest('[data-gid]');
-      const cardEl = el && el.closest('[data-cardid]');
-      if (groupEl && isMyTurn) {
-        const gid = groupEl.getAttribute('data-gid');
+      swallowClick.current = true;
+      setTimeout(() => { swallowClick.current = false; }, 80);
+      if (drop && d.gid) {
         // If the dragged card is part of a current multi-card selection, attach the
         // whole selection at once; otherwise attach just the dragged card.
         if (state.sel.length > 1 && state.sel.includes(d.card.id))
-          dispatch({ type: 'ATTACH', gid });
+          dispatch({ type: 'ATTACH', gid: d.gid });
         else
-          dispatch({ type: 'ATTACH', gid, cid: d.card.id });
-      } else if (cardEl) {
-        const targetId = cardEl.getAttribute('data-cardid');
-        if (targetId && targetId !== d.card.id)
-          dispatch({ type: 'REORDER', cid: d.card.id, targetId });
+          dispatch({ type: 'ATTACH', gid: d.gid, cid: d.card.id });
+      } else if (drop && d.slot) {
+        const { targetId, after } = d.slot;
+        const next = moveCard(hand, d.card.id, targetId, after);
+        if (next !== hand) {
+          setPendingOrder(next.map(c => c.id));
+          dispatch({ type: 'REORDER', cid: d.card.id, targetId, after });
+        }
       }
     }
-    d.active = false; d.card = null;
+    Object.assign(d, { card: null, active: false, pointerId: null, slot: null, gid: null });
     clearSelection();
     setDrag(null);
+    setHotGid(null);
+  }
+  function endPress(e) {
+    const d = dragRef.current;
+    if (!d.card || e.pointerId !== d.pointerId) return;
+    // A cancel (the OS took the gesture) puts the card back where it was.
+    if (e.type === 'pointerup' && d.active) track(e.clientX, e.clientY);
+    finish(e.type === 'pointerup');
   }
 
   // Global listeners so drag tracks across the whole screen (re-bound each render for fresh state)
   useEffect(() => {
     const move = (e) => movePress(e);
     const up = (e) => endPress(e);
+    // Esc drops a card back where it came from.
+    const key = (e) => { if (e.key === 'Escape' && dragRef.current.active) finish(false); };
+    const click = (e) => {
+      if (!swallowClick.current) return;
+      swallowClick.current = false;
+      e.stopPropagation(); e.preventDefault();
+    };
     // While a finger is down on a card, refuse to start a text selection at all.
     // CSS user-select covers most browsers; this catches the rest, and costs
     // nothing when no card is being pressed.
@@ -1101,14 +1231,21 @@ function Game({ state, dispatch }) {
     window.addEventListener('pointermove', move, { passive: false });
     window.addEventListener('pointerup', up);
     window.addEventListener('pointercancel', up);
+    window.addEventListener('keydown', key);
+    window.addEventListener('click', click, true);
     window.addEventListener('selectstart', noSelect);
     return () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
       window.removeEventListener('pointercancel', up);
+      window.removeEventListener('keydown', key);
+      window.removeEventListener('click', click, true);
       window.removeEventListener('selectstart', noSelect);
     };
   });
+
+  // The ghost and the bar mount with the drag; place them before first paint.
+  useLayoutEffect(() => { if (drag) paintDrag(); }, [drag]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // AI now runs authoritatively on the server (the Room Durable Object),
   // so there is no local AI effect here. The client only renders state and
@@ -1614,6 +1751,7 @@ function Game({ state, dispatch }) {
                 <GroupView
                   key={g.id} group={g}
                   canAttach={normalAttach}
+                  hot={hotGid === g.id}
                   onAttach={() => {
                     if (normalAttach) {
                       dispatch({ type: 'ATTACH', gid: g.id });
@@ -1639,7 +1777,7 @@ function Game({ state, dispatch }) {
       {(() => {
         const myTurn = isMyTurn && state.phase !== 'round_end' && state.phase !== 'game_end';
         return (
-      <div className="ga-hand" style={{
+      <div className="ga-hand" ref={handAreaRef} style={{
         background: myTurn
           ? 'linear-gradient(180deg, #7c4a09, #1a1206)'
           : '#0f172a',
@@ -1710,7 +1848,7 @@ function Game({ state, dispatch }) {
               }}
             >✋ {myPts} נק׳ ביד</button>
             <button
-              onClick={() => dispatch({ type: 'SORT' })}
+              onClick={() => { setPendingOrder(null); dispatch({ type: 'SORT' }); }}
               style={{
                 background: '#1e293b', color: '#cbd5e1', border: '1px solid #334155',
                 borderRadius: 8, fontSize: 12, fontWeight: 700, padding: '5px 12px',
@@ -1721,12 +1859,13 @@ function Game({ state, dispatch }) {
 
           {/* Hand cards — wrap to multiple rows to fit screen width (no scroll) */}
           <div
+            ref={handRowRef}
             style={{
               display: 'flex', flexWrap: 'wrap', justifyContent: 'center',
               alignContent: 'flex-start', gap: 2, paddingBottom: 2, paddingTop: 14,
             }}
           >
-            {human.hand.map((c, i) => {
+            {hand.map((c) => {
               const inStage = stagedIds.has(c.id);
               const dragging = drag && drag.card.id === c.id;
               const sel = state.sel.includes(c.id);
@@ -1742,13 +1881,13 @@ function Game({ state, dispatch }) {
                   onDragStart={(e) => e.preventDefault()}
                   draggable={false}
                   style={{
+                    cursor: dragging ? 'grabbing' : 'grab',
                     // Always 'none', not just mid-drag: the browser picks the
                     // gesture owner at touch-start, so switching once the drag
                     // has begun is too late to stop a swipe-navigation.
                     // Nothing scrolls here — the hand is a fixed row — so the
                     // touch is ours to keep.
                     touchAction: 'none',
-                    opacity: dragging ? 0.3 : 1,
                     zIndex: sel ? 100 : 1,
                     flexShrink: 0,
                   }}
@@ -1756,7 +1895,9 @@ function Game({ state, dispatch }) {
                   <CardView
                     card={c}
                     sel={sel}
-                    faded={inStage}
+                    // The fade lives on the card, not this wrapper: dealIn's
+                    // fill-mode pins the wrapper's opacity at 1.
+                    faded={inStage || dragging}
                     newCard={(human.newIds || []).includes(c.id)}
                     onClick={
                       state.phase === 'action' && !inStage
@@ -1774,15 +1915,26 @@ function Game({ state, dispatch }) {
 
       </div>{/* /game-grid */}
 
-      {/* Drag ghost — centred on the finger, whatever the current card size */}
+      {/* Drag ghost — under the cursor, or lifted above the finger on touch so
+          it stays visible. Positioned by paintDrag(), never by a re-render. */}
       {drag && (
-        <div style={{
-          position: 'fixed', left: drag.x, top: drag.y,
+        <div ref={ghostRef} style={{
+          position: 'fixed', left: 0, top: 0,
           pointerEvents: 'none', zIndex: 9999,
-          transform: 'translate(-50%, -50%) scale(1.15)',
+          filter: 'drop-shadow(0 10px 14px rgba(0,0,0,.55))',
+          willChange: 'transform',
         }}>
           <CardView card={drag.card} />
         </div>
+      )}
+      {/* Where the card will go when it's let go — drawn over the ghost, which
+          on touch sits right on the drop point */}
+      {drag && (
+        <div ref={markerRef} style={{
+          position: 'fixed', left: 0, top: 0, width: 4, display: 'none',
+          borderRadius: 2, background: GOLD, pointerEvents: 'none', zIndex: 10000,
+          boxShadow: `0 0 10px ${GOLD}, 0 0 3px #fff`,
+        }} />
       )}
     </div>
   );

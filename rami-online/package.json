@@ -1,11 +1,11 @@
 {
   "name": "rami-online",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "test": "node tests/host-reconnect.mjs && node tests/room-lifetime.mjs && node tests/ai-seats.mjs && node tests/scoreboard.mjs",
+    "test": "node tests/host-reconnect.mjs && node tests/room-lifetime.mjs && node tests/ai-seats.mjs && node tests/scoreboard.mjs && node tests/reorder.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "deploy": "npm run build && wrangler deploy",
