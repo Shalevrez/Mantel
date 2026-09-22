@@ -142,7 +142,10 @@ function GroupView({ group, onAttach, canAttach }) {
 // The full name rides along on the cell's title.
 const MK_SHORT = ['3', '3+3', '4', '4+4', '5', '5+5'];
 
-const RANK = ['🥇', '🥈', '🥉', '4️⃣'];
+// A room seats six now, so the standings need six marks; anything past them
+// falls back to a plain position rather than rendering nothing at all.
+const RANK_MARKS = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣', '6️⃣'];
+const rankMark = (i) => RANK_MARKS[i] ?? `${i + 1}.`;
 
 // A round score is a penalty — less is better, and an ant is negative — so it's
 // always written with its sign.
@@ -198,7 +201,7 @@ function Leaderboard({ state, note }) {
                   fontWeight: 700, whiteSpace: 'nowrap',
                   background: rank === 0 ? '#fefce8' : 'transparent',
                 }}>
-                  {RANK[rank]} {p.name}{p.you ? ' (אתה)' : ''}
+                  {rankMark(rank)} {p.name}{p.you ? ' (אתה)' : ''}
                 </td>
                 {history.map(h => {
                   const s = h.scores[seat] ?? 0;
@@ -414,8 +417,9 @@ function RulesModal({ onClose }) {
           </Section>
 
           <Section title="🃏 הקלפים">
-            משחקים עם 2 חפיסות + 4 ג׳וקרים (108 קלפים). אס יכול לשמש כ־1 (לפני 2)
-            או כ־14 (אחרי מלך). הג׳וקר מחליף כל קלף.
+            משחקים עם 2 חפיסות + 4 ג׳וקרים (108 קלפים), ומחמישה שחקנים ומעלה עם
+            3 חפיסות + 6 ג׳וקרים (162 קלפים) — אחרת החבילה נגמרת לפני שמישהו מספיק
+            לסיים. אס יכול לשמש כ־1 (לפני 2) או כ־14 (אחרי מלך). הג׳וקר מחליף כל קלף.
           </Section>
 
           <Section title="🔢 ערך הקלפים (לניקוד)">
@@ -815,7 +819,7 @@ function RoundEnd({ state, dispatch }) {
                 border: `2px solid ${p.id === result.w ? '#86efac' : '#e7e5e4'}`,
               }}>
                 <span style={{ fontWeight: 700 }}>
-                  {RANK[i]} {p.name}
+                  {rankMark(i)} {p.name}
                 </span>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                   <span style={{
@@ -919,7 +923,7 @@ function GameEnd({ state, onRestart }) {
               border: i === 0 ? `2px solid ${GOLD}` : '2px solid #e7e5e4',
             }}>
               <span style={{ fontWeight: 700, fontSize: 15 }}>
-                {RANK[i]} {p.name}
+                {rankMark(i)} {p.name}
               </span>
               <span style={{ fontWeight: 700, fontSize: 20, color: FELTD }}>
                 {p.totalScore}<span style={{ fontSize: 12, color: '#78716c', fontWeight: 400 }}> נק׳</span>
@@ -1314,7 +1318,9 @@ function Game({ state, dispatch }) {
           if (i === mySeat) return null; // don't render myself as an opponent
           const active = i === state.cur;
           const handN = p.handCount ?? p.hand?.length ?? 0;
-          const miniN = Math.min(handN, 6);
+          // Five opponents share the width four used to; a shorter fan keeps
+          // each tile readable instead of squeezing the name out.
+          const miniN = Math.min(handN, state.players.length > 4 ? 3 : 6);
           return (
             <div key={i} style={{
               flex: 1, minWidth: 0,

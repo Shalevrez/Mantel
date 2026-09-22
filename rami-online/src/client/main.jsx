@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, Component } from "react";
 import { createRoot } from "react-dom/client";
-import { FELT, FELTD, GOLD, CREAM } from "../game-core.js";
+import { FELT, FELTD, GOLD, CREAM, AI_LEVELS, AI_LEVEL_NAMES } from "../game-core.js";
 import { Game, RoundEnd, GameEnd, RulesModal, ReleaseNotes } from "./ui.jsx";
 import { LATEST_RELEASE } from "../releases.js";
 import { createRoom, joinRoom } from "./net.js";
@@ -141,7 +141,11 @@ function App() {
                    onShowNotes={() => setNotes(true)} />;
 
     if (screen === 'lobby')
-      return <Lobby {...{ lobby, code, error, onStart: (opts) => connRef.current?.start(opts) }}
+      return <Lobby {...{ lobby, code, error }}
+                    onStart={() => connRef.current?.start()}
+                    onAddAI={() => connRef.current?.addAI()}
+                    onRemoveAI={(seat) => connRef.current?.removeAI(seat)}
+                    onAILevel={(lv) => connRef.current?.setAILevel(lv)}
                     onShowNotes={() => setNotes(true)} />;
 
     // screen === 'game'
@@ -176,7 +180,7 @@ function Home({ name, setName, code, setCode, error, connecting, handleCreate, h
           רמי אקסטרים
         </h1>
         <div style={{ width: 50, height: 2, background: GOLD, margin: '8px auto' }} />
-        <p style={{ color: '#78716c', margin: 0, fontSize: 13 }}>אונליין · עד 4 שחקנים</p>
+        <p style={{ color: '#78716c', margin: 0, fontSize: 13 }}>אונליין · 2–6 שחקנים</p>
       </div>
 
       <Label>השם שלך</Label>
@@ -230,14 +234,20 @@ function Home({ name, setName, code, setCode, error, connecting, handleCreate, h
 // LOBBY — waiting room; host starts the game
 // ═══════════════════════════════════════════════════════
 
-function Lobby({ lobby, code, error, onStart, onShowNotes }) {
+function Lobby({ lobby, code, error, onStart, onAddAI, onRemoveAI, onAILevel, onShowNotes }) {
   const [copied, setCopied] = useState(false);
-  const [fillAI, setFillAI] = useState(false);
   if (!lobby) return <Splash text="מתחבר לחדר..." />;
 
   const shareLink = `${location.origin}${location.pathname}?code=${lobby.code || code}`;
   const players = lobby.players || [];
-  const canStart = lobby.youHost && (players.length >= 2 || fillAI);
+  // The server owns these limits; the fallbacks only matter if an old server
+  // answers a new client.
+  const maxSeats = lobby.maxSeats || 6;
+  const maxAI = lobby.maxAI || 3;
+  const aiCount = lobby.aiCount ?? players.filter(p => p.isAI).length;
+  const level = lobby.aiLevel || 'medium';
+  const canAddAI = aiCount < maxAI && players.length < maxSeats;
+  const canStart = lobby.youHost && players.length >= 2;
 
   const copy = async () => {
     try { await navigator.clipboard.writeText(shareLink); setCopied(true); setTimeout(() => setCopied(false), 1500); }
@@ -280,53 +290,109 @@ function Lobby({ lobby, code, error, onStart, onShowNotes }) {
 
       {/* Player list */}
       <div style={{ marginBottom: 14 }}>
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+          color: '#78716c', fontSize: 12, marginBottom: 6,
+        }}>
+          <span>שחקנים בחדר</span>
+          <span>{players.length}/{maxSeats}</span>
+        </div>
         {players.map((p) => (
           <div key={p.seat} style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
             padding: '10px 14px', borderRadius: 11, marginBottom: 6,
             background: p.host ? `${FELT}14` : '#fafaf9',
             border: `2px solid ${p.host ? FELT + '33' : '#e7e5e4'}`,
           }}>
-            <span style={{ fontWeight: 700, color: FELTD }}>
+            <span style={{ fontWeight: 700, color: FELTD, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {p.isAI ? '🤖' : p.connected ? '🟢' : '⚪'} {p.name}
               {p.seat === lobby.youSeat && <span style={{ color: '#78716c', fontWeight: 400 }}> (אתה)</span>}
+              {p.isAI && (
+                <span style={{ color: '#78716c', fontWeight: 400, fontSize: 12 }}>
+                  {' · '}{AI_LEVEL_NAMES[p.ai || level] || ''}
+                </span>
+              )}
             </span>
-            {p.host && <span style={{ fontSize: 11, color: FELT, fontWeight: 700 }}>👑 מארח</span>}
+            <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+              {p.host && <span style={{ fontSize: 11, color: FELT, fontWeight: 700 }}>👑 מארח</span>}
+              {p.isAI && lobby.youHost && (
+                <button onClick={() => onRemoveAI(p.seat)} title="הסר שחקן מחשב"
+                        style={removeBtn}>✕</button>
+              )}
+            </span>
           </div>
         ))}
-        {Array.from({ length: Math.max(0, 4 - players.length) }).map((_, k) => (
-          <div key={'e' + k} style={{
-            padding: '10px 14px', borderRadius: 11, marginBottom: 6,
+        {/* Six chairs is a long list to draw one by one, so the free ones are
+            summed up in a single row. */}
+        {players.length < maxSeats && (
+          <div style={{
+            padding: '9px 14px', borderRadius: 11, marginBottom: 6,
             background: '#fafaf9', border: '2px dashed #e7e5e4',
             color: '#a8a29e', fontSize: 13, textAlign: 'center',
           }}>
-            ממתין לשחקן...
+            🪑 {maxSeats - players.length === 1
+              ? 'כיסא פנוי אחד'
+              : `${maxSeats - players.length} כיסאות פנויים`}
           </div>
-        ))}
+        )}
       </div>
 
       {lobby.youHost ? (
         <>
-          {players.length < 2 && (
-            <label style={{
-              display: 'flex', alignItems: 'center', gap: 8, fontSize: 13,
-              color: '#57534e', marginBottom: 12, cursor: 'pointer', justifyContent: 'center',
+          {/* Computer players — the host decides how many sit down, and how
+              well they play. They join the room the moment they're added, so
+              everyone waiting can see the table filling up. */}
+          <div style={{
+            border: '2px solid #e7e5e4', borderRadius: 13, padding: '12px 14px', marginBottom: 12,
+          }}>
+            <div style={{
+              display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8,
+              marginBottom: 10,
             }}>
-              <input type="checkbox" checked={fillAI} onChange={e => setFillAI(e.target.checked)}
-                     style={{ width: 16, height: 16 }} />
-              מלא מקומות ריקים בשחקני מחשב
-            </label>
-          )}
+              <span style={{ fontWeight: 700, color: FELTD, fontSize: 14 }}>🤖 שחקני מחשב</span>
+              <span style={{ color: '#78716c', fontSize: 12 }}>{aiCount}/{maxAI}</span>
+            </div>
+            <button onClick={onAddAI} disabled={!canAddAI}
+                    style={{ ...secondaryBtn, marginTop: 0, marginBottom: 4, opacity: canAddAI ? 1 : 0.5 }}>
+              ➕ הוסף מחשב למשחק
+            </button>
+            <div style={{ color: '#a8a29e', fontSize: 11, marginBottom: 10, textAlign: 'center' }}>
+              {aiCount >= maxAI
+                ? `הגעתם למקסימום — ${maxAI} שחקני מחשב`
+                : players.length >= maxSeats
+                  ? `השולחן מלא (${maxSeats} שחקנים)`
+                  : 'כל לחיצה מושיבה מחשב אחד בשולחן. להסרה — ✕ ליד שמו.'}
+            </div>
+            <div style={{ color: '#78716c', fontSize: 12, marginBottom: 6 }}>דרגת קושי</div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {AI_LEVELS.map(lv => (
+                <button key={lv} onClick={() => onAILevel(lv)}
+                        style={{
+                          flex: 1, padding: '8px 0', borderRadius: 10, cursor: 'pointer',
+                          fontFamily: 'inherit', fontSize: 13, fontWeight: 700,
+                          border: `2px solid ${lv === level ? FELT : '#e7e5e4'}`,
+                          background: lv === level ? FELT : '#fff',
+                          color: lv === level ? CREAM : '#57534e',
+                        }}>
+                  {AI_LEVEL_NAMES[lv]}
+                </button>
+              ))}
+            </div>
+            <div style={{ color: '#a8a29e', fontSize: 11, marginTop: 6, lineHeight: 1.5 }}>
+              {LEVEL_HINT[level]}
+            </div>
+          </div>
+
           <button
-            onClick={() => onStart({ fillAI, minPlayers: 2 })}
+            onClick={onStart}
             disabled={!canStart}
             style={{ ...primaryBtn, opacity: canStart ? 1 : 0.5, marginTop: 0 }}
           >
             🎮 התחל משחק
           </button>
-          {players.length < 2 && !fillAI && (
+          {players.length < 2 && (
             <div style={{ textAlign: 'center', color: '#a8a29e', fontSize: 12, marginTop: 8 }}>
-              צריך לפחות 2 שחקנים כדי להתחיל
+              צריך לפחות 2 שחקנים — הזמינו חבר או הוסיפו מחשב
             </div>
           )}
         </>
@@ -344,6 +410,13 @@ function Lobby({ lobby, code, error, onStart, onShowNotes }) {
     </Shell>
   );
 }
+
+// What each difficulty actually changes, in one line for the host.
+const LEVEL_HINT = {
+  easy:   'מתחיל: לא קונה, לא מצמיד לשולחן, וזורק כמעט כל קלף מיותר.',
+  medium: 'בינוני: לוקח קלפים שמשלימים קבוצה, קונה מדי פעם, ומצמיד קלף אחד בתור.',
+  hard:   'קשה: אוסף גם קלפים שמתחברים ליד, קונה בלי היסוס, ומרוקן לשולחן כל מה שאפשר.',
+};
 
 // ═══════════════════════════════════════════════════════
 // ROOM CLOSED — the server retired the room
@@ -458,6 +531,13 @@ const linkBtn = {
   width: '100%', padding: '10px 0', background: 'transparent', color: FELT,
   border: 'none', fontSize: 14, fontWeight: 700, cursor: 'pointer', marginTop: 10,
 };
+// The ✕ that takes a computer player back out of the lobby.
+const removeBtn = {
+  width: 24, height: 24, borderRadius: 7, border: '2px solid #e7e5e4',
+  background: '#fff', color: '#a8a29e', fontSize: 12, fontWeight: 700,
+  cursor: 'pointer', fontFamily: 'inherit', lineHeight: 1, padding: 0,
+};
+
 const errorStyle = {
   marginTop: 12, padding: '9px 12px', borderRadius: 10,
   background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c',
