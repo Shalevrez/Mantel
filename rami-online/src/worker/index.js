@@ -600,8 +600,10 @@ export class Room {
   }
 
   scheduleAI(fn) {
-    // small delay so humans see the AI move; DO alarms would be more robust,
-    // but a short setTimeout is fine within a single active request lifetime.
+    // Just enough of a pause for a human to register that the AI moved, and no
+    // more — waiting on the computer is the slowest part of a table full of
+    // them. DO alarms would be more robust, but a short setTimeout is fine
+    // within a single active request lifetime.
     // One at a time: maybeRunAI can be reached more than once for the same AI
     // turn, and without this guard the AI would play its move twice.
     if (this.aiPending) return;
@@ -610,7 +612,7 @@ export class Room {
       this.aiPending = false;
       try { fn(); this.touch(); await this.persist(); await this.armAlarm(); this.broadcastState(); this.maybeRunAI(); }
       catch (e) { /* swallow */ }
-    }, 500 + Math.random() * 400);
+    }, 260 + Math.random() * 160);
   }
 
   // How sharply a given AI seat plays. Falls back to the room's level for a seat
