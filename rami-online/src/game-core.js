@@ -48,14 +48,10 @@ const CLOTH =
   `repeating-linear-gradient(90deg, ${CLOTH_BAND} 0 28px, transparent 28px 56px),` +
   CLOTH_BASE;
 
-// The play table itself is the same gingham in navy: lighter blue bands on a deep
-// navy base, so the cards and the light group mats stand out against it.
+// The play table itself is plain deep navy, so the cards and the light group
+// mats stand out against it; the gingham stays on the screens around it.
 const TABLE_BASE = FELTD;
-const TABLE_BAND = 'rgba(120,160,215,.16)';
-const TABLE =
-  `repeating-linear-gradient(0deg, ${TABLE_BAND} 0 28px, transparent 28px 56px),` +
-  `repeating-linear-gradient(90deg, ${TABLE_BAND} 0 28px, transparent 28px 56px),` +
-  TABLE_BASE;
+const TABLE = TABLE_BASE;
 
 let _uid = 1;
 const uid = () => `${Date.now()}-${(_uid++).toString(36)}`;
