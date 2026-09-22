@@ -19,6 +19,23 @@ const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '
 // Which release the player has already been shown the notes for.
 const SEEN_RELEASE_KEY = 'rami_seen_release';
 
+// ── Browser storage ──────────────────────────────────
+// Every read and write is guarded: a browser with storage blocked (private
+// mode, an in-app webview, a locked-down profile) throws on plain access, and
+// a throw while the app is deciding what to put in the name box would take the
+// whole screen down. A blocked store just means nothing is remembered.
+function readStore(key) {
+  try { return localStorage.getItem(key) || ''; } catch { return ''; }
+}
+function writeStore(key, value) {
+  try { localStorage.setItem(key, value); } catch { /* storage blocked */ }
+}
+
+// The player's name, kept between visits. It is typed once and comes back
+// filled in on every later entry — a reload mid-game, a return after the
+// browser was closed, or a fresh invite link.
+const NAME_KEY = 'rami_name';
+
 // ── Read ?code= from the URL so a shared link auto-fills the room ──
 function urlCode() {
   const p = new URLSearchParams(location.search);
@@ -31,12 +48,12 @@ function urlCode() {
 // they just need the code to get back to their seat and their host controls.
 const LAST_ROOM_KEY = 'rami_last_room';
 function lastRoom() {
-  try { return (localStorage.getItem(LAST_ROOM_KEY) || '').toUpperCase(); } catch { return ''; }
+  return readStore(LAST_ROOM_KEY).toUpperCase();
 }
 
 function App() {
   const [screen, setScreen] = useState('home'); // home | lobby | game
-  const [name, setName] = useState(() => localStorage.getItem('rami_name') || '');
+  const [name, setName] = useState(() => readStore(NAME_KEY));
   const [code, setCode] = useState(() => urlCode() || lastRoom());
   const [lobby, setLobby] = useState(null);
   const [state, setState] = useState(null);
@@ -46,28 +63,30 @@ function App() {
   const [closed, setClosed] = useState(null); // why the server retired the room
   const connRef = useRef(null);
 
-  // Persist the chosen name for next time
-  useEffect(() => { if (name) localStorage.setItem('rami_name', name); }, [name]);
+  // Persist the chosen name for next time. Stored trimmed — the same name the
+  // server is given — so padding can't come back looking like a different one.
+  // An emptied box keeps the last saved name rather than forgetting it.
+  useEffect(() => {
+    const trimmed = name.trim();
+    if (trimmed) writeStore(NAME_KEY, trimmed);
+  }, [name]);
 
   // "What's new": pop the release notes once per version, then remember it was
-  // seen. Wrapped in try/catch — private mode can make localStorage throw, and
-  // a blocked storage must not stop the game from loading.
+  // seen.
   useEffect(() => {
-    try {
-      if (localStorage.getItem(SEEN_RELEASE_KEY) !== LATEST_RELEASE.version) setNotes(true);
-    } catch { /* storage blocked — just don't auto-open */ }
+    if (readStore(SEEN_RELEASE_KEY) !== LATEST_RELEASE.version) setNotes(true);
   }, []);
 
   const closeNotes = useCallback(() => {
     setNotes(false);
-    try { localStorage.setItem(SEEN_RELEASE_KEY, LATEST_RELEASE.version); } catch {}
+    writeStore(SEEN_RELEASE_KEY, LATEST_RELEASE.version);
   }, []);
 
   const connect = useCallback((roomCode, asHost) => {
     setConnecting(true);
     setError('');
     setClosed(null);
-    try { localStorage.setItem(LAST_ROOM_KEY, roomCode); } catch {}
+    writeStore(LAST_ROOM_KEY, roomCode);
     const conn = joinRoom(
       { code: roomCode, name: name.trim() || 'שחקן', host: asHost },
       {
@@ -150,6 +169,9 @@ function App() {
 
 function Home({ name, setName, code, setCode, error, connecting, handleCreate, handleJoin, onShowNotes }) {
   const [showRules, setShowRules] = useState(false);
+  // Was the box filled in from the last visit rather than typed just now?
+  // Captured once, on mount, so it doesn't flicker away as the name is edited.
+  const [remembered] = useState(() => !!readStore(NAME_KEY));
   return (
     <Shell>
       <div style={{ textAlign: 'center', marginBottom: 22 }}>
@@ -167,8 +189,13 @@ function Home({ name, setName, code, setCode, error, connecting, handleCreate, h
         onChange={e => setName(e.target.value)}
         placeholder="איך קוראים לך?"
         maxLength={16}
-        style={inputStyle}
+        style={{ ...inputStyle, marginBottom: remembered ? 4 : 14 }}
       />
+      {remembered && (
+        <div style={{ color: '#a8a29e', fontSize: 11.5, marginBottom: 14 }}>
+          ✓ השם נשמר מהפעם הקודמת — אפשר לשנות אותו
+        </div>
+      )}
 
       <button onClick={handleCreate} disabled={connecting} style={primaryBtn}>
         {connecting ? '...' : '➕ צור חדר חדש'}

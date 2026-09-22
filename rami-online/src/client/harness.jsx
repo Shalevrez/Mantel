@@ -1,9 +1,9 @@
 // Dev-only harness: renders <Game> against a real, server-shaped state so the
 // layout can be inspected at any viewport without a Worker or a second player.
 import { createRoot } from "react-dom/client";
-import { initGame, startHand, mkCard, G } from "../game-core.js";
+import { initGame, startHand, mkCard, G, MK } from "../game-core.js";
 import { viewFor } from "../worker/index.js";
-import { Game, RoundEnd, GameEnd } from "./ui.jsx";
+import { Game, RoundEnd, GameEnd, ScoreModal } from "./ui.jsx";
 
 const params = new URLSearchParams(location.search);
 const seats = Number(params.get('seats') || 4);
@@ -40,15 +40,41 @@ const buying = viewFor({
   ...st, phase: 'buying', cur: 1,
   buy: { checker: 0, origNext: 0, prev: -1 },
 }, 0);
+// A few rounds already in the books, so the leaderboard has columns to draw.
+// Totals are accumulated from the per-round scores, exactly as the server does
+// it — a table built on numbers that don't add up teaches nothing.
+const n = view.players.length;
+const running = Array(n).fill(0);
+const history = [
+  { mk: 0, w: 0, isAnt: false },
+  { mk: 0, w: 2 % n, isAnt: false },
+  { mk: 1, w: 1 % n, isAnt: true },
+  { mk: 2, w: null, isAnt: false, empty: true },
+].map((r, idx) => {
+  const scores = Array.from({ length: n }, (_, i) =>
+    i === r.w ? (r.isAnt ? -50 : 0) : 6 + ((i * 9 + idx * 7) % 28));
+  scores.forEach((v, i) => { running[i] += v; });
+  return {
+    n: idx + 1, mk: r.mk, mkName: MK[r.mk].name, sivuv: 1,
+    w: r.w, isAnt: !!r.isAnt, empty: !!r.empty,
+    scores, totals: [...running],
+  };
+});
+
+const withHistory = { ...view, history };
+
 const ended = {
-  ...view,
-  result: { w: 1, isAnt: true, empty: false },
-  players: view.players.map((p, i) => ({ ...p, totalScore: i * 37, lastScore: i * 12 })),
+  ...withHistory,
+  result: { w: 1 % n, isAnt: true, empty: false },
+  players: view.players.map((p, i) => ({
+    ...p, totalScore: running[i], lastScore: history[history.length - 1].scores[i],
+  })),
 };
 
 createRoot(document.getElementById('root')).render(
   screen === 'buying' ? <Game state={buying} dispatch={(a) => console.log('dispatch', a)} />
   : screen === 'round' ? <RoundEnd state={ended} dispatch={() => {}} />
   : screen === 'end' ? <GameEnd state={ended} onRestart={() => {}} />
-  : <Game state={view} dispatch={(a) => console.log('dispatch', a)} />
+  : screen === 'score' ? <ScoreModal state={ended} onClose={() => {}} />
+  : <Game state={withHistory} dispatch={(a) => console.log('dispatch', a)} />
 );
