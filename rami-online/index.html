@@ -3,8 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <meta name="theme-color" content="#0d2e1a" />
-    <title>רמי אקסטרים · אונליין</title>
+    <meta name="theme-color" content="#faf6ee" />
+    <title>מנטל · אונליין</title>
     <style>
       /*
         One font stack for the whole app. `system-ui` resolves to whatever the
@@ -21,7 +21,7 @@
                    "Noto Sans Hebrew", Arial, sans-serif;
       }
 
-      html, body, #root { height: 100%; margin: 0; padding: 0; background: #0d2e1a; }
+      html, body, #root { height: 100%; margin: 0; padding: 0; background: #faf6ee; }
       html, body { font-family: var(--font-ui); }
       /* Form controls don't inherit the page font by default — make them. */
       button, input, select, textarea { font-family: inherit; }
@@ -63,15 +63,15 @@
         position: fixed; inset: 0; z-index: 9999;
         align-items: center; justify-content: center;
         padding: 16px; direction: rtl;
-        background: #0d2e1a;
+        background: #faf6ee;
       }
       #boot-error.show { display: flex; }
       #boot-error .card {
         background: #faf7f0; border-radius: 22px; padding: 26px 24px;
         max-width: 390px; width: 100%; text-align: center;
-        border: 2px solid #c9a84777; box-shadow: 0 24px 72px rgba(0,0,0,.6);
+        border: 2px solid #c9a84777; box-shadow: 0 12px 40px rgba(19,40,79,.18);
       }
-      #boot-error h1 { margin: 0 0 6px; font-size: 20px; color: #0d2e1a; }
+      #boot-error h1 { margin: 0 0 6px; font-size: 20px; color: #13284f; }
       #boot-error p { margin: 0 0 14px; font-size: 14px; color: #57534e; line-height: 1.6; }
       #boot-error code {
         display: block; margin: 10px 0 0; padding: 8px 10px; border-radius: 8px;
@@ -91,7 +91,7 @@
         font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px;
       }
       #boot-error button {
-        width: 100%; padding: 13px 0; background: #14532d; color: #c9a847;
+        width: 100%; padding: 13px 0; background: #1e3a5f; color: #c9a847;
         border: 2px solid #c9a84788; border-radius: 13px;
         font-size: 16px; font-weight: 700; cursor: pointer; font-family: inherit;
       }
@@ -106,8 +106,8 @@
         <h1>המשחק לא נטען</h1>
         <p>
           קבצי האפליקציה לא הגיעו מהשרת, ולכן המסך נשאר ריק.<br />
-          בדרך כלל זה אומר שהאתר הועלה בלי <code style="display:inline;padding:1px 5px;color:#14532d;background:#e7e5e4;direction:ltr">npm run build</code>
-          או שתיקיית <code style="display:inline;padding:1px 5px;color:#14532d;background:#e7e5e4;direction:ltr">dist</code> לא נפרסה.
+          בדרך כלל זה אומר שהאתר הועלה בלי <code style="display:inline;padding:1px 5px;color:#1e3a5f;background:#e7e5e4;direction:ltr">npm run build</code>
+          או שתיקיית <code style="display:inline;padding:1px 5px;color:#1e3a5f;background:#e7e5e4;direction:ltr">dist</code> לא נפרסה.
         </p>
         <button onclick="location.reload()">↻ נסה שוב</button>
         <code id="boot-error-detail" style="display:none"></code>

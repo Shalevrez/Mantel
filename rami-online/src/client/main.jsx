@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, Component } from "react";
 import { createRoot } from "react-dom/client";
-import { FELT, FELTD, GOLD, CREAM, AI_LEVELS, AI_LEVEL_NAMES } from "../game-core.js";
+import { FELT, FELTD, GOLD, CREAM, CLOTH, AI_LEVELS, AI_LEVEL_NAMES } from "../game-core.js";
 import { Game, RoundEnd, GameEnd, RulesModal, ReleaseNotes } from "./ui.jsx";
 import { LATEST_RELEASE } from "../releases.js";
 import { createRoom, joinRoom } from "./net.js";
@@ -217,7 +217,7 @@ function Home({ name, setName, code, setCode, error, connecting, handleCreate, h
       <div style={{ textAlign: 'center', marginBottom: 22 }}>
         <div style={{ fontSize: 54, marginBottom: 4, filter: 'drop-shadow(0 2px 4px rgba(0,0,0,.2))' }}>🃏</div>
         <h1 style={{ margin: 0, fontSize: 30, color: FELTD, letterSpacing: 2, fontWeight: 700 }}>
-          רמי אקסטרים
+          מנטל
         </h1>
         <div style={{ width: 50, height: 2, background: GOLD, margin: '8px auto' }} />
         <p style={{ color: '#78716c', margin: 0, fontSize: 13 }}>אונליין · 2–6 שחקנים</p>
@@ -498,7 +498,7 @@ function Shell({ children }) {
   return (
     <div style={{
       minHeight: '100dvh',
-      background: `radial-gradient(ellipse at 50% 30%, #1f6b3a 0%, ${FELTD} 70%)`,
+      background: CLOTH,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       direction: 'rtl', padding: 16,
     }}>
