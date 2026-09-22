@@ -317,6 +317,15 @@ function nextCk(buy, n) {
 // REDUCER
 // ═══════════════════════════════════════════════════════
 
+// Mark a board group as just added to: who attached (`by`, a seat) and which of its
+// cards are the new ones (`ids`). The mark is public, so every player can see where
+// the table changed. A second attach by the same player adds to the mark; it stays
+// until that player's next turn begins (see DISCARD), i.e. a full go-around.
+function markAttach(g, by, ids) {
+  const prev = g.att && g.att.by === by ? g.att.ids : [];
+  return { ...g, att: { by, ids: [...prev, ...ids] } };
+}
+
 function G(state, action) {
   const { type } = action;
 
@@ -579,7 +588,8 @@ function G(state, action) {
       if (match) {
         const joker = grp.cards.find(c => c.id === match.jokerId);
         const swapped = orderGroup(grp.cards.map(c => c.id === match.jokerId ? card : c));
-        const board = state.board.map(g => g.id === grp.id ? { ...g, cards: swapped } : g);
+        const board = state.board.map(g => g.id === grp.id
+          ? markAttach({ ...g, cards: swapped }, state.cur, [card.id]) : g);
         const newHand = [...p.hand.filter(c => c.id !== card.id), joker];
         const players = state.players.map((pl, i) =>
           i === state.cur ? { ...pl, hand: newHand } : pl
@@ -599,7 +609,8 @@ function G(state, action) {
     const ok = (isSeq(grp.cards) && isSeq(combined)) || (isSet(grp.cards) && isSet(combined));
     if (!ok) return { ...state, msg: '❌ לא ניתן להצמיד את הקלפים האלה' };
     const newCards = orderGroup(combined);
-    const board = state.board.map(g => g.id === action.gid ? { ...g, cards: newCards } : g);
+    const board = state.board.map(g => g.id === action.gid
+      ? markAttach({ ...g, cards: newCards }, state.cur, cards.map(c => c.id)) : g);
     const attachedIds = new Set(cards.map(c => c.id));
     const newHand = p.hand.filter(c => !attachedIds.has(c.id));
     const players = state.players.map((pl, i) =>
@@ -665,7 +676,8 @@ function G(state, action) {
     const newHand = p.hand.filter(c => c.id !== card.id);
     if (newHand.length === 0) return state; // must keep a card to discard
     const newCards = orderGroup([...grp.cards, card]);
-    const board = state.board.map(g => g.id === action.gid ? { ...g, cards: newCards } : g);
+    const board = state.board.map(g => g.id === action.gid
+      ? markAttach({ ...g, cards: newCards }, state.cur, [card.id]) : g);
     const players = state.players.map((pl, i) =>
       i === state.cur ? { ...pl, hand: newHand } : pl
     );
@@ -706,8 +718,13 @@ function G(state, action) {
     if (turnsPlayed > 50 * state.players.length) {
       return endDeck({ ...state, players, discard: [...state.discard, card] });
     }
+    // The next player's own attach marks have been on show for a full go-around —
+    // everyone has seen them — so they clear as that player's turn begins.
+    const board = state.board.some(g => g.att && g.att.by === nextIdx)
+      ? state.board.map(({ att, ...g }) => att && att.by !== nextIdx ? { ...g, att } : g)
+      : state.board;
     return {
-      ...state, phase: 'buying',
+      ...state, phase: 'buying', board,
       discard: [...state.discard, card],
       players, cur: nextIdx, sel: [], staging: [],
       undoBefore: null, turnsPlayed, canLay, mustUseJoker: null, tookBeit: false,

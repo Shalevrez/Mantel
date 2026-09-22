@@ -132,21 +132,39 @@ function CardView({ card, sel, onClick, sm, back, glow, faded, newCard }) {
 // ═══════════════════════════════════════════════════════
 
 // `hot`: a card is being dragged over this group and will attach on release.
-function GroupView({ group, onAttach, canAttach, hot }) {
+// `attBy`: name of the player who just attached to this group (group.att), shown as
+// a tag above it, with the attached cards themselves glowing.
+const ATT = '#f472b6';
+function GroupView({ group, onAttach, canAttach, hot, attBy }) {
   const seq = group.type === 'seq';
+  const att = group.att;
+  const attIds = att ? new Set(att.ids) : null;
   return (
     <div onClick={onAttach} data-gid={group.id} className="group-pop" style={{
+      position: 'relative',
       display: 'inline-flex', alignItems: 'center',
       background: hot ? 'rgba(96,165,250,.28)' : seq ? 'rgba(34,197,94,.12)' : 'rgba(251,191,36,.12)',
-      border: `2px solid ${hot || canAttach ? '#60a5fa' : seq ? 'rgba(34,197,94,.45)' : 'rgba(251,191,36,.45)'}`,
-      borderRadius: 10, padding: '5px 7px', margin: '3px 3px',
+      border: `2px solid ${hot || canAttach ? '#60a5fa' : att ? ATT : seq ? 'rgba(34,197,94,.45)' : 'rgba(251,191,36,.45)'}`,
+      borderRadius: 10, padding: '5px 7px', margin: att ? '11px 3px 3px' : '3px 3px',
       cursor: canAttach ? 'pointer' : 'default',
       boxShadow: hot ? '0 0 0 4px rgba(96,165,250,.6), 0 0 18px rgba(96,165,250,.5)'
-        : canAttach ? '0 0 0 3px rgba(96,165,250,.35)' : 'none',
+        : canAttach ? '0 0 0 3px rgba(96,165,250,.35)'
+        : att ? `0 0 12px ${ATT}66` : 'none',
       transform: hot ? 'scale(1.04)' : 'none',
       transition: 'box-shadow .1s, transform .1s, background .1s',
     }}>
-      {group.cards.map(c => <CardView key={c.id} card={c} sm />)}
+      {att && (
+        <div title={attBy ? `${attBy} הצמיד/ה לקבוצה הזו` : 'הוצמד לקבוצה הזו'} style={{
+          position: 'absolute', top: -10, insetInlineStart: 8, zIndex: 2,
+          background: ATT, color: '#3b0a24', borderRadius: 8, padding: '0 6px',
+          fontSize: 10, fontWeight: 800, lineHeight: '16px', whiteSpace: 'nowrap',
+          maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis',
+          boxShadow: '0 1px 4px rgba(0,0,0,.4)', pointerEvents: 'none',
+        }}>
+          📌 {attBy || 'הוצמד'}
+        </div>
+      )}
+      {group.cards.map(c => <CardView key={c.id} card={c} sm glow={!!attIds && attIds.has(c.id)} />)}
     </div>
   );
 }
@@ -1750,6 +1768,7 @@ function Game({ state, dispatch }) {
               return (
                 <GroupView
                   key={g.id} group={g}
+                  attBy={g.att ? state.players[g.att.by]?.name : null}
                   canAttach={normalAttach}
                   hot={hotGid === g.id}
                   onAttach={() => {
