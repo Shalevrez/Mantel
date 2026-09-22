@@ -29,6 +29,8 @@ st = {
   ],
   players: st.players.map((p, i) => i === 0 ? { ...p, hasLaid: true } : p),
 };
+// A group someone just attached to, so the attach mark is on screen.
+st.board[1] = { ...st.board[1], att: { by: 1, ids: [st.board[1].cards[2].id] } };
 st = { ...st, sel: [st.players[0].hand[0].id, st.players[0].hand[1].id] };
 
 const view = viewFor(st, 0);
