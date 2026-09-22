@@ -27,10 +27,19 @@ function urlCode() {
   return (p.get('code') || p.get('room') || '').toUpperCase();
 }
 
+// The last room this browser was in. A host who created a room has no ?code= in
+// their URL, so without this, closing the browser and coming back leaves them
+// with nothing to type. The server still knows them (see playerId in net.js) —
+// they just need the code to get back to their seat and their host controls.
+const LAST_ROOM_KEY = 'rami_last_room';
+function lastRoom() {
+  try { return (localStorage.getItem(LAST_ROOM_KEY) || '').toUpperCase(); } catch { return ''; }
+}
+
 function App() {
   const [screen, setScreen] = useState('home'); // home | lobby | game
   const [name, setName] = useState(() => localStorage.getItem('rami_name') || '');
-  const [code, setCode] = useState(urlCode());
+  const [code, setCode] = useState(() => urlCode() || lastRoom());
   const [lobby, setLobby] = useState(null);
   const [state, setState] = useState(null);
   const [error, setError] = useState('');
@@ -58,6 +67,7 @@ function App() {
   const connect = useCallback((roomCode, asHost) => {
     setConnecting(true);
     setError('');
+    try { localStorage.setItem(LAST_ROOM_KEY, roomCode); } catch {}
     const conn = joinRoom(
       { code: roomCode, name: name.trim() || 'שחקן', host: asHost },
       {

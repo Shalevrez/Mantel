@@ -1,10 +1,11 @@
 {
   "name": "rami-online",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "test": "node tests/host-reconnect.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "deploy": "npm run build && wrangler deploy",

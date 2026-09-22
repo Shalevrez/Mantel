@@ -12,6 +12,11 @@ import {
   aiWantCard, findAIGroups, meetsReq, attachPos, aiDiscard,
 } from '../game-core.js';
 
+// How long the host keeps the crown after their connection drops. A refresh,
+// a phone locking itself or a flaky network all look like a disconnect, so the
+// room waits this long before handing the game to somebody else.
+const HOST_GRACE_MS = 60000;
+
 // 4-char room codes, no ambiguous chars (no 0/O/1/I).
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 function makeCode() {
@@ -67,8 +72,10 @@ export class Room {
     this.ctx = ctx;
     this.env = env;
     this.state = null;              // authoritative game state (or null pre-start)
-    this.seats = [];               // { name, ws, connId, connected, isAI } by seat index
-    this.hostConn = null;          // connId of the host (can start / configure)
+    this.seats = [];               // { name, uid, ws, connId, connected, isAI } by seat index
+    // The host is identified by `uid` — the player's own id, which survives a
+    // reconnect — and never by connId, which is minted fresh for every socket.
+    this.hostUid = null;
     this.code = null;
     this.started = false;
     this.sockets = new Map();      // connId -> ws
@@ -81,8 +88,13 @@ export class Room {
     const saved = await this.ctx.storage.get('room');
     if (saved) {
       this.state = saved.state;
-      this.seats = saved.seats.map(s => ({ ...s, ws: null, connected: false }));
-      this.hostConn = saved.hostConn;
+      // Nobody is connected right after an eviction, but the seats themselves
+      // (and who owns them) are exactly as they were — so a returning player,
+      // host included, is recognised rather than seated as someone new. They all
+      // count as "just dropped", which starts the host's grace period from the
+      // moment the room woke up instead of from a stale (or zero) timestamp.
+      this.seats = saved.seats.map(s => ({ ...s, ws: null, connected: false, downAt: Date.now() }));
+      this.hostUid = saved.hostUid || null;
       this.code = saved.code;
       this.started = saved.started;
     }
@@ -92,8 +104,11 @@ export class Room {
   async persist() {
     await this.ctx.storage.put('room', {
       state: this.state,
-      seats: this.seats.map(s => ({ name: s.name, connId: s.connId, isAI: s.isAI })),
-      hostConn: this.hostConn,
+      seats: this.seats.map(s => ({
+        name: s.name, uid: s.uid, connId: s.connId,
+        isAI: s.isAI, ai: s.ai, downAt: s.downAt || 0,
+      })),
+      hostUid: this.hostUid,
       code: this.code,
       started: this.started,
     });
@@ -110,7 +125,8 @@ export class Room {
       const name = url.searchParams.get('name') || 'שחקן';
       const code = url.searchParams.get('code') || '';
       const wantHost = url.searchParams.get('host') === '1';
-      this.handleSocket(server, name, code, wantHost);
+      const pid = url.searchParams.get('pid') || '';
+      this.handleSocket(server, name, code, wantHost, pid);
       return new Response(null, { status: 101, webSocket: client });
     }
 
@@ -124,37 +140,49 @@ export class Room {
     return new Response('Room DO', { status: 200 });
   }
 
-  handleSocket(ws, name, code, wantHost) {
+  handleSocket(ws, name, code, wantHost, pid) {
     ws.accept();
     const connId = crypto.randomUUID();
     this.sockets.set(connId, ws);
 
-    // Assign / reclaim a seat
-    let seat = this.seats.findIndex(s => s.connId === connId);
-    if (seat === -1) {
-      // Reconnect by name to a disconnected seat, else take a new seat
-      seat = this.seats.findIndex(s => s.name === name && !s.connected);
-      if (seat === -1 && this.seats.length < 4 && !this.started) {
-        seat = this.seats.length;
-        this.seats.push({ name, connId, ws, connected: true, isAI: false });
-      } else if (seat !== -1) {
-        this.seats[seat].connId = connId;
-        this.seats[seat].ws = ws;
-        this.seats[seat].connected = true;
-      }
-    }
+    // Who this is, across connections. `connId` is a brand-new UUID on every
+    // socket, so it can only answer "which pipe is this" — never "which player".
+    // The client's own id does that; older clients that don't send one fall back
+    // to the name, which is what seat reclaim keyed on before.
+    const uid = pid ? `pid:${pid}` : `name:${name}`;
+
+    // Reclaim first: a player who refreshed, lost the network or closed the
+    // browser and came back is the same player, and gets their seat (and, if it
+    // was theirs, the host role) back.
+    let seat = this.seats.findIndex(s => !s.isAI && s.uid === uid);
+    // Older clients that reconnect without an id still match by name.
+    if (seat === -1) seat = this.seats.findIndex(s => !s.isAI && s.name === name && !s.connected);
 
     if (seat === -1) {
-      // Room full or already started with no seat for this player
-      ws.send(JSON.stringify({ t: 'error', msg: this.started ? 'המשחק כבר התחיל' : 'החדר מלא (4 שחקנים)' }));
-      ws.close(1008, 'no seat');
-      return;
+      if (this.seats.length >= 4 || this.started) {
+        // Room full or already started with no seat for this player
+        ws.send(JSON.stringify({ t: 'error', msg: this.started ? 'המשחק כבר התחיל' : 'החדר מלא (4 שחקנים)' }));
+        ws.close(1008, 'no seat');
+        return;
+      }
+      seat = this.seats.length;
+      this.seats.push({ name, uid, connId, ws, connected: true, isAI: false, downAt: 0 });
+    } else {
+      // Same player on a new socket: drop the old one so a seat never has two
+      // live connections (a stale socket would otherwise keep "answering" for it).
+      const prev = this.seats[seat];
+      if (prev.connId && prev.connId !== connId) this.dropSocket(prev.connId);
+      prev.uid = uid;
+      prev.name = name;
+      prev.downAt = 0;
     }
 
     this.seats[seat].ws = ws;
     this.seats[seat].connId = connId;
     this.seats[seat].connected = true;
-    if (wantHost && this.hostConn == null) this.hostConn = connId;
+    // First player to ask for it owns the room. Afterwards the crown follows the
+    // uid, so reconnecting never has to re-claim it.
+    if (wantHost && this.hostUid == null) this.hostUid = uid;
 
     ws.addEventListener('message', (evt) => this.onMessage(connId, seat, evt));
     ws.addEventListener('close', () => this.onClose(connId, seat));
@@ -165,29 +193,64 @@ export class Room {
     if (this.started) this.sendState(seat);
   }
 
+  // Close a socket we're replacing, without letting its close event tear down
+  // the seat that has already moved on to a newer connection.
+  dropSocket(connId) {
+    const old = this.sockets.get(connId);
+    this.sockets.delete(connId);
+    if (old) { try { old.close(4000, 'replaced'); } catch {} }
+  }
+
   onClose(connId, seat) {
     this.sockets.delete(connId);
+    // Only the seat's *current* socket closing means the player left; a stale
+    // one closing after a reconnect must not mark them away again.
     if (this.seats[seat] && this.seats[seat].connId === connId) {
       this.seats[seat].connected = false;
       this.seats[seat].ws = null;
+      this.seats[seat].downAt = Date.now();
+      // The host's grace period is the one thing that expires on its own, so
+      // re-announce the lobby when it runs out: that's when the remaining
+      // players find out somebody else can start the game now.
+      if (this.seats[seat].uid === this.hostUid) {
+        setTimeout(() => this.broadcastLobby(), HOST_GRACE_MS + 500);
+      }
     }
     this.broadcastLobby();
   }
 
+  // ── Who may start / configure the room, as a seat index ──
+  // Derived on every read rather than stored, so it can't get stuck pointing at
+  // a connection that no longer exists — the bug that used to make the host's
+  // "start game" button vanish for good after a reconnect.
+  hostSeat() {
+    const owner = this.hostUid == null ? -1 : this.seats.findIndex(s => !s.isAI && s.uid === this.hostUid);
+    if (owner !== -1) {
+      const s = this.seats[owner];
+      // Still here, or still within the grace period after dropping: theirs.
+      if (s.connected || !s.downAt || Date.now() - s.downAt < HOST_GRACE_MS) return owner;
+    }
+    // Host gone for good: the longest-seated human still in the room takes over,
+    // so a room is never left with nobody able to start it.
+    const alt = this.seats.findIndex(s => s.connected && !s.isAI);
+    return alt !== -1 ? alt : owner;
+  }
+
   // ── Lobby state (pre-game): who's in the room ──
   broadcastLobby() {
+    const hostSeat = this.hostSeat();
     const lobby = {
       t: 'lobby',
       code: this.code,
       started: this.started,
       players: this.seats.map((s, i) => ({
         seat: i, name: s.name, connected: s.connected, isAI: s.isAI,
-        host: s.connId === this.hostConn,
+        host: i === hostSeat,
       })),
     };
     for (const [connId, ws] of this.sockets) {
       const seat = this.seats.findIndex(s => s.connId === connId);
-      try { ws.send(JSON.stringify({ ...lobby, youSeat: seat, youHost: connId === this.hostConn })); } catch {}
+      try { ws.send(JSON.stringify({ ...lobby, youSeat: seat, youHost: seat !== -1 && seat === hostSeat })); } catch {}
     }
   }
 
@@ -207,14 +270,17 @@ export class Room {
 
     // ── Host starts the game ──
     if (msg.t === 'start') {
-      if (connId !== this.hostConn || this.started) return;
+      if (this.started) return;
+      // Checked against the seat, not the connection: the host that reconnected
+      // is still the host, even though this socket is a different one.
+      if (seat !== this.hostSeat()) return;
       // Optionally fill empty seats with AI if host requested
       const fillAI = !!msg.fillAI;
       if (fillAI) {
         while (this.seats.length < (msg.minPlayers || 2)) {
           this.seats.push({
-            name: `מחשב ${this.seats.length}`, connId: null,
-            ws: null, connected: false, isAI: true, ai: 'medium',
+            name: `מחשב ${this.seats.length}`, uid: `ai:${this.seats.length}`, connId: null,
+            ws: null, connected: false, isAI: true, ai: 'medium', downAt: 0,
           });
         }
       }
