@@ -320,7 +320,8 @@ function nextCk(buy, n) {
 // Mark a board group as just added to: who attached (`by`, a seat) and which of its
 // cards are the new ones (`ids`). The mark is public, so every player can see where
 // the table changed. A second attach by the same player adds to the mark; it stays
-// until that player's next turn begins (see DISCARD), i.e. a full go-around.
+// through the rest of that turn and the whole next player's turn, and clears when
+// that next player discards (see DISCARD).
 function markAttach(g, by, ids) {
   const prev = g.att && g.att.by === by ? g.att.ids : [];
   return { ...g, att: { by, ids: [...prev, ...ids] } };
@@ -718,10 +719,10 @@ function G(state, action) {
     if (turnsPlayed > 50 * state.players.length) {
       return endDeck({ ...state, players, discard: [...state.discard, card] });
     }
-    // The next player's own attach marks have been on show for a full go-around —
-    // everyone has seen them — so they clear as that player's turn begins.
-    const board = state.board.some(g => g.att && g.att.by === nextIdx)
-      ? state.board.map(({ att, ...g }) => att && att.by !== nextIdx ? { ...g, att } : g)
+    // Marks left by the previous player have now stayed up through this whole turn,
+    // so they clear as it ends. Marks this player made just now carry into the next turn.
+    const board = state.board.some(g => g.att && g.att.by !== state.cur)
+      ? state.board.map(({ att, ...g }) => att && att.by === state.cur ? { ...g, att } : g)
       : state.board;
     return {
       ...state, phase: 'buying', board,
