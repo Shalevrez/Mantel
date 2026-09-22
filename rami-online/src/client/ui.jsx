@@ -46,7 +46,11 @@ function clearSelection() {
   } catch { /* nothing selectable — fine */ }
 }
 
-function CardView({ card, sel, onClick, sm, back, glow, faded, newCard }) {
+// Colour of the "just attached" mark, on both the group and the card itself.
+const ATT = '#f472b6';
+
+// `attached`: this card was just attached to a board group — pink ring and a pin.
+function CardView({ card, sel, onClick, sm, back, glow, faded, newCard, attached }) {
   const w = sm ? CARD_W_SM : CARD_W;
   const h = sm ? CARD_H_SM : CARD_H;
   // Everything inside a card is a ratio of its height, so it scales with it.
@@ -95,18 +99,26 @@ function CardView({ card, sel, onClick, sm, back, glow, faded, newCard }) {
         ? 'linear-gradient(150deg,#7c3aed 0%,#9f67f5 50%,#5b21b6 100%)'
         : 'linear-gradient(157deg,#ffffff 0%,#fbf6ec 55%,#f1e7d6 100%)',
       border: sel ? '2px solid #60a5fa'
+        : attached ? `2px solid ${ATT}`
         : (newCard || glow) ? `2px solid ${GOLD}`
         : '1px solid rgba(0,0,0,.22)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       cursor: onClick ? 'pointer' : 'default', userSelect: 'none', overflow: 'hidden',
       transform: sel ? `translateY(calc(${h} * -.19)) scale(1.07)` : 'none',
       boxShadow: sel ? '0 11px 22px rgba(96,165,250,.55)'
+        : attached ? `0 0 0 2px ${ATT}, 0 0 14px ${ATT}cc`
         : newCard ? `0 0 0 3px ${GOLD}, 0 0 18px ${GOLD}88`
         : glow ? `0 0 12px ${GOLD}aa` : '0 2px 5px rgba(0,0,0,.32)',
       transition: 'transform .11s cubic-bezier(.34,1.56,.64,1), box-shadow .11s',
       opacity: faded ? 0.38 : 1,
       animation: newCard ? 'newCardPulse 1.6s ease-in-out infinite' : 'none',
     }}>
+      {attached && (
+        <div style={{
+          position: 'absolute', bottom: 1, left: '50%', transform: 'translateX(-50%)',
+          fontSize: fs(.2), lineHeight: 1, zIndex: 2, pointerEvents: 'none',
+        }}>📌</div>
+      )}
       {/* gloss highlight */}
       <div style={{
         position: 'absolute', top: 0, left: 0, right: 0, height: '42%',
@@ -134,7 +146,6 @@ function CardView({ card, sel, onClick, sm, back, glow, faded, newCard }) {
 // `hot`: a card is being dragged over this group and will attach on release.
 // `attBy`: name of the player who just attached to this group (group.att), shown as
 // a tag above it, with the attached cards themselves glowing.
-const ATT = '#f472b6';
 function GroupView({ group, onAttach, canAttach, hot, attBy }) {
   const seq = group.type === 'seq';
   const att = group.att;
@@ -164,7 +175,7 @@ function GroupView({ group, onAttach, canAttach, hot, attBy }) {
           📌 {attBy || 'הוצמד'}
         </div>
       )}
-      {group.cards.map(c => <CardView key={c.id} card={c} sm glow={!!attIds && attIds.has(c.id)} />)}
+      {group.cards.map(c => <CardView key={c.id} card={c} sm attached={!!attIds && attIds.has(c.id)} />)}
     </div>
   );
 }

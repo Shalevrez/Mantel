@@ -4,8 +4,8 @@
 //
 // When a card is attached to a group already on the board, the group is marked
 // (`att`: who attached, which cards are new) so every player sees where the table
-// changed. The mark stays up for a full go-around and clears as the attacher's
-// next turn begins.
+// changed. The mark stays up through the next player's turn and clears when that
+// player discards.
 // ═══════════════════════════════════════════════════════
 import { initGame, G } from '../src/game-core.js';
 import { viewFor } from '../src/worker/index.js';
@@ -53,15 +53,16 @@ st = G(st, { type: 'ATTACH', gid: 'g2', cid: '2s' });
 const g2b = st.board.find(g => g.id === 'g2');
 check('a new attacher takes the mark over', g2b.att.by === 1 && g2b.att.ids.join() === '2s');
 
-// Player 1 → 2: player 0's set mark is still shown to player 2.
+// Player 1 → 2: player 1's turn is over, so player 0's set mark (shown through it)
+// clears; player 1's own sequence mark carries into player 2's turn.
 st = G(st, { type: 'DISCARD', cid: 'qd' });
-check("still marked on the third player's turn", st.board.find(g => g.id === 'g1').att?.by === 0);
+check("mark clears at the end of the next player's turn", !st.board.find(g => g.id === 'g1').att);
+check("the discarding player's own mark carries on", st.board.find(g => g.id === 'g2').att?.by === 1);
 
-// Player 2 → 0: a full go-around, player 0's mark clears; player 1's stays.
+// Player 2 → 0: player 2 made no attach, so player 1's mark clears now.
 st = { ...st, phase: 'action', buy: null };
 st = G(st, { type: 'DISCARD', cid: 'jd' });
-check("mark clears when the attacher's turn comes back", !st.board.find(g => g.id === 'g1').att);
-check("other players' marks stay", st.board.find(g => g.id === 'g2').att?.by === 1);
+check('no marks left after a quiet turn', st.board.every(g => !g.att));
 
 // AI attaches mark the group the same way.
 let ai = { ...st, phase: 'action', buy: null, cur: 1,
