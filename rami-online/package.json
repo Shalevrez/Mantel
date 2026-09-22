@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "test": "node tests/host-reconnect.mjs && node tests/room-lifetime.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "deploy": "npm run build && wrangler deploy",
