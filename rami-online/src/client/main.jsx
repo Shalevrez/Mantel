@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback, Component } from "react";
 import { createRoot } from "react-dom/client";
 import { FELT, FELTD, GOLD, CREAM } from "../game-core.js";
-import { Game, RoundEnd, GameEnd, RulesModal } from "./ui.jsx";
+import { Game, RoundEnd, GameEnd, RulesModal, ReleaseNotes } from "./ui.jsx";
+import { LATEST_RELEASE } from "../releases.js";
 import { createRoom, joinRoom } from "./net.js";
 
 // ═══════════════════════════════════════════════════════
@@ -14,6 +15,9 @@ import { createRoom, joinRoom } from "./net.js";
 // Injected by Vite from package.json (see vite.config.js). The fallback keeps
 // the UI sane if the app is ever served without going through the build.
 const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev';
+
+// Which release the player has already been shown the notes for.
+const SEEN_RELEASE_KEY = 'rami_seen_release';
 
 // ── Read ?code= from the URL so a shared link auto-fills the room ──
 function urlCode() {
@@ -29,10 +33,25 @@ function App() {
   const [state, setState] = useState(null);
   const [error, setError] = useState('');
   const [connecting, setConnecting] = useState(false);
+  const [notes, setNotes] = useState(false);
   const connRef = useRef(null);
 
   // Persist the chosen name for next time
   useEffect(() => { if (name) localStorage.setItem('rami_name', name); }, [name]);
+
+  // "What's new": pop the release notes once per version, then remember it was
+  // seen. Wrapped in try/catch — private mode can make localStorage throw, and
+  // a blocked storage must not stop the game from loading.
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(SEEN_RELEASE_KEY) !== LATEST_RELEASE.version) setNotes(true);
+    } catch { /* storage blocked — just don't auto-open */ }
+  }, []);
+
+  const closeNotes = useCallback(() => {
+    setNotes(false);
+    try { localStorage.setItem(SEEN_RELEASE_KEY, LATEST_RELEASE.version); } catch {}
+  }, []);
 
   const connect = useCallback((roomCode, asHost) => {
     setConnecting(true);
@@ -78,24 +97,35 @@ function App() {
   }, []);
 
   // ── Screens ──
-  if (screen === 'home')
-    return <Home {...{ name, setName, code, setCode, error, connecting, handleCreate, handleJoin }} />;
+  const screenEl = (() => {
+    if (screen === 'home')
+      return <Home {...{ name, setName, code, setCode, error, connecting, handleCreate, handleJoin }}
+                   onShowNotes={() => setNotes(true)} />;
 
-  if (screen === 'lobby')
-    return <Lobby {...{ lobby, code, error, onStart: (opts) => connRef.current?.start(opts) }} />;
+    if (screen === 'lobby')
+      return <Lobby {...{ lobby, code, error, onStart: (opts) => connRef.current?.start(opts) }}
+                    onShowNotes={() => setNotes(true)} />;
 
-  // screen === 'game'
-  if (!state) return <Splash text="טוען משחק..." />;
-  if (state.phase === 'game_end') return <GameEnd state={state} onRestart={() => location.reload()} />;
-  if (state.phase === 'round_end') return <RoundEnd state={state} dispatch={dispatch} />;
-  return <Game state={state} dispatch={dispatch} />;
+    // screen === 'game'
+    if (!state) return <Splash text="טוען משחק..." />;
+    if (state.phase === 'game_end') return <GameEnd state={state} onRestart={() => location.reload()} />;
+    if (state.phase === 'round_end') return <RoundEnd state={state} dispatch={dispatch} />;
+    return <Game state={state} dispatch={dispatch} />;
+  })();
+
+  return (
+    <>
+      {screenEl}
+      {notes && <ReleaseNotes onClose={closeNotes} current={APP_VERSION} />}
+    </>
+  );
 }
 
 // ═══════════════════════════════════════════════════════
 // HOME — name + create/join
 // ═══════════════════════════════════════════════════════
 
-function Home({ name, setName, code, setCode, error, connecting, handleCreate, handleJoin }) {
+function Home({ name, setName, code, setCode, error, connecting, handleCreate, handleJoin, onShowNotes }) {
   const [showRules, setShowRules] = useState(false);
   return (
     <Shell>
@@ -142,6 +172,9 @@ function Home({ name, setName, code, setCode, error, connecting, handleCreate, h
       {error && <div style={errorStyle}>{error}</div>}
 
       <button onClick={() => setShowRules(true)} style={linkBtn}>📖 חוקים והסבר</button>
+      <button onClick={onShowNotes} style={{ ...linkBtn, marginTop: 0, fontSize: 13, color: '#78716c' }}>
+        🆕 מה חדש בגרסה {LATEST_RELEASE.version}
+      </button>
       {showRules && <RulesModal onClose={() => setShowRules(false)} />}
     </Shell>
   );
@@ -151,7 +184,7 @@ function Home({ name, setName, code, setCode, error, connecting, handleCreate, h
 // LOBBY — waiting room; host starts the game
 // ═══════════════════════════════════════════════════════
 
-function Lobby({ lobby, code, error, onStart }) {
+function Lobby({ lobby, code, error, onStart, onShowNotes }) {
   const [copied, setCopied] = useState(false);
   const [fillAI, setFillAI] = useState(false);
   if (!lobby) return <Splash text="מתחבר לחדר..." />;
@@ -183,7 +216,10 @@ function Lobby({ lobby, code, error, onStart }) {
             display: 'inline-block', padding: '10px 26px', borderRadius: 14,
             background: FELT, color: GOLD, fontSize: 34, fontWeight: 700,
             letterSpacing: 10, cursor: 'pointer', fontVariantNumeric: 'tabular-nums',
-            boxShadow: `0 4px 16px ${FELT}66`, userSelect: 'all',
+            // Opts back in to selection (the app disables it globally for the
+            // card drag), so the code can still be long-pressed and copied.
+            boxShadow: `0 4px 16px ${FELT}66`,
+            userSelect: 'all', WebkitUserSelect: 'all', WebkitTouchCallout: 'default',
           }}
           title="העתק קישור הזמנה"
         >
@@ -255,6 +291,10 @@ function Lobby({ lobby, code, error, onStart }) {
       )}
 
       {error && <div style={errorStyle}>{error}</div>}
+
+      <button onClick={onShowNotes} style={{ ...linkBtn, fontSize: 13, color: '#78716c' }}>
+        🆕 מה חדש בגרסה {LATEST_RELEASE.version}
+      </button>
     </Shell>
   );
 }

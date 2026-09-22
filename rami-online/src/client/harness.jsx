@@ -34,6 +34,12 @@ st = { ...st, sel: [st.players[0].hand[0].id, st.players[0].hand[1].id] };
 const view = viewFor(st, 0);
 
 const screen = params.get('screen') || 'game';
+
+// The buying phase puts a decision panel on screen; it has its own grid area.
+const buying = viewFor({
+  ...st, phase: 'buying', cur: 1,
+  buy: { checker: 0, origNext: 0, prev: -1 },
+}, 0);
 const ended = {
   ...view,
   result: { w: 1, isAnt: true, empty: false },
@@ -41,7 +47,8 @@ const ended = {
 };
 
 createRoot(document.getElementById('root')).render(
-  screen === 'round' ? <RoundEnd state={ended} dispatch={() => {}} />
+  screen === 'buying' ? <Game state={buying} dispatch={(a) => console.log('dispatch', a)} />
+  : screen === 'round' ? <RoundEnd state={ended} dispatch={() => {}} />
   : screen === 'end' ? <GameEnd state={ended} onRestart={() => {}} />
   : <Game state={view} dispatch={(a) => console.log('dispatch', a)} />
 );

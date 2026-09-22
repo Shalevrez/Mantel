@@ -32,6 +32,31 @@
       .rules-card { max-height: 88vh; max-height: 88dvh; }
       * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
 
+      /* Dragging a card sideways is a game gesture. Without this, a drag that
+         starts near the screen edge is read as Chrome's swipe-to-go-back (which
+         leaves the game mid-round) and a downward one as pull-to-refresh. */
+      html, body { overscroll-behavior: none; }
+
+      /* A long press here means "pick this card up", never "select this text".
+         Mobile browsers answer a long press with a text selection and a
+         copy/lookup callout, which fights the drag — so both are switched off
+         for the whole app. The `-webkit-` forms are not optional: iOS Safari
+         below 16.4 only understands those. Inputs opt back in below. */
+      html, body, #root {
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+      }
+      input, textarea, [contenteditable] {
+        -webkit-user-select: text;
+        -moz-user-select: text;
+        -ms-user-select: text;
+        user-select: text;
+        -webkit-touch-callout: default;
+      }
+
       /* Boot failure panel — hidden until the watchdog below decides the app never mounted. */
       #boot-error {
         display: none;
