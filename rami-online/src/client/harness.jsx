@@ -75,8 +75,8 @@ const ended = {
 
 createRoot(document.getElementById('root')).render(
   screen === 'buying' ? <Game state={buying} dispatch={(a) => console.log('dispatch', a)} />
-  : screen === 'round' ? <RoundEnd state={ended} dispatch={() => {}} />
+  : screen === 'round' ? <RoundEnd state={ended} dispatch={() => {}} onLeave={() => {}} />
   : screen === 'end' ? <GameEnd state={ended} onRestart={() => {}} />
   : screen === 'score' ? <ScoreModal state={ended} onClose={() => {}} />
-  : <Game state={withHistory} dispatch={(a) => console.log('dispatch', a)} />
+  : <Game state={{ ...withHistory, msg: params.get('msg') || '' }} dispatch={(a) => console.log('dispatch', a)} onLeave={() => {}} />
 );

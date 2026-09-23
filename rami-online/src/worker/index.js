@@ -388,6 +388,61 @@ export class Room {
     return true;
   }
 
+  // ── Leaving on purpose ───────────────────────────────
+  // Unlike a dropped connection, which keeps the seat warm for a comeback, this
+  // gives the chair up. Before the game it simply empties; once the cards are
+  // dealt the seat can't vanish from under everyone else, so a computer player
+  // takes over the hand and the game goes on. Either way the crown passes on
+  // straight away, with no grace period, and the player is never seated here
+  // again under their old id.
+  leaveSeat(seat) {
+    const s = this.seats[seat];
+    if (!s || s.isAI) return;
+    const wasHost = s.uid === this.hostUid;
+    const connId = s.connId;
+
+    if (!this.started) {
+      this.seats.splice(seat, 1);
+    } else {
+      Object.assign(s, {
+        isAI: true, ai: this.aiLevel, uid: `ai:${crypto.randomUUID()}`,
+        connId: null, ws: null, connected: false, downAt: 0,
+      });
+      let st = this.state;
+      if (st && st.players[seat]) {
+        // Mid-turn work a bot can't pick up — a beit taken for an ant, lays
+        // that haven't been thrown on — is rolled back, as the player's own
+        // "undo" would, so the computer starts the turn from a clean position.
+        if (st.cur === seat && st.phase === 'action' && st.undoBefore) st = G(st, { type: 'UNDO' });
+        st = {
+          ...st,
+          players: st.players.map((p, i) => i === seat ? { ...p, isAI: true, ai: this.aiLevel } : p),
+          log: [...(st.log || []), `🚪 ${s.name} יצא מהחדר — המחשב ממשיך במקומו`],
+        };
+        this.state = st;
+      }
+    }
+
+    if (wasHost) {
+      const next = this.seats.find(x => !x.isAI && x.connected) || this.seats.find(x => !x.isAI);
+      this.hostUid = next ? next.uid : null;
+    }
+
+    // Hang up this player's socket. Its seat no longer points at it, so the
+    // close event that follows touches nobody.
+    if (connId) this.dropSocket(connId);
+
+    // Nobody left but computer players: there is no game for anyone to watch.
+    if (!this.seats.some(x => !x.isAI)) return this.closeRoom('empty');
+
+    this.touch();
+    this.noteConnections();
+    this.persist();
+    this.armAlarm();
+    this.broadcastLobby();
+    if (this.started) { this.broadcastState(); this.maybeRunAI(); }
+  }
+
   onClose(connId) {
     this.sockets.delete(connId);
     if (this.closing) return;   // the room is being retired; nothing left to update
@@ -497,6 +552,12 @@ export class Room {
       // change straight away, and the write is only the crash insurance.
       this.broadcastLobby();
       await this.persist();
+      return;
+    }
+
+    // ── A player leaves the room for good ──
+    if (msg.t === 'leave') {
+      await this.leaveSeat(seat);
       return;
     }
 
