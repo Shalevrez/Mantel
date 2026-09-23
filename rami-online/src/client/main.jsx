@@ -284,6 +284,9 @@ function Home({ name, setName, code, setCode, error, connecting, handleCreate, h
 // LOBBY — waiting room; host starts the game
 // ═══════════════════════════════════════════════════════
 
+// Height of one row in the lobby's player list (border included).
+const LOBBY_ROW_H = 44;
+
 function Lobby({ lobby, code, error, onStart, onAddAI, onRemoveAI, onAILevel, onLeave, onShowNotes }) {
   const [copied, setCopied] = useState(false);
   const [showLeave, setShowLeave] = useState(false);
@@ -294,7 +297,7 @@ function Lobby({ lobby, code, error, onStart, onAddAI, onRemoveAI, onAILevel, on
   // The server owns these limits; the fallbacks only matter if an old server
   // answers a new client.
   const maxSeats = lobby.maxSeats || 6;
-  const maxAI = lobby.maxAI || 3;
+  const maxAI = lobby.maxAI || 5;
   const aiCount = lobby.aiCount ?? players.filter(p => p.isAI).length;
   const level = lobby.aiLevel || 'medium';
   const canAddAI = aiCount < maxAI && players.length < maxSeats;
@@ -350,10 +353,19 @@ function Lobby({ lobby, code, error, onStart, onAddAI, onRemoveAI, onAILevel, on
           <span>שחקנים בחדר</span>
           <span>{players.length}/{maxSeats}</span>
         </div>
+        {/* The list always takes the room of a full table: every row has a
+            fixed height and the free chairs stretch over what's left. The card
+            is centred on the screen, so a list that grew with each bot made
+            the whole card — and the + button under the pointer — jump. */}
+        <div style={{
+          display: 'flex', flexDirection: 'column', gap: 6,
+          minHeight: maxSeats * (LOBBY_ROW_H + 6) - 6,
+        }}>
         {players.map((p) => (
           <div key={p.seat} style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
-            padding: '10px 14px', borderRadius: 11, marginBottom: 6,
+            height: LOBBY_ROW_H, flexShrink: 0,
+            padding: '0 14px', borderRadius: 11,
             background: p.host ? `${FELT}14` : '#fafaf9',
             border: `2px solid ${p.host ? FELT + '33' : '#e7e5e4'}`,
           }}>
@@ -378,10 +390,12 @@ function Lobby({ lobby, code, error, onStart, onAddAI, onRemoveAI, onAILevel, on
           </div>
         ))}
         {/* Six chairs is a long list to draw one by one, so the free ones are
-            summed up in a single row. */}
+            summed up in a single box that fills the rest of the list. */}
         {players.length < maxSeats && (
           <div style={{
-            padding: '9px 14px', borderRadius: 11, marginBottom: 6,
+            flex: 1, minHeight: LOBBY_ROW_H,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '0 14px', borderRadius: 11,
             background: '#fafaf9', border: '2px dashed #e7e5e4',
             color: '#a8a29e', fontSize: 13, textAlign: 'center',
           }}>
@@ -390,6 +404,7 @@ function Lobby({ lobby, code, error, onStart, onAddAI, onRemoveAI, onAILevel, on
               : `${maxSeats - players.length} כיסאות פנויים`}
           </div>
         )}
+        </div>
       </div>
 
       {lobby.youHost ? (
