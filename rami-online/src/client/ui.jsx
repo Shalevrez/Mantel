@@ -905,13 +905,6 @@ function RoundEnd({ state, dispatch, onLeave }) {
         </div>
 
         <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-          <button onClick={() => dispatch({ type: 'NEW_HAND' })} style={{
-            flex: 1, padding: '11px 0', background: '#e7e5e4',
-            color: '#57534e', border: '2px solid #d6d3d1',
-            borderRadius: 11, fontSize: 14, cursor: 'pointer', fontWeight: 600,
-          }}>
-            <IconLabel name="refresh">סיבוב נוסף</IconLabel>
-          </button>
           <button
             onClick={() => mk >= 5 ? dispatch({ type: 'GAME_END' }) : dispatch({ type: 'NEXT_MK' })}
             style={{
