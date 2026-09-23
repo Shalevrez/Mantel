@@ -160,8 +160,71 @@ function isSet(cards) {
 
 const isGroup = cs => isSeq(cs) || isSet(cs);
 
-// Orders a valid sequence's cards by value, placing jokers in their gap positions
+// When a sequence's cards are already in a playable order — every real card sitting
+// at start+i, jokers in between — returns that start value (the first position's
+// value; an ace may stand for 1 or 14). null for any other order. A board group
+// keeps its cards in this order, which is how a joker remembers which card it
+// stands for: in [JK,4♥,5♥,6♥] it is the 3♥, in [4♥,5♥,6♥,JK] the 7♥.
+function layoutStart(cards) {
+  if (!isSeq(cards)) return null;
+  const n = cards.length;
+  const i = cards.findIndex(c => !c.j);
+  const v = cards[i].v;
+  for (const s of v === 1 ? [1 - i, 14 - i] : [v - i]) {
+    if (s < 1 || s + n - 1 > 14) continue;
+    if (cards.every((c, k) => c.j || c.v === s + k || (c.v === 1 && s + k === 14))) return s;
+  }
+  return null;
+}
+
+// Every way to lay `cards` out as a sequence, as [{ start, cards }] by rising start.
+// With `base` (a group already on the board), base keeps its own layout and the new
+// cards go around it. More than one option only when a joker could sit at either
+// end: 4♥,5♥,6♥+JK → the joker as 3♥ (start 3) or as 7♥ (start 4).
+function seqLayouts(cards, base = null) {
+  const all = base ? [...base, ...cards] : cards;
+  if (!isSeq(all)) return [];
+  const bs = base ? layoutStart(base) : null;
+  if (base && bs === null) return [];
+  const n = all.length;
+  const extra = base ? cards : all;
+  const real = extra.filter(c => !c.j), jokers = extra.filter(c => c.j);
+  const out = [];
+  for (let s = 1; s + n - 1 <= 14; s++) {
+    const slots = Array(n).fill(null);
+    if (base) {
+      const o = bs - s;
+      if (o < 0 || o + base.length > n) continue;
+      base.forEach((c, k) => { slots[o + k] = c; });
+    }
+    const fits = real.every(c => {
+      const k = [c.v - s, c.v === 1 ? 14 - s : -1].find(k => k >= 0 && k < n && !slots[k]);
+      if (k === undefined) return false;
+      slots[k] = c;
+      return true;
+    });
+    if (!fits) continue;
+    let jk = 0;
+    for (let k = 0; k < n; k++) if (!slots[k]) slots[k] = jokers[jk++];
+    if (layoutStart(slots) === s) out.push({ start: s, cards: slots });
+  }
+  return out;
+}
+
+// Attaches `cards` to board sequence `base`, keeping where its jokers already stand.
+// `start` picks among seqLayouts' options; by default new cards go on top when they
+// can. null when the cards don't fit around it — a joker already on the board
+// doesn't move to make room.
+function extendSeq(base, cards, start) {
+  const opts = seqLayouts(cards, base);
+  if (!opts.length) return null;
+  return (opts.find(o => o.start === start) || opts[opts.length - 1]).cards;
+}
+
+// Orders a valid sequence's cards by value, placing jokers in their gap positions.
+// Cards already in a playable order (see layoutStart) are kept as they are.
 function orderSeq(cards) {
+  if (layoutStart(cards) !== null) return cards;
   const jokers = cards.filter(c => c.j);
   let real = cards.filter(c => !c.j);
   if (real.length < 1) return cards;
@@ -198,17 +261,9 @@ function orderGroup(cards) {
 function jokerValues(cards) {
   if (!isSeq(cards)) return [];
   const ordered = orderSeq(cards);
-  const real = ordered.filter(c => !c.j);
-  if (!real.length) return [];
-  const suit = real[0].suit;
-  const vals = real.map(c => c.v);
-  const aceHigh = vals.includes(1) && vals.some(v => v >= 11);
-  const sv = c => (aceHigh && c.v === 1) ? 14 : c.v;
-  let startV = null;
-  for (let i = 0; i < ordered.length; i++) {
-    if (!ordered[i].j) { startV = sv(ordered[i]) - i; break; }
-  }
+  const startV = layoutStart(ordered);
   if (startV === null) return [];
+  const suit = ordered.find(c => !c.j).suit;
   const out = [];
   ordered.forEach((c, i) => {
     if (c.j) {
@@ -222,7 +277,7 @@ function jokerValues(cards) {
 
 function attachPos(gCards, card) {
   const combined = [...gCards, card];
-  if (isSeq(combined)) return 'seq';
+  if (isSeq(gCards) ? extendSeq(gCards, [card]) : isSeq(combined)) return 'seq';
   if (isSet(gCards) && isSet(combined)) return 'set';
   return null;
 }
@@ -230,6 +285,19 @@ function attachPos(gCards, card) {
 function meetsReq(groups, mIdx) {
   const { seqs, min } = MK[mIdx];
   return groups.filter(g => isSeq(g.cards) && g.cards.length >= min).length >= seqs;
+}
+
+// The group a LAY would form from the current player's selection: valid on its own
+// (3+ cards), or completed with the must-use joker. { group, autoJoker } or { err }.
+function layGroup(state) {
+  const p = state.players[state.cur];
+  const stagedIds = new Set(state.staging.flatMap(g => g.cards.map(c => c.id)));
+  const selCards = p.hand.filter(c => state.sel.includes(c.id) && !stagedIds.has(c.id));
+  const mj = state.mustUseJoker &&
+    p.hand.find(c => c.id === state.mustUseJoker && !state.sel.includes(c.id) && !stagedIds.has(c.id));
+  if (selCards.length >= 3 && isGroup(selCards)) return { group: selCards, autoJoker: false };
+  if (mj && selCards.length >= 2 && isGroup([...selCards, mj])) return { group: [...selCards, mj], autoJoker: true };
+  return { err: selCards.length < 3 ? '❌ בחר לפחות 3 קלפים' : '❌ קבוצה לא חוקית' };
 }
 
 // ═══════════════════════════════════════════════════════
@@ -554,24 +622,14 @@ function G(state, action) {
     const p = state.players[state.cur];
     if (!state.canLay) return { ...state, msg: '⚠️ אי אפשר להוריד בסבב הראשון' };
 
-    const stagedIds = new Set(state.staging.flatMap(g => g.cards.map(c => c.id)));
-    const selCards = p.hand.filter(c => state.sel.includes(c.id) && !stagedIds.has(c.id));
-
-    // Build the group. It's valid either on its own (3+ real cards), or by completing
-    // it with the must-use joker (works for both sequences with a gap and sets).
-    const mj = state.mustUseJoker &&
-      p.hand.find(c => c.id === state.mustUseJoker && !state.sel.includes(c.id) && !stagedIds.has(c.id));
-    let group = selCards;
-    let autoJoker = false;
-    if (selCards.length >= 3 && isGroup(selCards)) {
-      // valid as selected
-    } else if (mj && selCards.length >= 2 && isGroup([...selCards, mj])) {
-      group = [...selCards, mj]; autoJoker = true;
-    } else if (selCards.length < 3) {
-      return { ...state, msg: '❌ בחר לפחות 3 קלפים' };
-    } else {
-      return { ...state, msg: '❌ קבוצה לא חוקית' };
-    }
+    const built = layGroup(state);
+    if (built.err) return { ...state, msg: built.err };
+    const { autoJoker } = built;
+    // A sequence whose joker could stand at either end is laid the way the player
+    // chose (`start`, from seqLayouts); without a choice it falls back to orderSeq.
+    const opts = isSeq(built.group) ? seqLayouts(built.group) : [];
+    const chosen = opts.find(o => o.start === action.start);
+    const group = chosen ? chosen.cards : orderGroup(built.group);
 
     // Accumulate into staging
     const newStaging = [...state.staging, { id: uid(), cards: group }];
@@ -650,9 +708,9 @@ function G(state, action) {
     // Normal attach of one OR more cards: the whole combined group must stay valid
     // (a sequence stays a sequence, a set stays a set).
     const combined = [...grp.cards, ...cards];
-    const ok = (isSeq(grp.cards) && isSeq(combined)) || (isSet(grp.cards) && isSet(combined));
-    if (!ok) return { ...state, msg: '❌ לא ניתן להצמיד את הקלפים האלה' };
-    const newCards = orderGroup(combined);
+    const newCards = (isSeq(grp.cards) && extendSeq(grp.cards, cards, action.start))
+      || (isSet(grp.cards) && isSet(combined) ? combined : null);
+    if (!newCards) return { ...state, msg: '❌ לא ניתן להצמיד את הקלפים האלה' };
     const board = state.board.map(g => g.id === action.gid
       ? markAttach({ ...g, cards: newCards }, state.cur, cards.map(c => c.id)) : g);
     const attachedIds = new Set(cards.map(c => c.id));
@@ -719,7 +777,7 @@ function G(state, action) {
     if (!pos) return state;
     const newHand = p.hand.filter(c => c.id !== card.id);
     if (newHand.length === 0) return state; // must keep a card to discard
-    const newCards = orderGroup([...grp.cards, card]);
+    const newCards = (pos === 'seq' && isSeq(grp.cards) && extendSeq(grp.cards, [card])) || orderGroup([...grp.cards, card]);
     const board = state.board.map(g => g.id === action.gid
       ? markAttach({ ...g, cards: newCards }, state.cur, [card.id]) : g);
     const players = state.players.map((pl, i) =>
@@ -969,6 +1027,7 @@ export {
   AI_LEVELS, AI_LEVEL_NAMES, aiLevel, cardAffinity, decksFor,
   uid, sortHand, moveCard, mkCard, makeDeck, shuffle, handScore,
   isSeq, isSet, isGroup, orderSeq, orderGroup, jokerValues, attachPos, meetsReq,
+  layoutStart, seqLayouts, extendSeq, layGroup,
   startHand, initGame, endWin, endDeck, nextCk, roundRecord,
   G, aiWantCard, findAIGroups, aiDiscard,
 };

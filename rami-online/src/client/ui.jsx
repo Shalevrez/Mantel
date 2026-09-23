@@ -10,7 +10,7 @@ import {
   SUITS, SYM, COL, VD, cSc, cTxt, MK, FELT, FELTD, GOLD, CREAM,
   INK, GOLDD, CLOTH, CLOTH_BASE, TABLE, TABLE_BASE,
   isSeq, isSet, isGroup, orderSeq, orderGroup, jokerValues, attachPos, meetsReq,
-  sortHand, moveCard, handScore,
+  seqLayouts, layGroup, sortHand, moveCard, handScore,
 } from "../game-core.js";
 import { Icon, IconLabel, IconText, RankBadge } from "./icons.jsx";
 
@@ -403,6 +403,54 @@ function ScoreModal({ state, onClose }) {
               </div>
             ) : null}
           />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
+// JOKER SPOT — where a joker stands when it could go at either end
+// ═══════════════════════════════════════════════════════
+
+// `opts`: seqLayouts' options ({ start, cards }). Picking one calls onPick(start).
+function JokerPick({ opts, onPick, onClose }) {
+  return (
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, zIndex: 1000,
+      background: 'rgba(0,0,0,.6)', backdropFilter: 'blur(2px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      direction: 'rtl', padding: 14,
+    }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        background: CREAM, borderRadius: 20, maxWidth: 440, width: '100%',
+        border: `2px solid ${GOLD}88`, boxShadow: '0 24px 72px rgba(0,0,0,.6)',
+        overflow: 'hidden',
+      }}>
+        <div style={{ background: FELT, padding: '12px 18px', color: GOLD, fontSize: 18, fontWeight: 700 }}>
+          <IconLabel name="cards">איפה הג׳וקר?</IconLabel>
+        </div>
+        <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {opts.map(o => (
+            <button key={o.start} onClick={() => onPick(o.start)} style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+              padding: '10px 8px', borderRadius: 12, cursor: 'pointer', fontFamily: 'inherit',
+              background: 'rgba(220,252,231,.9)', border: '2px solid rgba(34,197,94,.55)',
+            }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center' }}>
+                {o.cards.map(c => <CardView key={c.id} card={c} sm />)}
+              </div>
+              <span style={{ color: INK, fontSize: 14, fontWeight: 700 }}>
+                ג׳וקר = {jokerValues(o.cards).map(x => <bdi key={x.jokerId} dir="ltr">{cTxt(x)} </bdi>)}
+              </span>
+            </button>
+          ))}
+          <button onClick={onClose} style={{
+            padding: '8px 0', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit',
+            background: 'rgba(255,255,255,.7)', color: '#78716c', border: '1px solid rgba(120,113,108,.3)',
+          }}>
+            <Icon name="x" /> ביטול
+          </button>
         </div>
       </div>
     </div>
@@ -1080,6 +1128,8 @@ function LeaveConfirm({ started, onConfirm, onClose }) {
 
 function Game({ state, dispatch, onLeave }) {
   const [attachMode, setAttachMode] = useState(false);
+  // { opts, action }: a lay/attach waiting for the player to say where the joker goes.
+  const [jokerPick, setJokerPick] = useState(null);
   const [showRules, setShowRules] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
   const [showScores, setShowScores] = useState(false);
@@ -1146,6 +1196,23 @@ function Game({ state, dispatch, onLeave }) {
   const stagedIds  = new Set(state.staging.flatMap(g => g.cards.map(c => c.id)));
   // selCards = selected but not yet staged
   const selCards   = human.hand.filter(c => state.sel.includes(c.id) && !stagedIds.has(c.id));
+
+  // Lay/attach, first asking where the joker goes when it could stand at either
+  // end of the sequence (4,5,6+JK → 3 or 7). The server gets the choice as `start`.
+  const sendWithJokerPick = (action, opts) => {
+    if (opts.length > 1) setJokerPick({ opts, action });
+    else dispatch(action);
+  };
+  const lay = () => {
+    const built = layGroup(state);
+    sendWithJokerPick({ type: 'LAY' }, built.group && isSeq(built.group) ? seqLayouts(built.group) : []);
+  };
+  const attach = (gid, cid) => {
+    const grp = state.board.find(g => g.id === gid);
+    const cards = cid ? human.hand.filter(c => c.id === cid) : selCards;
+    const action = cid ? { type: 'ATTACH', gid, cid } : { type: 'ATTACH', gid };
+    sendWithJokerPick(action, grp && isSeq(grp.cards) && cards.some(c => c.j) ? seqLayouts(cards, grp.cards) : []);
+  };
 
   // ── Card drag: reorder within hand, or attach to a board group ──
   // Rearranging your own hand is allowed at ANY time — also while you're waiting
@@ -1286,9 +1353,9 @@ function Game({ state, dispatch, onLeave }) {
         // If the dragged card is part of a current multi-card selection, attach the
         // whole selection at once; otherwise attach just the dragged card.
         if (state.sel.length > 1 && state.sel.includes(d.card.id))
-          dispatch({ type: 'ATTACH', gid: d.gid });
+          attach(d.gid);
         else
-          dispatch({ type: 'ATTACH', gid: d.gid, cid: d.card.id });
+          attach(d.gid, d.card.id);
       } else if (drop && d.slot) {
         const { targetId, after } = d.slot;
         const next = moveCard(hand, d.card.id, targetId, after);
@@ -1572,6 +1639,13 @@ function Game({ state, dispatch, onLeave }) {
       {showRules && <RulesModal onClose={() => setShowRules(false)} />}
       {showNotes && <ReleaseNotes onClose={() => setShowNotes(false)} />}
       {showScores && <ScoreModal state={state} onClose={() => setShowScores(false)} />}
+      {jokerPick && (
+        <JokerPick
+          opts={jokerPick.opts}
+          onPick={(start) => { dispatch({ ...jokerPick.action, start }); setJokerPick(null); }}
+          onClose={() => setJokerPick(null)}
+        />
+      )}
 
       {/* Opponents, piles and the status line. In portrait each one falls into
           its own grid area; in landscape they stack into the side rail. */}
@@ -1867,7 +1941,7 @@ function Game({ state, dispatch, onLeave }) {
                   hot={hotGid === g.id}
                   onAttach={() => {
                     if (normalAttach) {
-                      dispatch({ type: 'ATTACH', gid: g.id });
+                      attach(g.id);
                       setAttachMode(false);
                     }
                   }}
@@ -1910,7 +1984,7 @@ function Game({ state, dispatch, onLeave }) {
                 label={!state.canLay ? '🚫 הורד (סבב ראשון)' : '⬇️ הורד'}
                 disabled={selCards.length < (state.mustUseJoker ? 2 : 3) || !state.canLay}
                 bg={FELT} col={GOLD}
-                onClick={() => dispatch({ type: 'LAY' })}
+                onClick={lay}
               />
               <Btn
                 label={attachMode ? '❌ בטל' : '📌 הצמד'}
