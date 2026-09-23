@@ -777,12 +777,17 @@ function G(state, action) {
 // AI turn is made of — whether to take the discard, how hard it works the
 // board, and which card it throws.
 //
-//   easy   — takes only what obviously completes a group (and not always),
-//            never pays to buy, never attaches to the board, throws a random
-//            spare card, and will even throw a joker.
-//   medium — the game's long-standing behaviour: takes what completes a group,
-//            buys now and then, attaches one card a turn, throws its most
-//            expensive spare card. Keeps its jokers.
+//   easy   — takes only what obviously completes a group, and not always;
+//            never pays to buy; never attaches to the board; throws a random
+//            spare card. It still won't throw away a joker by pure chance
+//            when a normal card was available — that's luck, not difficulty.
+//   medium — takes what completes a group, and now also a card that pairs
+//            well with its hand even before it completes anything, though it
+//            needs a thinner margin of doubt than hard to convince it; buys
+//            out of turn about seventy percent of the time it wants a card;
+//            attaches most of what it can each turn; throws its most
+//            expensive spare, never one that would hand an opponent a free
+//            lay-off onto a group already on the table. Keeps its jokers.
 //   hard   — also picks up cards that pair with what it holds, buys whenever
 //            the card fits — though a paid buy needs a stronger pairing than a
 //            free one, since it costs a penalty card too — attaches everything
@@ -826,12 +831,14 @@ function aiWantCard(hand, card, level = 'medium', opts = {}) {
   const after = withCard.groups.reduce((n, g) => n + g.cards.length, 0);
   const used = withCard.groups.some(g => g.cards.some(c => c.id === card.id));
   if (used && (after - before) >= 2) return true;
-  if (lv !== 'hard') return false;
-  // A sharp AI also plays one move ahead: a card that pairs up with what it
-  // already holds is worth having even before it completes anything. But a
-  // paid buy also costs a penalty card, so it needs a stronger pairing than
-  // a free take to be worth it — otherwise hard clutters its own hand.
-  return cardAffinity(hand, card) >= (opts.costly ? 5 : 3);
+  if (lv === 'easy') return false;
+  // Medium and hard both play a move ahead of a beginner: a card that pairs
+  // up with what's already in hand is worth having before it completes
+  // anything. Hard trusts a thinner pairing than medium, and a paid buy —
+  // which also costs a penalty card — needs a stronger one than a free take
+  // at either level.
+  const bar = lv === 'hard' ? (opts.costly ? 5 : 3) : (opts.costly ? 6 : 4);
+  return cardAffinity(hand, card) >= bar;
 }
 
 function findAIGroups(hand) {
@@ -900,28 +907,25 @@ function aiDiscard(hand, level = 'medium', rnd = Math.random, board = []) {
   const lv = aiLevel(level);
   const { unused } = findAIGroups(hand);
   let cands = unused.length ? hand.filter(c => unused.includes(c.id)) : [...hand];
-  // Holding a joker is almost always right — only a beginner throws one away.
-  if (lv !== 'easy') {
-    const real = cands.filter(c => !c.j);
-    if (real.length) cands = real;
-  }
+  // Losing a joker to bad luck isn't a difficulty trait at any level — keep
+  // it out of the pool whenever a real spare is available.
+  const real = cands.filter(c => !c.j);
+  if (real.length) cands = real;
   if (!cands.length) cands = [...hand];
   // Easy: no plan beyond getting rid of something, so it regularly throws a
   // card that was one step away from a group.
   if (lv === 'easy') return cands[Math.floor(rnd() * cands.length)] || hand[0];
-  // Hard: throw what the hand can least use; points only break the tie. But a
-  // sharp player doesn't hand an opponent a free lay-off when there's a
-  // choice, so a card that extends a group already on the table is avoided
-  // whenever a candidate that doesn't is available.
-  if (lv === 'hard') {
-    const feeds = c => board.some(g => attachPos(g.cards, c));
-    const safe = cands.filter(c => !feeds(c));
-    const pool = safe.length ? safe : cands;
+  // Medium and hard both avoid handing an opponent a free lay-off onto the
+  // table when there's a choice.
+  const feeds = c => board.some(g => attachPos(g.cards, c));
+  const safe = cands.filter(c => !feeds(c));
+  const pool = safe.length ? safe : cands;
+  // Hard: throw what the hand can least use; points only break the tie.
+  if (lv === 'hard')
     return [...pool].sort((a, b) =>
       (cardAffinity(hand, a) - cardAffinity(hand, b)) || (cSc(b) - cSc(a)))[0] || hand[0];
-  }
-  // Medium: the most expensive spare card.
-  return [...cands].sort((a, b) => cSc(b) - cSc(a))[0] || hand[0];
+  // Medium: the most expensive safe spare card.
+  return [...pool].sort((a, b) => cSc(b) - cSc(a))[0] || hand[0];
 }
 
 // ═══════════════════════════════════════════════════════
