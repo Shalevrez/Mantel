@@ -325,9 +325,10 @@ function startHand(base) {
     players: base.players.map((p, i) => ({ ...p, hand: p.isAI ? hands[i] : sortHand(hands[i]), hasLaid: false, newIds: [] })),
     phase: 'buying',
     cur: 0,
-    // The opening discard is free for everyone: if the first player passes on it,
-    // whoever takes it after them gets it without a penalty card.
-    buy: { checker: 0, origNext: 0, prev: -1, free: true },
+    // In the first round of a mishkakon the opening discard is free for everyone:
+    // if the first player passes on it, whoever takes it after them gets it
+    // without a penalty card. From round 2 on it's bought as usual.
+    buy: { checker: 0, origNext: 0, prev: -1, free: sivuv === 1 },
     sel: [], staging: [], msg: '', undoBefore: null, mustUseJoker: null,
     laidAtTurnStart: false, attachedThisTurn: false, tookBeit: false,
     log: [...(base.log || []), `— ${MK[base.mk].name} • סיבוב ${sivuv} —`],

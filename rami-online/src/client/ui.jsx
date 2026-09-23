@@ -558,7 +558,7 @@ function RulesModal({ onClose }) {
             כשמישהו זורק קלף, השחקן הבא בתור יכול לקחת אותו בחינם. אם הוא מוותר,
             שחקנים אחרים יכולים "לקנות" אותו — ומקבלים יחד איתו קלף עונשין מהחבילה.
             אם אף אחד לא לקח — הקלף נשרף והשחקן הבא שולף מהחבילה.<br/>
-            <b>הקלף הפתוח בתחילת סיבוב</b> — בלי קנס לאף אחד: אם הראשון מוותר עליו,
+            <b>הקלף הפתוח בתחילת הסיבוב הראשון</b> של כל משחקון — בלי קנס לאף אחד: אם הראשון מוותר עליו,
             מי שלוקח אחריו מקבל אותו בחינם, בלי קלף עונשין.
           </Section>
 
@@ -1179,7 +1179,7 @@ function Game({ state, dispatch, onLeave }) {
   // I decide in the buying phase only when I'm the checker.
   const humanDecides  = buy && buy.checker === mySeat;
   const isFreeOffer   = buy && buy.checker === buy.origNext;
-  // The opening discard of a round carries no penalty for anyone.
+  // The opening discard of a mishkakon's first round carries no penalty for anyone.
   const isFreeBuy     = buy && !isFreeOffer && !!buy.free;
 
   // ── One draw per turn, even on a double-tap ──────────────────────────────

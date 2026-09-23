@@ -2,9 +2,10 @@
 // OPENING DISCARD — regression checks
 // Run with: npm test   (plain node, no test runner needed)
 //
-// The card turned up on the discard pile when a round is dealt carries no
-// penalty for anyone: if the first player passes on it, whoever takes it after
-// them gets it without a penalty card. Later discards still cost one.
+// In the first round of a mishkakon, the card turned up on the discard pile
+// carries no penalty for anyone: if the first player passes on it, whoever
+// takes it after them gets it without a penalty card. Later discards, and the
+// opening discard of round 2 on, still cost one.
 // ═══════════════════════════════════════════════════════
 import { initGame, G } from '../src/game-core.js';
 
@@ -40,6 +41,21 @@ for (const n of [2, 3]) {
     st = G(st, { type: 'BUY', idx: nextBuyer });
     check(`${n} players: buying a later discard costs a penalty card`, st.players[nextBuyer].hand.length === before + 2);
   }
+}
+
+// Round 2 of the same mishkakon: the opening discard is a paid buy again.
+{
+  let st = initGame(['א', 'ב'].map(name => ({ name, isAI: false })));
+  st = G({ ...st, phase: 'round_end' }, { type: 'NEW_HAND' });
+  check('round 2 opens on a paid offer', st.sivuv === 2 && st.phase === 'buying' && !st.buy.free);
+  st = G(st, { type: 'SKIP' });
+  const deckLen = st.deck.length;
+  st = G(st, { type: 'BUY', idx: 1 });
+  check('round 2: buying the opening card costs a penalty card',
+    st.players[1].hand.length === 16 && st.deck.length === deckLen - 1);
+  // A new mishkakon starts again at round 1 — free.
+  st = G({ ...st, phase: 'round_end' }, { type: 'NEXT_MK' });
+  check('next mishkakon, round 1: free again', st.sivuv === 1 && st.buy.free);
 }
 
 if (failures) { console.error(`\n${failures} check(s) failed`); process.exit(1); }
