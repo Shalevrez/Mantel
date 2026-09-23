@@ -432,7 +432,7 @@ function G(state, action) {
   // ── Take beit card (for ANT) ───────────────────────
   if (type === 'TAKE_BEIT') {
     const beit = state.beit;
-    if (!beit || state.phase !== 'draw' || state.players[state.cur].isAI) return state;
+    if (!beit || state.phase !== 'draw') return state;
     const p = state.players[state.cur];
     // The beit is only for an ANT attempt. If you've already laid down this round,
     // an ant is impossible, so taking it is blocked.
@@ -793,7 +793,14 @@ function G(state, action) {
 //            free one, since it costs a penalty card too — attaches everything
 //            it can before discarding, and throws the spare card its hand can
 //            least use (points break ties), never one that would hand an
-//            opponent a free lay-off onto a group already on the table.
+//            opponent a free lay-off onto a group already on the table. It
+//            also chases an ante like a real player would: it holds back a
+//            lay when it's only one or two cards short of laying its whole
+//            hand at once — laying the partial group now would lock in
+//            hasLaid and forfeit the ante for the rest of the round — and
+//            it'll reach for the בית (beit) card, the one mechanic that
+//            exists for exactly this, but only once it's proven to itself
+//            that taking it wins the hand outright.
 const AI_LEVELS = ['easy', 'medium', 'hard'];
 const AI_LEVEL_NAMES = { easy: 'קל', medium: 'בינוני', hard: 'קשה' };
 // Anything unknown (an old saved room, a hand-crafted message) plays as medium.

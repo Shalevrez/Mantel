@@ -80,6 +80,19 @@ export function viewFor(state, seat) {
   };
 }
 
+// Simulates taking the beit, laying, and discarding the lone spare, using the
+// real reducer chain so this can never say yes to something that then fails
+// for real when the AI actually commits to it. Pure — st is never mutated.
+function antReadyWithBeit(st, seat) {
+  const took = G(st, { type: 'TAKE_BEIT' });
+  if (took === st || took.phase !== 'action') return false;
+  const { groups } = findAIGroups(took.players[seat].hand);
+  const laid = G(took, { type: 'AI_LAY', groups });
+  if (laid === took || laid.players[seat].hand.length !== 1) return false;
+  const done = G(laid, { type: 'DISCARD', cid: laid.players[seat].hand[0].id });
+  return done.phase === 'round_end' || done.phase === 'game_end';
+}
+
 // ═══════════════════════════════════════════════════════
 // ROOM — Durable Object
 // ═══════════════════════════════════════════════════════
@@ -716,6 +729,17 @@ export class Room {
   }
 
   aiDraw() {
+    const st = this.state;
+    const seat = st.cur;
+    // A sharp player reaches for the house card when — and only when — it's
+    // the exact missing piece of an ante. Taking it is a commitment (every
+    // discard is refused until the turn ends as an ante or the card is
+    // handed back), so this has to be certain, not a guess.
+    if (this.levelOf(seat) === 'hard' && st.beit && st.canLay &&
+        !st.players[seat].hasLaid && antReadyWithBeit(st, seat)) {
+      this.state = G(st, { type: 'TAKE_BEIT' });
+      return;
+    }
     this.state = G(this.state, { type: 'DRAW' });
   }
 
@@ -724,12 +748,28 @@ export class Room {
     const seat = st.cur;
     const lv = this.levelOf(seat);
 
-    // 1. Lay down, if the mishkakon is covered and a card is left to throw.
-    if (st.canLay && !st.players[seat].hasLaid) {
+    // Took the beit chasing an ante: it must go out as one this very turn —
+    // lay everything and discard the lone spare — or hand the card back.
+    // Never fall into the ordinary flow below: it has no idea it needs to
+    // protect the ante, and could leave the turn stuck (every discard is
+    // refused while the beit is held).
+    if (st.tookBeit) {
       const { groups } = findAIGroups(st.players[seat].hand);
-      const usedIds = new Set(groups.flatMap(g => g.cards.map(c => c.id)));
-      const spares = st.players[seat].hand.filter(c => !usedIds.has(c.id));
-      if (meetsReq(groups, st.mk) && spares.length >= 1) {
+      const laid = G(st, { type: 'AI_LAY', groups });
+      this.state = (laid !== st && laid.players[seat].hand.length === 1)
+        ? G(laid, { type: 'DISCARD', cid: laid.players[seat].hand[0].id })
+        : G(st, { type: 'UNDO' }); // give the beit back rather than get stuck
+      return;
+    }
+
+    // 1. Lay down, if the mishkakon is covered and a card is left to throw. A
+    // sharp player chasing an ante holds back a lay when it's only one or two
+    // cards short of laying its WHOLE hand at once — laying the partial group
+    // now would lock in hasLaid and forfeit the ante for the rest of the round.
+    if (st.canLay && !st.players[seat].hasLaid) {
+      const { groups, unused } = findAIGroups(st.players[seat].hand);
+      const chasingAnt = lv === 'hard' && unused.length >= 2 && unused.length <= 3;
+      if (meetsReq(groups, st.mk) && unused.length >= 1 && !chasingAnt) {
         // AI_LAY re-validates against the real hand and may refuse, returning the
         // state untouched. Fall through to a discard rather than spinning on it.
         const laid = G(st, { type: 'AI_LAY', groups });

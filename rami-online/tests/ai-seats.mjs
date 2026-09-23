@@ -256,5 +256,101 @@ for (const level of ['easy', 'medium', 'hard']) {
   check(`${level}: no card was lost or duplicated on the way`, cards === 162);
 }
 
+// ── 10. Hard chases an ante (אנט) ────────────────────
+// A player wins as an "ant" (−50 bonus) only by going out on the very first
+// lay of the round, in that same turn, without attaching to the board. Laying
+// a partial group early locks in hasLaid and forfeits that for the rest of
+// the round, so a sharp player holds off when it's genuinely close — and
+// reaches for the בית (beit) card when it's the exact missing piece.
+{
+  const seq3 = () => [mkCard('h', 5), mkCard('h', 6), mkCard('h', 7)];
+
+  // Builds a fresh 2-player state with seat 0's hand set directly, ready to
+  // act in the 'action' phase on mishkakon 0 (needs just one 3+ sequence).
+  function craftAction(hand) {
+    const st = initGame([{ name: 'a', isAI: true }, { name: 'b', isAI: true }]);
+    return {
+      ...st, phase: 'action', cur: 0, canLay: true, mk: 0, board: [],
+      laidAtTurnStart: false, attachedThisTurn: false, tookBeit: false,
+      players: st.players.map((p, i) => i === 0 ? { ...p, hand, hasLaid: false } : p),
+    };
+  }
+
+  // Two spares left after grouping (9♠, 2♣): close, but not a sure thing yet
+  // — laying now would mean giving up on the ante for the rest of the round.
+  const closeHand = [...seq3(), mkCard('s', 9), mkCard('c', 2)];
+
+  const hardRoom = makeRoom();
+  hardRoom.seats = [{ ai: 'hard' }, { ai: 'medium' }];
+  hardRoom.state = craftAction(closeHand);
+  hardRoom.aiAction();
+  check('hard holds back a lay two cards short of an ante', hardRoom.state.players[0].hasLaid === false);
+  check('hard’s hold-back leaves the board untouched', hardRoom.state.board.length === 0);
+  check('hard still discarded this turn', hardRoom.state.phase === 'buying');
+
+  const mediumRoom = makeRoom();
+  mediumRoom.seats = [{ ai: 'medium' }, { ai: 'medium' }];
+  mediumRoom.state = craftAction(closeHand);
+  mediumRoom.aiAction();
+  check('medium lays the identical hand immediately (no ante-chasing)', mediumRoom.state.players[0].hasLaid === true);
+  check('medium’s lay reaches the board', mediumRoom.state.board.length > 0);
+
+  // Four spares is too far off to gamble on — hard plays it normally.
+  const farHand = [...seq3(), mkCard('s', 9), mkCard('c', 2), mkCard('d', 4), mkCard('c', 8)];
+  const farRoom = makeRoom();
+  farRoom.seats = [{ ai: 'hard' }, { ai: 'medium' }];
+  farRoom.state = craftAction(farHand);
+  farRoom.aiAction();
+  check('hard doesn’t hold back when it’s too far from an ante', farRoom.state.players[0].hasLaid === true);
+
+  // Exactly one spare is already a perfect ante: lay it and it wins outright.
+  const perfectHand = [...seq3(), mkCard('s', 9)];
+  const perfectRoom = makeRoom();
+  perfectRoom.seats = [{ ai: 'hard' }, { ai: 'medium' }];
+  perfectRoom.state = craftAction(perfectHand);
+  perfectRoom.aiAction();
+  check('a perfect one-spare hand lays immediately and wins as an ante',
+    perfectRoom.state.phase === 'round_end');
+  check('the ante bonus is applied', perfectRoom.state.players[0].lastScore === -50);
+
+  // The beit is exactly the missing card: aiDraw() reaches for it instead of
+  // drawing, and aiAction() then completes the ante.
+  const beitCard = mkCard('h', 7);
+  const beitRoom = makeRoom();
+  beitRoom.seats = [{ ai: 'hard' }, { ai: 'medium' }];
+  beitRoom.state = {
+    ...craftAction([mkCard('h', 5), mkCard('h', 6), mkCard('s', 9)]),
+    phase: 'draw', beit: beitCard,
+  };
+  beitRoom.aiDraw();
+  check('hard reaches for the beit when it completes the hand', beitRoom.state.tookBeit === true);
+  check('the beit is spent', beitRoom.state.beit === null);
+  check('the beit joined the hand', beitRoom.state.players[0].hand.some(c => c.id === beitCard.id));
+  beitRoom.aiAction();
+  check('hard completes the ante after taking the beit', beitRoom.state.phase === 'round_end');
+  check('the ante bonus is applied after a beit win', beitRoom.state.players[0].lastScore === -50);
+
+  // A hand that took the beit but can't actually complete an ante (should
+  // never happen — aiDraw only takes it once antReadyWithBeit proves it out
+  // — but aiAction must never get stuck on it) gives the card back instead.
+  const beforeHand = [mkCard('h', 5), mkCard('h', 6), mkCard('s', 9)];
+  const strandedBeit = mkCard('c', 2);
+  const stuckRoom = makeRoom();
+  stuckRoom.seats = [{ ai: 'hard' }, { ai: 'medium' }];
+  stuckRoom.state = {
+    ...craftAction([...beforeHand, strandedBeit]),
+    tookBeit: true, beit: null,
+    undoBefore: {
+      hand: beforeHand, board: [], hasLaid: false, beit: strandedBeit,
+      deck: [], discard: [], fromBeit: true,
+    },
+  };
+  stuckRoom.aiAction();
+  check('a stranded beit is handed back rather than leaving the turn stuck', stuckRoom.state.phase === 'draw');
+  check('tookBeit clears on the way out', stuckRoom.state.tookBeit === false);
+  check('the beit itself is restored', stuckRoom.state.beit?.id === strandedBeit.id);
+  check('the hand is restored to before the beit', stuckRoom.state.players[0].hand.length === beforeHand.length);
+}
+
 console.log(failures ? `\n${failures} check(s) failed` : '\nall checks passed');
 process.exit(failures ? 1 : 0);
