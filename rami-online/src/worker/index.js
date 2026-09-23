@@ -65,6 +65,10 @@ export function viewFor(state, seat) {
     beit: state.beit || null,
     beitPresent: !!state.beit,
     undoBefore,
+    // A hint or refusal ("one more group to lay", "invalid group") is meant for
+    // the player whose move produced it — nobody else sees it.
+    msg: state.msg && state.msgSeat === seat ? state.msg : '',
+    msgSeat: undefined,
     sel: acting ? (state.sel || []) : [],
     staging: acting ? (state.staging || []) : [],
     players: state.players.map((p, i) => {
@@ -78,6 +82,13 @@ export function viewFor(state, seat) {
       };
     }),
   };
+}
+
+// Run an action and remember whose move produced any new message, so the
+// message only goes out to that seat (see viewFor). An unchanged message
+// keeps its owner.
+function stampMsg(prev, next, seat) {
+  return next.msg && next.msg !== prev.msg ? { ...next, msgSeat: seat } : next;
 }
 
 // Simulates taking the beit, laying, and discarding the lone spare, using the
@@ -426,7 +437,7 @@ export class Room {
         // Mid-turn work a bot can't pick up — a beit taken for an ant, lays
         // that haven't been thrown on — is rolled back, as the player's own
         // "undo" would, so the computer starts the turn from a clean position.
-        if (st.cur === seat && st.phase === 'action' && st.undoBefore) st = G(st, { type: 'UNDO' });
+        if (st.cur === seat && st.phase === 'action' && st.undoBefore) st = stampMsg(st, G(st, { type: 'UNDO' }), -1);
         st = {
           ...st,
           players: st.players.map((p, i) => i === seat ? { ...p, isAI: true, ai: this.aiLevel } : p),
@@ -614,7 +625,7 @@ export class Room {
       const action = { ...msg.action, seat };
       if (!this.actionAllowed(seat, action)) return;
       // Last line of defence: one bad message must not kill the room for everyone.
-      try { this.state = G(this.state, action); }
+      try { this.state = stampMsg(this.state, G(this.state, action), seat); }
       catch (e) { console.error('action failed', action && action.type, e); return; }
       // Re-read the clock against the new state: the move that ends the game
       // starts the countdown to closing the room.
@@ -697,7 +708,8 @@ export class Room {
     this.aiPending = true;
     setTimeout(async () => {
       this.aiPending = false;
-      try { fn(); this.touch(); await this.persist(); await this.armAlarm(); this.broadcastState(); this.maybeRunAI(); }
+      // Whatever an AI move tells "the player" is for the AI alone: no human sees it.
+      try { const before = this.state; fn(); if (this.state) this.state = stampMsg(before, this.state, -1); this.touch(); await this.persist(); await this.armAlarm(); this.broadcastState(); this.maybeRunAI(); }
       catch (e) { /* swallow */ }
     }, 260 + Math.random() * 160);
   }

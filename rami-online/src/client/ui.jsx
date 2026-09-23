@@ -1181,6 +1181,14 @@ function Game({ state, dispatch, onLeave }) {
   const isFreeOffer   = buy && buy.checker === buy.origNext;
   // The opening discard of a mishkakon's first round carries no penalty for anyone.
   const isFreeBuy     = buy && !isFreeOffer && !!buy.free;
+  // Someone took the discard out of turn: shown to everyone until the next discard.
+  const bn = state.buyNote;
+  const buyNoteText = bn && state.players[bn.seat]
+    ? bn.seat === mySeat
+      ? (bn.paid ? '💰 קנית את הקלף' : '🎁 לקחת את הקלף בלי קנס')
+      : (bn.paid ? `💰 ${state.players[bn.seat].name} קנה את הקלף`
+                 : `🎁 ${state.players[bn.seat].name} לקח את הקלף בלי קנס`)
+    : '';
 
   // ── One draw per turn, even on a double-tap ──────────────────────────────
   // The pile stays lit until the server's next state arrives, so two fast taps would
@@ -1863,13 +1871,20 @@ function Game({ state, dispatch, onLeave }) {
       )}
 
       {/* ── Message bar ───────────────────────────── */}
-      {state.msg && (
+      {state.msg ? (
         <div className="ga-msg" style={{
           padding: '6px 12px', textAlign: 'center', fontSize: 13, flexShrink: 0,
           background: state.msg.startsWith('✓') ? 'rgba(22,101,52,.85)' : 'rgba(127,29,29,.85)',
           color: CREAM,
         }}>
           <IconText text={state.msg} />
+        </div>
+      ) : buyNoteText && (
+        <div className="ga-msg" style={{
+          padding: '6px 12px', textAlign: 'center', fontSize: 13, flexShrink: 0,
+          background: 'rgba(30,64,120,.85)', color: CREAM,
+        }}>
+          <IconText text={buyNoteText} />
         </div>
       )}
 

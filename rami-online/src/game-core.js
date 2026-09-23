@@ -329,7 +329,7 @@ function startHand(base) {
     // if the first player passes on it, whoever takes it after them gets it
     // without a penalty card. From round 2 on it's bought as usual.
     buy: { checker: 0, origNext: 0, prev: -1, free: sivuv === 1 },
-    sel: [], staging: [], msg: '', undoBefore: null, mustUseJoker: null,
+    sel: [], staging: [], msg: '', undoBefore: null, mustUseJoker: null, buyNote: null,
     laidAtTurnStart: false, attachedThisTurn: false, tookBeit: false,
     log: [...(base.log || []), `— ${MK[base.mk].name} • סיבוב ${sivuv} —`],
   };
@@ -490,6 +490,9 @@ function G(state, action) {
       deck: free ? state.deck : state.deck.slice(1),
       discard: state.discard.slice(0, -1),
       players,
+      // Public: everyone sees who took the discard out of turn, until the
+      // player on turn discards.
+      buyNote: { seat: action.idx, paid: !free },
       log: [...state.log, free
         ? `↑ ${state.players[action.idx].name} לקח מהאשפה (ללא קנס)`
         : `💰 ${state.players[action.idx].name} קנה`],
@@ -837,7 +840,7 @@ function G(state, action) {
       ...state, board,
       discard: [...state.discard, card],
       players, cur: nextIdx, sel: [], staging: [],
-      undoBefore: null, turnsPlayed, canLay, mustUseJoker: null, tookBeit: false,
+      undoBefore: null, turnsPlayed, canLay, mustUseJoker: null, tookBeit: false, buyNote: null,
       log: [...state.log, `↓ ${p.name} זרק ${cTxt(card)}`],
     }, { checker: nextIdx, origNext: nextIdx, prev: state.cur });
   }
