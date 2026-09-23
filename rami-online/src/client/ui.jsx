@@ -557,7 +557,9 @@ function RulesModal({ onClose }) {
           <Section title="🛒 קנייה">
             כשמישהו זורק קלף, השחקן הבא בתור יכול לקחת אותו בחינם. אם הוא מוותר,
             שחקנים אחרים יכולים "לקנות" אותו — ומקבלים יחד איתו קלף עונשין מהחבילה.
-            אם אף אחד לא לקח — הקלף נשרף והשחקן הבא שולף מהחבילה.
+            אם אף אחד לא לקח — הקלף נשרף והשחקן הבא שולף מהחבילה.<br/>
+            <b>הקלף הפתוח בתחילת סיבוב</b> — בלי קנס לאף אחד: אם הראשון מוותר עליו,
+            מי שלוקח אחריו מקבל אותו בחינם, בלי קלף עונשין.
           </Section>
 
           <Section title="☝️ קלף אחרון ביד">
@@ -1177,6 +1179,8 @@ function Game({ state, dispatch, onLeave }) {
   // I decide in the buying phase only when I'm the checker.
   const humanDecides  = buy && buy.checker === mySeat;
   const isFreeOffer   = buy && buy.checker === buy.origNext;
+  // The opening discard of a round carries no penalty for anyone.
+  const isFreeBuy     = buy && !isFreeOffer && !!buy.free;
 
   // ── One draw per turn, even on a double-tap ──────────────────────────────
   // The pile stays lit until the server's next state arrives, so two fast taps would
@@ -1433,7 +1437,7 @@ function Game({ state, dispatch, onLeave }) {
   const phaseLabel = () => {
     // Buying phase: whoever is the checker decides
     if (state.phase === 'buying') {
-      if (humanDecides) return isFreeOffer ? `🎁 האם לקחת מהאשפה?` : `💰 האם לקנות?`;
+      if (humanDecides) return (isFreeOffer || isFreeBuy) ? `🎁 האם לקחת מהאשפה?` : `💰 האם לקנות?`;
       return `⏳ ממתין ל${checker?.name || '...'}`;
     }
     // Not my turn → show who we're waiting on
@@ -1820,7 +1824,7 @@ function Game({ state, dispatch, onLeave }) {
           flexShrink: 0, border: '1px solid rgba(255,255,255,.12)',
         }}>
           <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8 }}>
-            {isFreeOffer
+            {(isFreeOffer || isFreeBuy)
               ? `קח את ${discard ? cTxt(discard) : '?'} מהאשפה — בחינם?`
               : `לקנות ${discard ? cTxt(discard) : '?'}? (+קלף קנס מהחבילה)`
             }
@@ -1842,7 +1846,7 @@ function Game({ state, dispatch, onLeave }) {
                 fontSize: 14, fontWeight: 700, fontFamily: 'inherit',
               }}
             >
-              <IconText text={isFreeOffer ? '✓ קח' : '💰 קנה'} />
+              <IconText text={(isFreeOffer || isFreeBuy) ? '✓ קח' : '💰 קנה'} />
             </button>
             <button
               onClick={() => dispatch({ type: 'SKIP' })}

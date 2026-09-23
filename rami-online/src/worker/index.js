@@ -719,6 +719,12 @@ export class Room {
       const want = !!top && aiWantCard(checker.hand, top, lv) &&
                    (lv !== 'easy' || Math.random() > 0.25);
       this.state = G(st, { type: want ? 'TAKE_FREE' : 'SKIP' });
+    } else if (buy.free) {
+      // The opening discard costs nothing even out of turn, so it's judged
+      // like a free take.
+      const want = !!top && aiWantCard(checker.hand, top, lv) &&
+                   (lv !== 'easy' || Math.random() > 0.25);
+      this.state = G(st, { type: want ? 'BUY' : 'SKIP', idx: buy.checker });
     } else {
       // Buying out of turn costs a penalty card from the deck, so each level
       // has its own appetite for it — and the beginner never pays at all.

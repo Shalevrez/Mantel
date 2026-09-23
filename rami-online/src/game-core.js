@@ -325,7 +325,9 @@ function startHand(base) {
     players: base.players.map((p, i) => ({ ...p, hand: p.isAI ? hands[i] : sortHand(hands[i]), hasLaid: false, newIds: [] })),
     phase: 'buying',
     cur: 0,
-    buy: { checker: 0, origNext: 0, prev: -1 },
+    // The opening discard is free for everyone: if the first player passes on it,
+    // whoever takes it after them gets it without a penalty card.
+    buy: { checker: 0, origNext: 0, prev: -1, free: true },
     sel: [], staging: [], msg: '', undoBefore: null, mustUseJoker: null,
     laidAtTurnStart: false, attachedThisTurn: false, tookBeit: false,
     log: [...(base.log || []), `— ${MK[base.mk].name} • סיבוב ${sivuv} —`],
@@ -466,8 +468,9 @@ function G(state, action) {
     if (onLastCard(state.players[action.idx]))
       return { ...state, msg: '🚫 עם קלף אחרון ביד אי אפשר לקנות' };
     const top = state.discard[state.discard.length - 1];
-    const pen = state.deck[0];
-    if (!top || !pen) {
+    const free = !!state.buy.free;
+    const pen = free ? null : state.deck[0];
+    if (!top || (!free && !pen)) {
       // Can't buy (nothing to take, or deck has no penalty card) — treat as a skip
       const n = state.players.length;
       const nc = nextCk(state.buy, n);
@@ -476,15 +479,19 @@ function G(state, action) {
     }
     const players = state.players.map((p, i) =>
       i === action.idx
-        ? { ...p, hand: [...p.hand, top, pen], newIds: [...(p.newIds || []), top.id, pen.id] }
+        ? free
+          ? { ...p, hand: [...p.hand, top], newIds: [...(p.newIds || []), top.id] }
+          : { ...p, hand: [...p.hand, top, pen], newIds: [...(p.newIds || []), top.id, pen.id] }
         : p
     );
     return {
       ...state, phase: 'draw', buy: null,
-      deck: state.deck.slice(1),
+      deck: free ? state.deck : state.deck.slice(1),
       discard: state.discard.slice(0, -1),
       players,
-      log: [...state.log, `💰 ${state.players[action.idx].name} קנה`],
+      log: [...state.log, free
+        ? `↑ ${state.players[action.idx].name} לקח מהאשפה (ללא קנס)`
+        : `💰 ${state.players[action.idx].name} קנה`],
     };
   }
 
