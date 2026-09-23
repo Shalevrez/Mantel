@@ -929,7 +929,7 @@ function RoundEnd({ state, dispatch, onLeave }) {
             color: '#b91c1c', border: 'none', fontSize: 13, fontWeight: 700,
             cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0,
           }}>
-            🚪 יציאה מהחדר
+            <LeaveIcon size={14} /> יציאה מהחדר
           </button>
         )}
       </div>
@@ -1027,6 +1027,21 @@ function GameEnd({ state, onRestart }) {
 // a computer player), so a stray tap must not do it on its own.
 // ═══════════════════════════════════════════════════════
 
+// The "leave room" mark: a door frame with an arrow walking out of it. Drawn
+// as a vector, not an emoji, so it looks the same on every phone and takes
+// its colour from the text around it.
+function LeaveIcon({ size = 16, style }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
+         aria-hidden="true" style={{ display: 'inline-block', verticalAlign: '-0.15em', flexShrink: 0, ...style }}>
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <polyline points="16 17 21 12 16 7" />
+      <line x1="21" y1="12" x2="9" y2="12" />
+    </svg>
+  );
+}
+
 function LeaveConfirm({ started, onConfirm, onClose }) {
   return (
     <div
@@ -1046,7 +1061,7 @@ function LeaveConfirm({ started, onConfirm, onClose }) {
           border: `2px solid ${GOLD}88`, boxShadow: '0 24px 72px rgba(0,0,0,.6)',
         }}
       >
-        <div style={{ fontSize: 40, marginBottom: 4 }}>🚪</div>
+        <div style={{ color: '#b91c1c', marginBottom: 6 }}><LeaveIcon size={38} /></div>
         <div style={{ color: FELTD, fontSize: 19, fontWeight: 700, marginBottom: 6 }}>
           לצאת מהחדר?
         </div>
@@ -1069,7 +1084,7 @@ function LeaveConfirm({ started, onConfirm, onClose }) {
             border: '2px solid #991b1b', borderRadius: 11,
             fontSize: 14, cursor: 'pointer', fontWeight: 700, fontFamily: 'inherit',
           }}>
-            🚪 יציאה
+            <LeaveIcon size={15} /> יציאה
           </button>
         </div>
       </div>
@@ -1563,7 +1578,7 @@ function Game({ state, dispatch, onLeave }) {
               background: 'rgba(185,28,28,.35)', color: CREAM, border: 'none',
               borderRadius: 8, fontSize: 12, fontWeight: 700, padding: '3px 9px',
               cursor: 'pointer', fontFamily: 'inherit',
-            }}>🚪<span className="hdr-label"> יציאה</span></button>
+            }}><LeaveIcon size={13} /><span className="hdr-label"> יציאה</span></button>
           )}
         </span>
       </div>
@@ -2055,6 +2070,6 @@ function Game({ state, dispatch, onLeave }) {
 
 export {
   CardView, GroupView, RulesModal, ReleaseNotes, Setup,
-  Leaderboard, BoardReveal, ScoreModal, LeaveConfirm,
+  Leaderboard, BoardReveal, ScoreModal, LeaveConfirm, LeaveIcon,
   RoundEnd, GameEnd, Game,
 };

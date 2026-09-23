@@ -8,7 +8,7 @@
 
 const RELEASES = [
   {
-    version: '2.1.0',
+    version: '2.0.1',
     date: '22.09.2026',
     title: 'כפתור יציאה מהחדר',
     changes: [

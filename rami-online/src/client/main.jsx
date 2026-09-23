@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, Component } from "react";
 import { createRoot } from "react-dom/client";
 import { FELT, FELTD, GOLD, CREAM, CLOTH, AI_LEVELS, AI_LEVEL_NAMES } from "../game-core.js";
-import { Game, RoundEnd, GameEnd, RulesModal, ReleaseNotes, LeaveConfirm } from "./ui.jsx";
+import { Game, RoundEnd, GameEnd, RulesModal, ReleaseNotes, LeaveConfirm, LeaveIcon } from "./ui.jsx";
 import { LATEST_RELEASE } from "../releases.js";
 import { createRoom, joinRoom } from "./net.js";
 
@@ -455,7 +455,7 @@ function Lobby({ lobby, code, error, onStart, onAddAI, onRemoveAI, onAILevel, on
       {error && <div style={errorStyle}>{error}</div>}
 
       <button onClick={() => setShowLeave(true)} style={{ ...linkBtn, color: '#b91c1c' }}>
-        🚪 יציאה מהחדר
+        <LeaveIcon size={15} /> יציאה מהחדר
       </button>
       <button onClick={onShowNotes} style={{ ...linkBtn, marginTop: 0, fontSize: 13, color: '#78716c' }}>
         🆕 מה חדש בגרסה {LATEST_RELEASE.version}
