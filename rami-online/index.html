@@ -57,6 +57,27 @@
         -webkit-touch-callout: default;
       }
 
+      /* Scrollbars in the app's colours (navy thumb, gold on hover, no arrow
+         buttons) instead of the browser's grey default. Only for a real mouse:
+         phones and tablets keep their native overlay scrollbar, which takes no
+         room and fades away, so touch scrolling is untouched.
+         Chrome 121+ ignores the ::-webkit-scrollbar rules once scrollbar-color
+         is set, so the standard properties are kept for Firefox only. */
+      @media (hover: hover) and (pointer: fine) {
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb {
+          background: rgba(30, 58, 95, .35); border-radius: 8px;
+          border: 2px solid transparent; background-clip: padding-box;
+        }
+        ::-webkit-scrollbar-thumb:hover { background: #c9973a; background-clip: padding-box; }
+        ::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+        ::-webkit-scrollbar-corner { background: transparent; }
+        @supports not selector(::-webkit-scrollbar) {
+          * { scrollbar-width: thin; scrollbar-color: rgba(30, 58, 95, .35) transparent; }
+        }
+      }
+
       /* Boot failure panel — hidden until the watchdog below decides the app never mounted. */
       #boot-error {
         display: none;
