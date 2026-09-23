@@ -13,12 +13,12 @@ import {
 } from '../game-core.js';
 
 // ── Table size ───────────────────────────────────────
-// Six chairs, of which at most three may be computer players: the host decides
+// Six chairs, of which at most five may be computer players: the host decides
 // how many to add in the lobby, and they sit down there and then. A computer
 // player never keeps a person out — if a human joins a full room before the
 // game starts, the newest bot gives up its chair (see handleSocket).
 const MAX_SEATS = 6;
-const MAX_AI = 3;
+const MAX_AI = 5;
 
 // How long the host keeps the crown after their connection drops. A refresh,
 // a phone locking itself or a flaky network all look like a disconnect, so the

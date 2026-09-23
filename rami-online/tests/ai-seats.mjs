@@ -43,17 +43,17 @@ function check(label, cond) {
   if (!cond) failures++;
 }
 
-// ── 1. The host seats bots one by one, up to three ──
+// ── 1. The host seats bots one by one, up to five ──
 {
   const room = makeRoom();
   const host = join(room, { name: 'שלו', pid: 'p-host', host: true });
-  for (let i = 0; i < 5; i++) host.msg({ t: 'addAI' });
-  check('at most three computer players', room.aiCount() === 3);
-  check('they are numbered 1..3', botNames(room).join(',') === 'מחשב 1,מחשב 2,מחשב 3');
-  check('the host is told why the fourth was refused', /עד 3/.test(host.lastError()?.msg || ''));
+  for (let i = 0; i < 7; i++) host.msg({ t: 'addAI' });
+  check('at most five computer players', room.aiCount() === 5);
+  check('they are numbered 1..5', botNames(room).join(',') === 'מחשב 1,מחשב 2,מחשב 3,מחשב 4,מחשב 5');
+  check('the host is told why the sixth was refused', /עד 5/.test(host.lastError()?.msg || ''));
   check('the lobby reports the count and the cap',
-        host.lastLobby().aiCount === 3 && host.lastLobby().maxAI === 3 && host.lastLobby().maxSeats === 6);
-  check('bots appear in the lobby list', host.lastLobby().players.filter(p => p.isAI).length === 3);
+        host.lastLobby().aiCount === 5 && host.lastLobby().maxAI === 5 && host.lastLobby().maxSeats === 6);
+  check('bots appear in the lobby list', host.lastLobby().players.filter(p => p.isAI).length === 5);
 }
 
 // ── 2. Six chairs, humans included ──
