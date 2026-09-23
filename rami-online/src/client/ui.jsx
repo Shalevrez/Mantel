@@ -557,7 +557,9 @@ function RulesModal({ onClose }) {
           <Section title="🛒 קנייה">
             כשמישהו זורק קלף, השחקן הבא בתור יכול לקחת אותו בחינם. אם הוא מוותר,
             שחקנים אחרים יכולים "לקנות" אותו — ומקבלים יחד איתו קלף עונשין מהחבילה.
-            אם אף אחד לא לקח — הקלף נשרף והשחקן הבא שולף מהחבילה.
+            אם אף אחד לא לקח — הקלף נשרף והשחקן הבא שולף מהחבילה.<br/>
+            <b>הקלף הפתוח בתחילת הסיבוב הראשון</b> של כל משחקון — בלי קנס לאף אחד: אם הראשון מוותר עליו,
+            מי שלוקח אחריו מקבל אותו בחינם, בלי קלף עונשין.
           </Section>
 
           <Section title="☝️ קלף אחרון ביד">
@@ -1177,6 +1179,16 @@ function Game({ state, dispatch, onLeave }) {
   // I decide in the buying phase only when I'm the checker.
   const humanDecides  = buy && buy.checker === mySeat;
   const isFreeOffer   = buy && buy.checker === buy.origNext;
+  // The opening discard of a mishkakon's first round carries no penalty for anyone.
+  const isFreeBuy     = buy && !isFreeOffer && !!buy.free;
+  // Someone took the discard out of turn: shown to everyone until the next discard.
+  const bn = state.buyNote;
+  const buyNoteText = bn && state.players[bn.seat]
+    ? bn.seat === mySeat
+      ? (bn.paid ? '💰 קנית את הקלף' : '🎁 לקחת את הקלף בלי קנס')
+      : (bn.paid ? `💰 ${state.players[bn.seat].name} קנה את הקלף`
+                 : `🎁 ${state.players[bn.seat].name} לקח את הקלף בלי קנס`)
+    : '';
 
   // ── One draw per turn, even on a double-tap ──────────────────────────────
   // The pile stays lit until the server's next state arrives, so two fast taps would
@@ -1433,7 +1445,7 @@ function Game({ state, dispatch, onLeave }) {
   const phaseLabel = () => {
     // Buying phase: whoever is the checker decides
     if (state.phase === 'buying') {
-      if (humanDecides) return isFreeOffer ? `🎁 האם לקחת מהאשפה?` : `💰 האם לקנות?`;
+      if (humanDecides) return (isFreeOffer || isFreeBuy) ? `🎁 האם לקחת מהאשפה?` : `💰 האם לקנות?`;
       return `⏳ ממתין ל${checker?.name || '...'}`;
     }
     // Not my turn → show who we're waiting on
@@ -1820,7 +1832,7 @@ function Game({ state, dispatch, onLeave }) {
           flexShrink: 0, border: '1px solid rgba(255,255,255,.12)',
         }}>
           <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8 }}>
-            {isFreeOffer
+            {(isFreeOffer || isFreeBuy)
               ? `קח את ${discard ? cTxt(discard) : '?'} מהאשפה — בחינם?`
               : `לקנות ${discard ? cTxt(discard) : '?'}? (+קלף קנס מהחבילה)`
             }
@@ -1842,7 +1854,7 @@ function Game({ state, dispatch, onLeave }) {
                 fontSize: 14, fontWeight: 700, fontFamily: 'inherit',
               }}
             >
-              <IconText text={isFreeOffer ? '✓ קח' : '💰 קנה'} />
+              <IconText text={(isFreeOffer || isFreeBuy) ? '✓ קח' : '💰 קנה'} />
             </button>
             <button
               onClick={() => dispatch({ type: 'SKIP' })}
@@ -1859,13 +1871,20 @@ function Game({ state, dispatch, onLeave }) {
       )}
 
       {/* ── Message bar ───────────────────────────── */}
-      {state.msg && (
+      {state.msg ? (
         <div className="ga-msg" style={{
           padding: '6px 12px', textAlign: 'center', fontSize: 13, flexShrink: 0,
           background: state.msg.startsWith('✓') ? 'rgba(22,101,52,.85)' : 'rgba(127,29,29,.85)',
           color: CREAM,
         }}>
           <IconText text={state.msg} />
+        </div>
+      ) : buyNoteText && (
+        <div className="ga-msg" style={{
+          padding: '6px 12px', textAlign: 'center', fontSize: 13, flexShrink: 0,
+          background: 'rgba(30,64,120,.85)', color: CREAM,
+        }}>
+          <IconText text={buyNoteText} />
         </div>
       )}
 

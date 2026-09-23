@@ -325,8 +325,11 @@ function startHand(base) {
     players: base.players.map((p, i) => ({ ...p, hand: p.isAI ? hands[i] : sortHand(hands[i]), hasLaid: false, newIds: [] })),
     phase: 'buying',
     cur: 0,
-    buy: { checker: 0, origNext: 0, prev: -1 },
-    sel: [], staging: [], msg: '', undoBefore: null, mustUseJoker: null,
+    // In the first round of a mishkakon the opening discard is free for everyone:
+    // if the first player passes on it, whoever takes it after them gets it
+    // without a penalty card. From round 2 on it's bought as usual.
+    buy: { checker: 0, origNext: 0, prev: -1, free: sivuv === 1 },
+    sel: [], staging: [], msg: '', undoBefore: null, mustUseJoker: null, buyNote: null,
     laidAtTurnStart: false, attachedThisTurn: false, tookBeit: false,
     log: [...(base.log || []), `— ${MK[base.mk].name} • סיבוב ${sivuv} —`],
   };
@@ -466,8 +469,9 @@ function G(state, action) {
     if (onLastCard(state.players[action.idx]))
       return { ...state, msg: '🚫 עם קלף אחרון ביד אי אפשר לקנות' };
     const top = state.discard[state.discard.length - 1];
-    const pen = state.deck[0];
-    if (!top || !pen) {
+    const free = !!state.buy.free;
+    const pen = free ? null : state.deck[0];
+    if (!top || (!free && !pen)) {
       // Can't buy (nothing to take, or deck has no penalty card) — treat as a skip
       const n = state.players.length;
       const nc = nextCk(state.buy, n);
@@ -476,15 +480,22 @@ function G(state, action) {
     }
     const players = state.players.map((p, i) =>
       i === action.idx
-        ? { ...p, hand: [...p.hand, top, pen], newIds: [...(p.newIds || []), top.id, pen.id] }
+        ? free
+          ? { ...p, hand: [...p.hand, top], newIds: [...(p.newIds || []), top.id] }
+          : { ...p, hand: [...p.hand, top, pen], newIds: [...(p.newIds || []), top.id, pen.id] }
         : p
     );
     return {
       ...state, phase: 'draw', buy: null,
-      deck: state.deck.slice(1),
+      deck: free ? state.deck : state.deck.slice(1),
       discard: state.discard.slice(0, -1),
       players,
-      log: [...state.log, `💰 ${state.players[action.idx].name} קנה`],
+      // Public: everyone sees who took the discard out of turn, until the
+      // player on turn discards.
+      buyNote: { seat: action.idx, paid: !free },
+      log: [...state.log, free
+        ? `↑ ${state.players[action.idx].name} לקח מהאשפה (ללא קנס)`
+        : `💰 ${state.players[action.idx].name} קנה`],
     };
   }
 
@@ -829,7 +840,7 @@ function G(state, action) {
       ...state, board,
       discard: [...state.discard, card],
       players, cur: nextIdx, sel: [], staging: [],
-      undoBefore: null, turnsPlayed, canLay, mustUseJoker: null, tookBeit: false,
+      undoBefore: null, turnsPlayed, canLay, mustUseJoker: null, tookBeit: false, buyNote: null,
       log: [...state.log, `↓ ${p.name} זרק ${cTxt(card)}`],
     }, { checker: nextIdx, origNext: nextIdx, prev: state.cur });
   }
