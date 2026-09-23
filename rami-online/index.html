@@ -102,14 +102,14 @@
 
     <div id="boot-error">
       <div class="card">
-        <div style="font-size:44px;margin-bottom:6px">🃏</div>
+        <div style="margin-bottom:6px;color:#1e3a5f"><svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-0.16em"><rect x="8" y="3" width="12" height="16" rx="2"/><path d="M4.5 7.5v11a2.5 2.5 0 0 0 2.5 2.5h8.5"/></svg></div>
         <h1>המשחק לא נטען</h1>
         <p>
           קבצי האפליקציה לא הגיעו מהשרת, ולכן המסך נשאר ריק.<br />
           בדרך כלל זה אומר שהאתר הועלה בלי <code style="display:inline;padding:1px 5px;color:#1e3a5f;background:#e7e5e4;direction:ltr">npm run build</code>
           או שתיקיית <code style="display:inline;padding:1px 5px;color:#1e3a5f;background:#e7e5e4;direction:ltr">dist</code> לא נפרסה.
         </p>
-        <button onclick="location.reload()">↻ נסה שוב</button>
+        <button onclick="location.reload()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-0.16em"><path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/></svg> נסה שוב</button>
         <code id="boot-error-detail" style="display:none"></code>
         <div id="boot-diag" style="display:none"></div>
       </div>

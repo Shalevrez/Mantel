@@ -12,6 +12,7 @@ import {
   isSeq, isSet, isGroup, orderSeq, orderGroup, jokerValues, attachPos, meetsReq,
   sortHand, moveCard, handScore,
 } from "../game-core.js";
+import { Icon, IconLabel, IconText, RankBadge } from "./icons.jsx";
 
 // Card backs (hands, fans, the draw pile): a classic white back with a navy
 // lattice inside a thin navy frame, so they stand out on the navy table.
@@ -124,8 +125,8 @@ function CardView({ card, sel, onClick, sm, back, glow, faded, newCard, attached
       {attached && (
         <div style={{
           position: 'absolute', bottom: 1, left: '50%', transform: 'translateX(-50%)',
-          fontSize: fs(.2), lineHeight: 1, zIndex: 2, pointerEvents: 'none',
-        }}>📌</div>
+          lineHeight: 1, zIndex: 2, pointerEvents: 'none', color: '#be185d',
+        }}><Icon name="pin" size={fs(.2)} strokeWidth={2.6} /></div>
       )}
       {/* gloss highlight */}
       <div style={{
@@ -180,7 +181,7 @@ function GroupView({ group, onAttach, canAttach, hot, attBy }) {
           maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis',
           boxShadow: '0 1px 4px rgba(0,0,0,.4)', pointerEvents: 'none',
         }}>
-          📌 {attBy || 'הוצמד'}
+          <Icon name="pin" strokeWidth={2.6} /> {attBy || 'הוצמד'}
         </div>
       )}
       {group.cards.map(c => <CardView key={c.id} card={c} sm attached={!!attIds && attIds.has(c.id)} />)}
@@ -197,10 +198,9 @@ function GroupView({ group, onAttach, canAttach, hot, attBy }) {
 // The full name rides along on the cell's title.
 const MK_SHORT = ['3', '3+3', '4', '4+4', '5', '5+5'];
 
-// A room seats six now, so the standings need six marks; anything past them
-// falls back to a plain position rather than rendering nothing at all.
-const RANK_MARKS = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣', '6️⃣'];
-const rankMark = (i) => RANK_MARKS[i] ?? `${i + 1}.`;
+// Standings marks: a medal for the podium, a numbered ring after it (see
+// RankBadge), so any seat count up to six gets one.
+const rankMark = (i) => <RankBadge rank={i} />;
 
 // A round score is a penalty — less is better, and an ant is negative — so it's
 // always written with its sign.
@@ -270,7 +270,7 @@ function Leaderboard({ state, note }) {
                         fontWeight: won ? 700 : 400,
                         background: won ? (h.isAnt ? '#f5f3ff' : '#f0fdf4') : 'transparent',
                       }}>
-                      {won ? (h.isAnt ? '🎯' : '🏆') : ''}{fmtScore(s)}
+                      {won && <Icon name={h.isAnt ? 'target' : 'trophy'} style={{ marginInlineEnd: 2 }} />}{fmtScore(s)}
                     </td>
                   );
                 })}
@@ -293,7 +293,7 @@ function Leaderboard({ state, note }) {
       )}
       {note}
       <div style={{ color: '#a8a29e', fontSize: 11, textAlign: 'center', marginTop: 8 }}>
-        כמה שפחות נקודות — יותר טוב · 🎯 אנט · 🏆 סיים ראשון
+        כמה שפחות נקודות — יותר טוב · <Icon name="target" /> אנט · <Icon name="trophy" /> סיים ראשון
       </div>
     </div>
   );
@@ -341,7 +341,7 @@ function SegTabs({ tabs, active, onPick }) {
           cursor: 'pointer', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit',
           background: active === t.key ? FELT : 'transparent',
           color: active === t.key ? GOLD : '#57534e',
-        }}>{t.label}</button>
+        }}><IconText text={t.label} /></button>
       ))}
     </div>
   );
@@ -378,13 +378,13 @@ function ScoreModal({ state, onClose }) {
           alignItems: 'center', justifyContent: 'space-between', flexShrink: 0,
         }}>
           <span style={{ color: GOLD, fontSize: 20, fontWeight: 700 }}>
-            🏆 טבלת ניקוד
+            <IconLabel name="trophy">טבלת ניקוד</IconLabel>
           </span>
           <button onClick={onClose} style={{
             background: 'rgba(255,255,255,.15)', color: CREAM, border: 'none',
             borderRadius: 8, width: 30, height: 30, fontSize: 18, cursor: 'pointer',
             fontWeight: 700, lineHeight: 1,
-          }}>✕</button>
+          }}><Icon name="x" size={16} strokeWidth={2.6} /></button>
         </div>
 
         <div style={{ padding: '16px 16px 20px', overflowY: 'auto' }}>
@@ -396,7 +396,7 @@ function ScoreModal({ state, onClose }) {
                 background: '#fffbeb', border: '1px solid #fde68a',
                 color: '#92400e', fontSize: 13, textAlign: 'center', fontWeight: 700,
               }}>
-                ✋ היד שלך כרגע: {handScore(me.hand)} נק׳ ({me.hand.length} קלפים)
+                <Icon name="hand" /> היד שלך כרגע: {handScore(me.hand)} נק׳ ({me.hand.length} קלפים)
                 <div style={{ fontWeight: 400, fontSize: 11.5, marginTop: 3 }}>
                   זה מה שייזקף לך אם הסיבוב ייגמר ברגע זה
                 </div>
@@ -423,7 +423,7 @@ function RulesModal({ onClose }) {
       <div style={{
         fontWeight: 700, color: FELTD, fontSize: 15, marginBottom: 6,
         borderRight: `3px solid ${GOLD}`, paddingRight: 8,
-      }}>{title}</div>
+      }}><IconText text={title} /></div>
       <div style={{ color: '#44403c', fontSize: 13.5, lineHeight: 1.7 }}>{children}</div>
     </div>
   );
@@ -454,13 +454,13 @@ function RulesModal({ onClose }) {
           alignItems: 'center', justifyContent: 'space-between', flexShrink: 0,
         }}>
           <span style={{ color: GOLD, fontSize: 20, fontWeight: 700 }}>
-            📖 חוקי מנטל
+            <IconLabel name="book">חוקי מנטל</IconLabel>
           </span>
           <button onClick={onClose} style={{
             background: 'rgba(255,255,255,.15)', color: CREAM, border: 'none',
             borderRadius: 8, width: 30, height: 30, fontSize: 18, cursor: 'pointer',
             fontWeight: 700, lineHeight: 1,
-          }}>✕</button>
+          }}><Icon name="x" size={16} strokeWidth={2.6} /></button>
         </div>
 
         {/* Scrollable body */}
@@ -520,7 +520,7 @@ function RulesModal({ onClose }) {
           <Section title="🎯 אנט (−50 נקודות!)">
             אם מורידים את <b>כל</b> היד בקבוצות חדשות משלך <b>בתור אחד</b> (ואז זורקים
             את הקלף האחרון) — זה <b>אנט</b>, ומקבלים בונוס של 50 נקודות פחות.<br/>
-            ⚠️ אם הצמדת קלפים לקבוצות קיימות של אחרים — זה כבר ניצחון רגיל (0), לא אנט.
+            <Icon name="alert" /> אם הצמדת קלפים לקבוצות קיימות של אחרים — זה כבר ניצחון רגיל (0), לא אנט.
           </Section>
 
           <Section title="🃏 לקיחת ג׳וקר">
@@ -531,13 +531,13 @@ function RulesModal({ onClose }) {
 
           <Section title="🏠 קלף הבית">
             במקום לשלוף, אפשר לקחת את "קלף הבית" — קלף גלוי שכולם רואים, מיועד
-            לניסיון אנט. אם לא הסתדר, אפשר ללחוץ "↩️ החזר בית" כדי להחזיר אותו
+            לניסיון אנט. אם לא הסתדר, אפשר ללחוץ "<Icon name="undo" /> החזר בית" כדי להחזיר אותו
             ולבחור שליפה אחרת.
           </Section>
 
           <Section title="✋ סידור היד">
             אפשר לסדר את הקלפים ביד כרצונך <b>בכל רגע — גם כשזה לא התור שלך</b>:
-            פשוט <b>גוררים</b> קלף למקום החדש — קו זהב מראה בדיוק איפה הוא ינחת. כפתור <b>🔀 מיין</b> ממיין
+            פשוט <b>גוררים</b> קלף למקום החדש — קו זהב מראה בדיוק איפה הוא ינחת. כפתור <b><Icon name="sort" /> מיין</b> ממיין
             אוטומטית לפי צורה וערך. הסידור שלך נשמר ואף שחקן אחר לא רואה אותו.
           </Section>
         </div>
@@ -702,7 +702,7 @@ function Setup({ onStart }) {
       }}>
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <div style={{ fontSize: 56, marginBottom: 4, filter: 'drop-shadow(0 2px 4px rgba(0,0,0,.2))' }}>🃏</div>
+          <div style={{ fontSize: 56, marginBottom: 4, filter: 'drop-shadow(0 2px 4px rgba(0,0,0,.2))', color: FELT }}><Icon name="cards" size={56} strokeWidth={1.8} /></div>
           <h1 style={{
             margin: 0, fontSize: 32,
             color: FELTD, letterSpacing: 2, fontWeight: 700,
@@ -739,7 +739,7 @@ function Setup({ onStart }) {
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: 20, flexShrink: 0 }}>
-                {i === 0 ? '👤' : p.isAI ? '🤖' : '👥'}
+                <Icon name={i === 0 ? 'user' : p.isAI ? 'bot' : 'users'} />
               </span>
               <input
                 value={p.name}
@@ -773,7 +773,7 @@ function Setup({ onStart }) {
                     background: p.ai === k ? FELT : '#e7e5e4',
                     color: p.ai === k ? GOLD : '#78716c',
                     transition: 'all .12s',
-                  }}>{label}</button>
+                  }}><IconText text={label} /></button>
                 ))}
               </div>
             )}
@@ -787,7 +787,7 @@ function Setup({ onStart }) {
           boxShadow: `0 5px 20px ${FELT}77`,
           letterSpacing: 1,
         }}>
-          🎮 התחל משחק
+          <IconLabel name="play">התחל משחק</IconLabel>
         </button>
 
         <button onClick={() => setShowRules(true)} style={{
@@ -795,7 +795,7 @@ function Setup({ onStart }) {
           border: `2px solid ${FELT}44`, borderRadius: 13,
           fontSize: 15, fontWeight: 700, cursor: 'pointer', marginTop: 10,
         }}>
-          📖 חוקים והסבר
+          <IconLabel name="book">חוקים והסבר</IconLabel>
         </button>
       </div>
 
@@ -832,8 +832,8 @@ function RoundEnd({ state, dispatch, onLeave }) {
         display: 'flex', flexDirection: 'column',
       }}>
         <div style={{ textAlign: 'center', marginBottom: 16, flexShrink: 0 }}>
-          <div style={{ fontSize: 42 }}>
-            {result.isAnt ? '🎯' : result.empty ? '📦' : '✅'}
+          <div style={{ fontSize: 42, color: result.isAnt ? '#7c3aed' : result.empty ? '#78716c' : '#16a34a' }}>
+            <Icon name={result.isAnt ? 'target' : result.empty ? 'package' : 'checkCircle'} strokeWidth={1.8} />
           </div>
           <h2 style={{ margin: '6px 0 4px', color: FELTD, fontSize: 22, fontWeight: 700 }}>
             {result.isAnt ? 'אנט!' : result.empty ? 'החבילה נגמרה' : 'הסיבוב הסתיים'}
@@ -851,7 +851,7 @@ function RoundEnd({ state, dispatch, onLeave }) {
             color: result.isAnt ? '#5b21b6' : '#15803d', fontWeight: 700, fontSize: 16,
             flexShrink: 0,
           }}>
-            {winner.name} {result.isAnt ? 'אנט! (−50 נק׳) 🎯' : 'סיים ראשון! 🏆'}
+            {winner.name} {result.isAnt ? 'אנט! (−50 נק׳)' : 'סיים ראשון!'} <Icon name={result.isAnt ? 'target' : 'trophy'} />
           </div>
         )}
 
@@ -910,7 +910,7 @@ function RoundEnd({ state, dispatch, onLeave }) {
             color: '#57534e', border: '2px solid #d6d3d1',
             borderRadius: 11, fontSize: 14, cursor: 'pointer', fontWeight: 600,
           }}>
-            🔄 סיבוב נוסף
+            <IconLabel name="refresh">סיבוב נוסף</IconLabel>
           </button>
           <button
             onClick={() => mk >= 5 ? dispatch({ type: 'GAME_END' }) : dispatch({ type: 'NEXT_MK' })}
@@ -920,7 +920,9 @@ function RoundEnd({ state, dispatch, onLeave }) {
               fontSize: 14, cursor: 'pointer', fontWeight: 700,
             }}
           >
-            {mk >= 5 ? '🏆 סיום' : `→ ${MK[mk + 1]?.name}`}
+            {mk >= 5
+              ? <IconLabel name="trophy">סיום</IconLabel>
+              : <IconLabel name="arrowRight">{MK[mk + 1]?.name}</IconLabel>}
           </button>
         </div>
         {onLeave && (
@@ -929,7 +931,7 @@ function RoundEnd({ state, dispatch, onLeave }) {
             color: '#b91c1c', border: 'none', fontSize: 13, fontWeight: 700,
             cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0,
           }}>
-            <LeaveIcon size={14} /> יציאה מהחדר
+            <IconLabel name="logOut">יציאה מהחדר</IconLabel>
           </button>
         )}
       </div>
@@ -962,7 +964,7 @@ function GameEnd({ state, onRestart }) {
         display: 'flex', flexDirection: 'column',
       }}>
         <div style={{ textAlign: 'center', marginBottom: 20, flexShrink: 0 }}>
-          <div style={{ fontSize: 56 }}>🏆</div>
+          <div style={{ color: GOLDD }}><Icon name="trophy" size={56} strokeWidth={1.8} /></div>
           <h2 style={{ margin: '6px 0 4px', color: FELTD, fontSize: 28, fontWeight: 700 }}>
             סיום המשחק
           </h2>
@@ -1014,7 +1016,7 @@ function GameEnd({ state, onRestart }) {
           border: `2px solid ${GOLD}`, borderRadius: 13,
           fontSize: 17, fontWeight: 700, cursor: 'pointer', marginTop: 12, flexShrink: 0,
         }}>
-          🎮 משחק חדש
+          <IconLabel name="play">משחק חדש</IconLabel>
         </button>
       </div>
     </div>
@@ -1026,21 +1028,6 @@ function GameEnd({ state, onRestart }) {
 // Leaving is for good: the chair is freed (or, mid-game, handed to
 // a computer player), so a stray tap must not do it on its own.
 // ═══════════════════════════════════════════════════════
-
-// The "leave room" mark: a door frame with an arrow walking out of it. Drawn
-// as a vector, not an emoji, so it looks the same on every phone and takes
-// its colour from the text around it.
-function LeaveIcon({ size = 16, style }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
-         stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
-         aria-hidden="true" style={{ display: 'inline-block', verticalAlign: '-0.15em', flexShrink: 0, ...style }}>
-      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-      <polyline points="16 17 21 12 16 7" />
-      <line x1="21" y1="12" x2="9" y2="12" />
-    </svg>
-  );
-}
 
 function LeaveConfirm({ started, onConfirm, onClose }) {
   return (
@@ -1061,7 +1048,7 @@ function LeaveConfirm({ started, onConfirm, onClose }) {
           border: `2px solid ${GOLD}88`, boxShadow: '0 24px 72px rgba(0,0,0,.6)',
         }}
       >
-        <div style={{ color: '#b91c1c', marginBottom: 6 }}><LeaveIcon size={38} /></div>
+        <div style={{ color: '#b91c1c', marginBottom: 6 }}><Icon name="logOut" size={38} /></div>
         <div style={{ color: FELTD, fontSize: 19, fontWeight: 700, marginBottom: 6 }}>
           לצאת מהחדר?
         </div>
@@ -1084,7 +1071,7 @@ function LeaveConfirm({ started, onConfirm, onClose }) {
             border: '2px solid #991b1b', borderRadius: 11,
             fontSize: 14, cursor: 'pointer', fontWeight: 700, fontFamily: 'inherit',
           }}>
-            <LeaveIcon size={15} /> יציאה
+            <IconLabel name="logOut">יציאה</IconLabel>
           </button>
         </div>
       </div>
@@ -1379,7 +1366,7 @@ function Game({ state, dispatch, onLeave }) {
       border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700,
       cursor: disabled ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
       opacity: disabled ? 0.55 : 1, transition: 'opacity .08s',
-    }}>{label}</button>
+    }}><IconText text={label} /></button>
   );
 
   const phaseLabel = () => {
@@ -1501,11 +1488,15 @@ function Game({ state, dispatch, onLeave }) {
           .hand-hint { display: none; }
         }
 
-        /* ── A small phone (or a narrow split view). The header carries four
-           controls now, so the buttons drop their words and keep their icons,
-           and the hand's drag hint gives up its room to the points chip. ── */
-        @media (max-width: 380px) {
+        /* ── A phone (or a narrow split view). The header carries five
+           controls now, the leave button included, so on anything narrower
+           than a small tablet the buttons drop their words and keep their
+           icons; on a small phone the hand's drag hint gives up its room to
+           the points chip too. ── */
+        @media (max-width: 480px) {
           .hdr-label { display: none; }
+        }
+        @media (max-width: 380px) {
           .hand-hint { display: none; }
         }
 
@@ -1555,30 +1546,30 @@ function Game({ state, dispatch, onLeave }) {
           background: state.canLay ? 'rgba(34,197,94,.25)' : 'rgba(251,191,36,.25)',
           color: state.canLay ? '#86efac' : GOLD,
         }}>
-          {state.canLay ? '✓ הורדה' : '⚠ סבב ראשון'}
+          <IconText text={state.canLay ? '✓ הורדה' : '⚠ סבב ראשון'} />
         </span>
         <span style={{ display: 'flex', gap: 5 }}>
-          <button onClick={() => setShowRules(true)} style={{
+          <button onClick={() => setShowRules(true)} title="חוקים" style={{
             background: 'rgba(255,255,255,.12)', color: CREAM, border: 'none',
             borderRadius: 8, fontSize: 12, fontWeight: 700, padding: '3px 9px',
             cursor: 'pointer', fontFamily: 'inherit',
-          }}>📖<span className="hdr-label"> חוקים</span></button>
+          }}><Icon name="book" /><span className="hdr-label"> חוקים</span></button>
           <button onClick={() => setShowScores(true)} title="טבלת ניקוד" style={{
             background: 'rgba(255,255,255,.12)', color: CREAM, border: 'none',
             borderRadius: 8, fontSize: 12, fontWeight: 700, padding: '3px 9px',
             cursor: 'pointer', fontFamily: 'inherit',
-          }}>🏆<span className="hdr-label"> ניקוד</span></button>
+          }}><Icon name="trophy" /><span className="hdr-label"> ניקוד</span></button>
           <button onClick={() => setShowNotes(true)} title="מה חדש בגרסה" style={{
             background: 'rgba(255,255,255,.12)', color: CREAM, border: 'none',
             borderRadius: 8, fontSize: 12, fontWeight: 700, padding: '3px 8px',
             cursor: 'pointer', fontFamily: 'inherit',
-          }}>🆕</button>
+          }}><Icon name="sparkles" /></button>
           {onLeave && (
             <button onClick={() => setShowLeave(true)} title="יציאה מהחדר" style={{
               background: 'rgba(185,28,28,.35)', color: CREAM, border: 'none',
               borderRadius: 8, fontSize: 12, fontWeight: 700, padding: '3px 9px',
               cursor: 'pointer', fontFamily: 'inherit',
-            }}><LeaveIcon size={13} /><span className="hdr-label"> יציאה</span></button>
+            }}><Icon name="logOut" /><span className="hdr-label"> יציאה</span></button>
           )}
         </span>
       </div>
@@ -1634,11 +1625,11 @@ function Game({ state, dispatch, onLeave }) {
                 ))}
               </div>
               <div style={{ fontSize: 11, color: 'rgba(255,255,255,.75)', whiteSpace: 'nowrap' }}>
-                🃏{handN} · ⭐{p.totalScore}
+                <Icon name="cards" /> {handN} · <Icon name="star" /> {p.totalScore}
               </div>
               {active && (
                 <div style={{ fontSize: 10, color: '#fffbeb', marginTop: 2, whiteSpace: 'nowrap' }}>
-                  {state.phase === 'action' ? '🎯 פועל' : state.phase === 'draw' ? '📤 שולף' : '⏳'}
+                  <IconText text={state.phase === 'action' ? '🎯 פועל' : state.phase === 'draw' ? '📤 שולף' : '⏳'} />
                 </div>
               )}
             </div>
@@ -1657,7 +1648,7 @@ function Game({ state, dispatch, onLeave }) {
           const blocked = state.phase === 'draw' && isMyTurn && human.hasLaid;
           return (
             <div style={{ textAlign: 'center' }}>
-              <div style={{ color: GOLD, fontSize: 10, fontWeight: 700, marginBottom: 3 }}>🏠 בית</div>
+              <div style={{ color: GOLD, fontSize: 10, fontWeight: 700, marginBottom: 3 }}><Icon name="home" /> בית</div>
               <div
                 onClick={() => canTake && drawOnce({ type: 'TAKE_BEIT' })}
                 style={{ cursor: canTake ? 'pointer' : 'default', opacity: blocked ? 0.4 : 1 }}
@@ -1689,7 +1680,7 @@ function Game({ state, dispatch, onLeave }) {
               background: BACK_BG,
             }}
           >
-            <span style={{ fontSize: 'calc(var(--card-h) * .39)', color: FELT }}>🂠</span>
+            <Icon name="cards" size="calc(var(--card-h) * .39)" color={FELT} strokeWidth={2} />
           </div>
         </div>
 
@@ -1744,7 +1735,7 @@ function Game({ state, dispatch, onLeave }) {
         color: 'rgba(255,255,255,.85)', fontSize: 12,
         textAlign: 'center', flexShrink: 0,
       }}>
-        <span style={{ fontWeight: 600 }}>{phaseLabel()}</span>
+        <span style={{ fontWeight: 600 }}><IconText text={phaseLabel()} /></span>
         <span style={{ color: 'rgba(255,255,255,.6)', marginRight: 10 }}>
           יד: {human.hand.length} קלפים · <b style={{ color: GOLD, whiteSpace: 'nowrap' }}>{myPts} נק׳</b>
           {' '}• סה״כ: {human.totalScore}
@@ -1783,7 +1774,7 @@ function Game({ state, dispatch, onLeave }) {
                 fontSize: 14, fontWeight: 700, fontFamily: 'inherit',
               }}
             >
-              {isFreeOffer ? '✓ קח' : '💰 קנה'}
+              <IconText text={isFreeOffer ? '✓ קח' : '💰 קנה'} />
             </button>
             <button
               onClick={() => dispatch({ type: 'SKIP' })}
@@ -1793,7 +1784,7 @@ function Game({ state, dispatch, onLeave }) {
                 fontSize: 14, fontWeight: 700, fontFamily: 'inherit',
               }}
             >
-              ✕ וותר
+              <Icon name="x" /> וותר
             </button>
           </div>
         </div>
@@ -1806,7 +1797,7 @@ function Game({ state, dispatch, onLeave }) {
           background: state.msg.startsWith('✓') ? 'rgba(22,101,52,.85)' : 'rgba(127,29,29,.85)',
           color: CREAM,
         }}>
-          {state.msg}
+          <IconText text={state.msg} />
         </div>
       )}
 
@@ -1825,10 +1816,10 @@ function Game({ state, dispatch, onLeave }) {
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
               <span style={{ color: GOLDD, fontSize: 12, fontWeight: 700 }}>
-                ⏳ בתהליך הורדה — {state.staging.length} קבוצ{state.staging.length > 1 ? 'ות' : 'ה'}
+                <Icon name="hourglass" /> בתהליך הורדה — {state.staging.length} קבוצ{state.staging.length > 1 ? 'ות' : 'ה'}
               </span>
               <span style={{ color: '#57534e', fontSize: 11 }}>
-                {!reqMet ? `דרוש: ${MK[state.mk].name}` : '✓ מוכן'}
+                {!reqMet ? `דרוש: ${MK[state.mk].name}` : <><Icon name="check" /> מוכן</>}
               </span>
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
@@ -1851,7 +1842,7 @@ function Game({ state, dispatch, onLeave }) {
                 borderRadius: 7, cursor: 'pointer', fontSize: 11, fontFamily: 'inherit',
               }}
             >
-              ✕ בטל הורדה
+              <Icon name="x" /> בטל הורדה
             </button>
           </div>
           );
@@ -1865,7 +1856,7 @@ function Game({ state, dispatch, onLeave }) {
             borderRadius: 12, padding: '8px 12px', marginBottom: 8, textAlign: 'center',
             color: '#5b21b6', fontSize: 13, fontWeight: 700,
           }}>
-            🃏 חובה להשתמש בג׳וקר — הצמד לקבוצה או הורד בקבוצה חדשה עם קלפים מהיד
+            <Icon name="cards" /> חובה להשתמש בג׳וקר — הצמד לקבוצה או הורד בקבוצה חדשה עם קלפים מהיד
           </div>
         )}
 
@@ -1974,7 +1965,7 @@ function Game({ state, dispatch, onLeave }) {
                 marginInlineStart: 'auto', marginInlineEnd: 6,
                 fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
               }}
-            >✋ {myPts} נק׳ ביד</button>
+            ><Icon name="hand" /> {myPts} נק׳ ביד</button>
             <button
               onClick={() => { setPendingOrder(null); dispatch({ type: 'SORT' }); }}
               style={{
@@ -1982,7 +1973,7 @@ function Game({ state, dispatch, onLeave }) {
                 borderRadius: 8, fontSize: 12, fontWeight: 700, padding: '5px 12px',
                 cursor: 'pointer', fontFamily: 'inherit',
               }}
-            >🔀 מיין</button>
+            ><Icon name="sort" /> מיין</button>
           </div>
 
           {/* Hand cards — wrap to multiple rows to fit screen width (no scroll) */}
@@ -2070,6 +2061,6 @@ function Game({ state, dispatch, onLeave }) {
 
 export {
   CardView, GroupView, RulesModal, ReleaseNotes, Setup,
-  Leaderboard, BoardReveal, ScoreModal, LeaveConfirm, LeaveIcon,
+  Leaderboard, BoardReveal, ScoreModal, LeaveConfirm,
   RoundEnd, GameEnd, Game,
 };

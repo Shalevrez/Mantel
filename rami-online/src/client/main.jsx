@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback, Component } from "react";
 import { createRoot } from "react-dom/client";
 import { FELT, FELTD, GOLD, CREAM, CLOTH, AI_LEVELS, AI_LEVEL_NAMES } from "../game-core.js";
-import { Game, RoundEnd, GameEnd, RulesModal, ReleaseNotes, LeaveConfirm, LeaveIcon } from "./ui.jsx";
+import { Game, RoundEnd, GameEnd, RulesModal, ReleaseNotes, LeaveConfirm } from "./ui.jsx";
+import { Icon, IconLabel } from "./icons.jsx";
 import { LATEST_RELEASE } from "../releases.js";
 import { createRoom, joinRoom } from "./net.js";
 
@@ -307,7 +308,7 @@ function Lobby({ lobby, code, error, onStart, onAddAI, onRemoveAI, onAILevel, on
   return (
     <Shell>
       <div style={{ textAlign: 'center', marginBottom: 16 }}>
-        <div style={{ fontSize: 40 }}>🎴</div>
+        <Icon name="cards" size={40} color={FELT} strokeWidth={1.8} />
         <h2 style={{ margin: '4px 0', color: FELTD, fontWeight: 700, fontSize: 22 }}>
           חדר המתנה
         </h2>
@@ -333,7 +334,9 @@ function Lobby({ lobby, code, error, onStart, onAddAI, onRemoveAI, onAILevel, on
         </div>
         <div style={{ marginTop: 8 }}>
           <button onClick={copy} style={{ ...linkBtn, marginTop: 0, fontSize: 13 }}>
-            {copied ? '✓ הקישור הועתק' : '🔗 העתק קישור הזמנה'}
+            {copied
+              ? <IconLabel name="check">הקישור הועתק</IconLabel>
+              : <IconLabel name="link">העתק קישור הזמנה</IconLabel>}
           </button>
         </div>
       </div>
@@ -355,7 +358,9 @@ function Lobby({ lobby, code, error, onStart, onAddAI, onRemoveAI, onAILevel, on
             border: `2px solid ${p.host ? FELT + '33' : '#e7e5e4'}`,
           }}>
             <span style={{ fontWeight: 700, color: FELTD, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {p.isAI ? '🤖' : p.connected ? '🟢' : '⚪'} {p.name}
+              {p.isAI
+                ? <Icon name="bot" color={FELT} />
+                : <Icon name="dot" color={p.connected ? '#22c55e' : '#d6d3d1'} />} {p.name}
               {p.seat === lobby.youSeat && <span style={{ color: '#78716c', fontWeight: 400 }}> (אתה)</span>}
               {p.isAI && (
                 <span style={{ color: '#78716c', fontWeight: 400, fontSize: 12 }}>
@@ -364,10 +369,10 @@ function Lobby({ lobby, code, error, onStart, onAddAI, onRemoveAI, onAILevel, on
               )}
             </span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-              {p.host && <span style={{ fontSize: 11, color: FELT, fontWeight: 700 }}>👑 מארח</span>}
+              {p.host && <span style={{ fontSize: 11, color: FELT, fontWeight: 700 }}><IconLabel name="crown" gap=".2em">מארח</IconLabel></span>}
               {p.isAI && lobby.youHost && (
                 <button onClick={() => onRemoveAI(p.seat)} title="הסר שחקן מחשב"
-                        style={removeBtn}>✕</button>
+                        style={removeBtn}><Icon name="x" size={12} strokeWidth={3} /></button>
               )}
             </span>
           </div>
@@ -380,7 +385,7 @@ function Lobby({ lobby, code, error, onStart, onAddAI, onRemoveAI, onAILevel, on
             background: '#fafaf9', border: '2px dashed #e7e5e4',
             color: '#a8a29e', fontSize: 13, textAlign: 'center',
           }}>
-            🪑 {maxSeats - players.length === 1
+            <Icon name="chair" style={{ marginInlineEnd: '.3em' }} />{maxSeats - players.length === 1
               ? 'כיסא פנוי אחד'
               : `${maxSeats - players.length} כיסאות פנויים`}
           </div>
@@ -399,19 +404,19 @@ function Lobby({ lobby, code, error, onStart, onAddAI, onRemoveAI, onAILevel, on
               display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8,
               marginBottom: 10,
             }}>
-              <span style={{ fontWeight: 700, color: FELTD, fontSize: 14 }}>🤖 שחקני מחשב</span>
+              <span style={{ fontWeight: 700, color: FELTD, fontSize: 14 }}><IconLabel name="bot">שחקני מחשב</IconLabel></span>
               <span style={{ color: '#78716c', fontSize: 12 }}>{aiCount}/{maxAI}</span>
             </div>
             <button onClick={onAddAI} disabled={!canAddAI}
                     style={{ ...secondaryBtn, marginTop: 0, marginBottom: 4, opacity: canAddAI ? 1 : 0.5 }}>
-              ➕ הוסף מחשב למשחק
+              <IconLabel name="plus">הוסף מחשב למשחק</IconLabel>
             </button>
             <div style={{ color: '#a8a29e', fontSize: 11, marginBottom: 10, textAlign: 'center' }}>
               {aiCount >= maxAI
                 ? `הגעתם למקסימום — ${maxAI} שחקני מחשב`
                 : players.length >= maxSeats
                   ? `השולחן מלא (${maxSeats} שחקנים)`
-                  : 'כל לחיצה מושיבה מחשב אחד בשולחן. להסרה — ✕ ליד שמו.'}
+                  : <>כל לחיצה מושיבה מחשב אחד בשולחן. להסרה — <Icon name="x" size=".95em" strokeWidth={3} /> ליד שמו.</>}
             </div>
             <div style={{ color: '#78716c', fontSize: 12, marginBottom: 6 }}>דרגת קושי</div>
             <div style={{ display: 'flex', gap: 6 }}>
@@ -438,7 +443,7 @@ function Lobby({ lobby, code, error, onStart, onAddAI, onRemoveAI, onAILevel, on
             disabled={!canStart}
             style={{ ...primaryBtn, opacity: canStart ? 1 : 0.5, marginTop: 0 }}
           >
-            🎮 התחל משחק
+            <IconLabel name="play">התחל משחק</IconLabel>
           </button>
           {players.length < 2 && (
             <div style={{ textAlign: 'center', color: '#a8a29e', fontSize: 12, marginTop: 8 }}>
@@ -448,17 +453,17 @@ function Lobby({ lobby, code, error, onStart, onAddAI, onRemoveAI, onAILevel, on
         </>
       ) : (
         <div style={{ textAlign: 'center', color: '#78716c', fontSize: 14, padding: '10px 0' }}>
-          ⏳ ממתינים שהמארח יתחיל את המשחק...
+          <IconLabel name="hourglass">ממתינים שהמארח יתחיל את המשחק...</IconLabel>
         </div>
       )}
 
       {error && <div style={errorStyle}>{error}</div>}
 
       <button onClick={() => setShowLeave(true)} style={{ ...linkBtn, color: '#b91c1c' }}>
-        <LeaveIcon size={15} /> יציאה מהחדר
+        <IconLabel name="logOut">יציאה מהחדר</IconLabel>
       </button>
       <button onClick={onShowNotes} style={{ ...linkBtn, marginTop: 0, fontSize: 13, color: '#78716c' }}>
-        🆕 מה חדש בגרסה {LATEST_RELEASE.version}
+        <IconLabel name="sparkles">מה חדש בגרסה {LATEST_RELEASE.version}</IconLabel>
       </button>
       {showLeave && <LeaveConfirm started={false} onConfirm={onLeave} onClose={() => setShowLeave(false)} />}
     </Shell>
@@ -479,11 +484,11 @@ const LEVEL_HINT = {
 // ═══════════════════════════════════════════════════════
 
 const CLOSED_TEXT = {
-  finished: { icon: '🏁', title: 'המשחק הסתיים',
+  finished: { icon: 'flag', title: 'המשחק הסתיים',
               text: 'החדר נסגר אחרי סיום המשחק. פתחו חדר חדש כדי לשחק שוב.' },
-  empty:    { icon: '🚪', title: 'החדר נסגר',
+  empty:    { icon: 'logOut', title: 'החדר נסגר',
               text: 'כל השחקנים יצאו מהחדר, אז הוא נסגר. אפשר לפתוח חדר חדש בכל רגע.' },
-  idle:     { icon: '💤', title: 'החדר נסגר',
+  idle:     { icon: 'moon', title: 'החדר נסגר',
               text: 'לא הייתה פעילות בחדר במשך זמן רב, אז הוא נסגר. פתחו חדר חדש כדי להמשיך.' },
 };
 
@@ -495,10 +500,10 @@ function RoomClosed({ reason }) {
   return (
     <Shell>
       <div style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: 44, marginBottom: 6 }}>{t.icon}</div>
+        <div style={{ marginBottom: 6 }}><Icon name={t.icon} size={44} color={FELT} strokeWidth={1.8} /></div>
         <h2 style={{ margin: '0 0 6px', color: FELTD, fontSize: 20 }}>{t.title}</h2>
         <p style={{ color: '#57534e', fontSize: 14, lineHeight: 1.6, margin: '0 0 16px' }}>{t.text}</p>
-        <button onClick={home} style={primaryBtn}>🏠 חזרה למסך הבית</button>
+        <button onClick={home} style={primaryBtn}><IconLabel name="home">חזרה למסך הבית</IconLabel></button>
       </div>
     </Shell>
   );
@@ -553,7 +558,7 @@ function Splash({ text }) {
       direction: 'rtl', fontSize: 18,
     }}>
       <div style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: 44, marginBottom: 10 }}>🃏</div>
+        <div style={{ marginBottom: 10 }}><Icon name="cards" size={44} strokeWidth={1.8} /></div>
         {text}
         <VersionTag />
       </div>
@@ -622,12 +627,12 @@ class ErrorBoundary extends Component {
     return (
       <Shell>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 44, marginBottom: 6 }}>🃏</div>
+          <div style={{ marginBottom: 6 }}><Icon name="cards" size={44} color={FELT} strokeWidth={1.8} /></div>
           <h2 style={{ margin: '0 0 6px', color: FELTD, fontSize: 20 }}>משהו השתבש</h2>
           <p style={{ color: '#57534e', fontSize: 14, lineHeight: 1.6, margin: '0 0 14px' }}>
             המשחק נתקל בשגיאה בלתי צפויה. טעינה מחדש בדרך כלל פותרת את זה.
           </p>
-          <button onClick={() => location.reload()} style={primaryBtn}>↻ טען מחדש</button>
+          <button onClick={() => location.reload()} style={primaryBtn}><IconLabel name="refresh">טען מחדש</IconLabel></button>
           <code style={{
             display: 'block', marginTop: 12, padding: '8px 10px', borderRadius: 8,
             background: '#f5f5f4', color: '#b91c1c', fontSize: 12,
