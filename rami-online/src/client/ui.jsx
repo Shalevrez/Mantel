@@ -690,10 +690,6 @@ function Setup({ onStart }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       direction: 'rtl', padding: 16,
     }}>
-      <style>{`
-        ::-webkit-scrollbar{width:4px;} ::-webkit-scrollbar-thumb{background:rgba(19,40,79,.25);border-radius:4px;}
-      `}</style>
-
       <div style={{
         background: CREAM, borderRadius: 22, padding: '28px 24px',
         maxWidth: 390, width: '100%',
