@@ -174,16 +174,59 @@ function check(label, cond) {
   check('an unknown level plays as medium', aiDiscard(hand, 'nonsense').v === 10);
 
   // 6♥ completes nothing here (5♥,6♥,8♥ has a gap and there is no second 6 to
-  // pair the 6♦ with) but it has partners all over the hand.
+  // pair the 6♦ with) but it has partners all over the hand: it scores 5
+  // affinity, clearing both hard's bar (3) and medium's (4).
   const near = [mkCard('h', 5), mkCard('h', 8), mkCard('d', 6), mkCard('s', 2)];
   check('hard picks up a card that pairs with the hand', aiWantCard(near, mkCard('h', 6), 'hard'));
-  check('medium waits until it completes a group', !aiWantCard(near, mkCard('h', 6), 'medium'));
+  check('medium also picks up a card that pairs with the hand', aiWantCard(near, mkCard('h', 6), 'medium'));
+  // A thinner pairing (6♦ same value +2, 8♥ same-suit gap-2 +1 = 3) clears
+  // hard's bar but not medium's — that's the gap between the two levels.
+  const thinPair = [mkCard('d', 6), mkCard('h', 8)];
+  check('hard trusts a thinner pairing than medium', aiWantCard(thinPair, mkCard('h', 6), 'hard'));
+  check('medium waits for a stronger pairing than hard', !aiWantCard(thinPair, mkCard('h', 6), 'medium'));
   const completes = [mkCard('h', 5), mkCard('h', 6), mkCard('h', 8), mkCard('s', 2)];
   check('medium takes the card that completes a run', aiWantCard(completes, mkCard('h', 7), 'medium'));
   check('easy takes it too', aiWantCard(completes, mkCard('h', 7), 'easy'));
   const joker = mkCard('j', 0);
   check('medium takes a discarded joker', aiWantCard(near, joker, 'medium'));
   check('easy leaves the joker', !aiWantCard(near, joker, 'easy'));
+
+  // A costly (paid) buy needs a stronger pairing than a free take: 6♥ scores
+  // 5 against `near` (two suit-adjacent cards plus a same-value partner), so
+  // it clears both bars; a hand that only scores 4 clears the free bar (≥3)
+  // but not the costly one (≥5).
+  check('hard wants a strong pairing even as a paid buy', aiWantCard(near, mkCard('h', 6), 'hard', { costly: true }));
+  const midPair = [mkCard('d', 6), mkCard('h', 5)];
+  check('hard takes a middling pairing for free', aiWantCard(midPair, mkCard('h', 6), 'hard'));
+  check('hard won’t pay a penalty card for a middling pairing', !aiWantCard(midPair, mkCard('h', 6), 'hard', { costly: true }));
+  // Medium's own bars are 4 free / 6 costly: `near` (5) clears the free bar
+  // but not medium's costly one.
+  check('medium won’t pay a penalty card for a pairing that only just clears its free bar', !aiWantCard(near, mkCard('h', 6), 'medium', { costly: true }));
+
+  // Hard also won't hand an opponent a free lay-off when it can help it: a
+  // board run of clubs 6-7-8 makes 9♣ a feed (it extends the run), while 3♠
+  // is equally useless to the hand but attaches to nothing on the table.
+  const boardHand = [
+    mkCard('h', 13), mkCard('d', 13), mkCard('c', 13),
+    mkCard('s', 3), mkCard('c', 9),
+  ];
+  const board = [{ id: 'g1', type: 'seq', cards: [mkCard('c', 6), mkCard('c', 7), mkCard('c', 8)] }];
+  check('without board awareness hard would throw the feeding card', aiDiscard(boardHand, 'hard').v === 9);
+  check('hard avoids feeding an open board run when it has a choice', aiDiscard(boardHand, 'hard', Math.random, board).v === 3);
+  // If every spare feeds the board, hard still has to throw something.
+  const onlyFeeds = [mkCard('h', 13), mkCard('d', 13), mkCard('c', 13), mkCard('c', 9)];
+  check('hard still discards when every spare feeds the board', aiDiscard(onlyFeeds, 'hard', Math.random, board).v === 9);
+  // Medium avoids feeding the board too, same as hard.
+  check('without board awareness medium would throw the feeding card', aiDiscard(boardHand, 'medium').v === 9);
+  check('medium avoids feeding an open board run when it has a choice', aiDiscard(boardHand, 'medium', Math.random, board).v === 3);
+
+  // Easy no longer risks its own joker on a coin flip: with two candidates
+  // (3♠, joker) and a coin flip that used to land on index 1 (the joker),
+  // it now always keeps the joker and throws the real card instead.
+  const spareAndJoker = [mkCard('s', 3), mkCard('j', 0)];
+  check('easy won’t lose its joker to bad luck', aiDiscard(spareAndJoker, 'easy', () => 0.99).v === 3);
+  // ...but it still has to throw the joker if it's the only card left.
+  check('easy still throws a joker when nothing else is left', aiDiscard([mkCard('j', 0)], 'easy').j);
 }
 
 // ── 9. Every level can play a full round without getting stuck ──

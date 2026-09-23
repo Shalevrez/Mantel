@@ -704,13 +704,13 @@ export class Room {
       // First refusal, and free: the only cost is picking up a card it doesn't
       // need. A beginner still lets good cards go by now and then.
       const want = !!top && aiWantCard(checker.hand, top, lv) &&
-                   (lv !== 'easy' || Math.random() > 0.4);
+                   (lv !== 'easy' || Math.random() > 0.25);
       this.state = G(st, { type: want ? 'TAKE_FREE' : 'SKIP' });
     } else {
       // Buying out of turn costs a penalty card from the deck, so each level
       // has its own appetite for it — and the beginner never pays at all.
-      const odds = lv === 'hard' ? 0.2 : lv === 'medium' ? 0.55 : 1;
-      const want = !!top && aiWantCard(checker.hand, top, lv) && Math.random() > odds;
+      const odds = lv === 'hard' ? 0.2 : lv === 'medium' ? 0.3 : 1;
+      const want = !!top && aiWantCard(checker.hand, top, lv, { costly: true }) && Math.random() > odds;
       this.state = G(st, { type: want ? 'BUY' : 'SKIP', idx: buy.checker });
     }
   }
@@ -738,11 +738,11 @@ export class Room {
     }
 
     // 2. Attach to the board. This is where the levels part company: a beginner
-    // never bothers, medium places one card a turn, and a sharp AI empties
+    // never bothers, medium clears most of what it can, and a sharp AI empties
     // everything it can (AI_ATTACH refuses to leave it with nothing to throw,
     // which is what stops the loop).
     if (st.players[seat].hasLaid && lv !== 'easy') {
-      const passes = lv === 'hard' ? 14 : 1;
+      const passes = lv === 'hard' ? 14 : lv === 'medium' ? 8 : 1;
       for (let i = 0; i < passes; i++) {
         const before = st;
         for (const c of st.players[seat].hand) {
@@ -760,7 +760,7 @@ export class Room {
 
     // 3. Throw a card — which is also how an AI goes out.
     const hand = st.players[seat].hand;
-    this.state = G(st, { type: 'DISCARD', cid: aiDiscard(hand, lv).id });
+    this.state = G(st, { type: 'DISCARD', cid: aiDiscard(hand, lv, Math.random, st.board).id });
   }
 }
 
