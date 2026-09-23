@@ -184,6 +184,29 @@ function check(label, cond) {
   const joker = mkCard('j', 0);
   check('medium takes a discarded joker', aiWantCard(near, joker, 'medium'));
   check('easy leaves the joker', !aiWantCard(near, joker, 'easy'));
+
+  // A costly (paid) buy needs a stronger pairing than a free take: 6♥ scores
+  // 5 against `near` (two suit-adjacent cards plus a same-value partner), so
+  // it clears both bars; a hand that only scores 4 clears the free bar (≥3)
+  // but not the costly one (≥5).
+  check('hard wants a strong pairing even as a paid buy', aiWantCard(near, mkCard('h', 6), 'hard', { costly: true }));
+  const midPair = [mkCard('d', 6), mkCard('h', 5)];
+  check('hard takes a middling pairing for free', aiWantCard(midPair, mkCard('h', 6), 'hard'));
+  check('hard won’t pay a penalty card for a middling pairing', !aiWantCard(midPair, mkCard('h', 6), 'hard', { costly: true }));
+
+  // Hard also won't hand an opponent a free lay-off when it can help it: a
+  // board run of clubs 6-7-8 makes 9♣ a feed (it extends the run), while 3♠
+  // is equally useless to the hand but attaches to nothing on the table.
+  const boardHand = [
+    mkCard('h', 13), mkCard('d', 13), mkCard('c', 13),
+    mkCard('s', 3), mkCard('c', 9),
+  ];
+  const board = [{ id: 'g1', type: 'seq', cards: [mkCard('c', 6), mkCard('c', 7), mkCard('c', 8)] }];
+  check('without board awareness hard would throw the feeding card', aiDiscard(boardHand, 'hard').v === 9);
+  check('hard avoids feeding an open board run when it has a choice', aiDiscard(boardHand, 'hard', Math.random, board).v === 3);
+  // If every spare feeds the board, hard still has to throw something.
+  const onlyFeeds = [mkCard('h', 13), mkCard('d', 13), mkCard('c', 13), mkCard('c', 9)];
+  check('hard still discards when every spare feeds the board', aiDiscard(onlyFeeds, 'hard', Math.random, board).v === 9);
 }
 
 // ── 9. Every level can play a full round without getting stuck ──

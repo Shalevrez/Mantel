@@ -710,7 +710,7 @@ export class Room {
       // Buying out of turn costs a penalty card from the deck, so each level
       // has its own appetite for it — and the beginner never pays at all.
       const odds = lv === 'hard' ? 0.2 : lv === 'medium' ? 0.55 : 1;
-      const want = !!top && aiWantCard(checker.hand, top, lv) && Math.random() > odds;
+      const want = !!top && aiWantCard(checker.hand, top, lv, { costly: true }) && Math.random() > odds;
       this.state = G(st, { type: want ? 'BUY' : 'SKIP', idx: buy.checker });
     }
   }
@@ -760,7 +760,7 @@ export class Room {
 
     // 3. Throw a card — which is also how an AI goes out.
     const hand = st.players[seat].hand;
-    this.state = G(st, { type: 'DISCARD', cid: aiDiscard(hand, lv).id });
+    this.state = G(st, { type: 'DISCARD', cid: aiDiscard(hand, lv, Math.random, st.board).id });
   }
 }
 
