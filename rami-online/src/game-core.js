@@ -331,6 +331,25 @@ function nextCk(buy, n) {
   return nc;
 }
 
+// A player down to their last card can't take from the discard pile — not for
+// free and not by buying. The only thing left to them is drawing from the deck
+// on their own turn.
+const onLastCard = p => !!p && p.hand.length === 1;
+
+// Settle the buying round on the next seat that may actually decide: seats on their
+// last card are passed over without being asked. Once the offer comes back around
+// to the next player the round is over and they draw.
+function settleBuy(state, buy) {
+  const n = state.players.length;
+  let b = buy;
+  while (onLastCard(state.players[b.checker])) {
+    const nc = nextCk(b, n);
+    if (nc === b.origNext) return { ...state, phase: 'draw', buy: null };
+    b = { ...b, checker: nc };
+  }
+  return { ...state, phase: 'buying', buy: b };
+}
+
 // ═══════════════════════════════════════════════════════
 // REDUCER
 // ═══════════════════════════════════════════════════════
@@ -359,6 +378,8 @@ function G(state, action) {
     const top = state.discard[state.discard.length - 1];
     if (!top) return state;
     const p = state.players[state.cur];
+    if (onLastCard(p))
+      return { ...state, msg: '🚫 עם קלף אחרון ביד אפשר רק לשלוף מהחבילה' };
     const players = state.players.map((pl, i) =>
       i === state.cur ? { ...pl, hand: [...pl.hand, top], newIds: [top.id] } : pl
     );
@@ -374,6 +395,8 @@ function G(state, action) {
 
   if (type === 'BUY') {
     if (state.phase !== 'buying' || !state.buy || !state.players[action.idx]) return state;
+    if (onLastCard(state.players[action.idx]))
+      return { ...state, msg: '🚫 עם קלף אחרון ביד אי אפשר לקנות' };
     const top = state.discard[state.discard.length - 1];
     const pen = state.deck[0];
     if (!top || !pen) {
@@ -381,7 +404,7 @@ function G(state, action) {
       const n = state.players.length;
       const nc = nextCk(state.buy, n);
       if (nc === state.buy.origNext) return { ...state, phase: 'draw', buy: null };
-      return { ...state, buy: { ...state.buy, checker: nc } };
+      return settleBuy(state, { ...state.buy, checker: nc });
     }
     const players = state.players.map((p, i) =>
       i === action.idx
@@ -403,7 +426,7 @@ function G(state, action) {
     const nc = nextCk(state.buy, n);
     if (nc === state.buy.origNext)
       return { ...state, phase: 'draw', buy: null };
-    return { ...state, buy: { ...state.buy, checker: nc } };
+    return settleBuy(state, { ...state.buy, checker: nc });
   }
 
   // ── Draw ──────────────────────────────────────────
@@ -438,6 +461,8 @@ function G(state, action) {
     // an ant is impossible, so taking it is blocked.
     if (p.hasLaid)
       return { ...state, msg: '🏠 אי אפשר לקחת בית אחרי שכבר הורדת — הבית הוא לאנט בלבד' };
+    if (onLastCard(p))
+      return { ...state, msg: '🚫 עם קלף אחרון ביד אפשר רק לשלוף מהחבילה' };
     const players = state.players.map((pl, i) =>
       i === state.cur ? { ...pl, hand: [...pl.hand, beit], newIds: [beit.id] } : pl
     );
@@ -742,14 +767,13 @@ function G(state, action) {
     const board = state.board.some(g => g.att && g.att.by !== state.cur)
       ? state.board.map(({ att, ...g }) => att && att.by === state.cur ? { ...g, att } : g)
       : state.board;
-    return {
-      ...state, phase: 'buying', board,
+    return settleBuy({
+      ...state, board,
       discard: [...state.discard, card],
       players, cur: nextIdx, sel: [], staging: [],
       undoBefore: null, turnsPlayed, canLay, mustUseJoker: null, tookBeit: false,
-      buy: { checker: nextIdx, origNext: nextIdx, prev: state.cur },
       log: [...state.log, `↓ ${p.name} זרק ${cTxt(card)}`],
-    };
+    }, { checker: nextIdx, origNext: nextIdx, prev: state.cur });
   }
 
   // ── Round controls ────────────────────────────────
