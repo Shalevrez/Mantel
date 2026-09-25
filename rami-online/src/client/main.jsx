@@ -7,7 +7,7 @@ import { LATEST_RELEASE } from "../releases.js";
 import { createRoom, joinRoom } from "./net.js";
 import { settle, buyPrice } from "../economy.js";
 import * as P from "./profile.js";
-import { useProfile, LoginScreen, Hub, MenuCards, ProfileSheet, LeaderboardList, RewardStrip } from "./account.jsx";
+import { useProfile, LoginScreen, Hub, MenuCards, ProfileSheet, SettingsSheet, LeaderboardList, RewardStrip } from "./account.jsx";
 import { PracticeSetup, OnlineSetup, JoinDialog, RoomTerms } from "./rooms.jsx";
 import { StoreScreen } from "./store.jsx";
 
@@ -88,6 +88,7 @@ function App() {
   const [closed, setClosed] = useState(null); // why the server retired the room
   const [showProfile, setShowProfile] = useState(false);
   const [showRules, setShowRules] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   // An invite link opens the join box straight away.
   const [showJoin, setShowJoin] = useState(() => !!urlCode() && !resumeCode);
   const connRef = useRef(null);
@@ -243,7 +244,7 @@ function App() {
     if (screen === 'resume') return <Splash text="חוזרים למשחק..." />;
 
     const hub = (title, body, back = () => go('home')) => (
-      <Hub profile={profile} title={title} onBack={back}
+      <Hub profile={profile} title={title} onBack={back} onSettings={() => setShowSettings(true)}
            onProfile={() => setShowProfile(true)} onCoins={() => go('store')}>
         {body}
       </Hub>
@@ -251,6 +252,7 @@ function App() {
 
     if (screen === 'home') return (
       <Hub profile={profile} onProfile={() => setShowProfile(true)} onCoins={() => go('store')}
+           onSettings={() => setShowSettings(true)}
            footer={<>
              <button onClick={() => setShowRules(true)} style={hubLink}><IconLabel name="book">חוקים</IconLabel></button>
              <button onClick={() => setNotes(true)} style={hubLink}><IconLabel name="sparkles">מה חדש ב־{LATEST_RELEASE.version}</IconLabel></button>
@@ -261,16 +263,16 @@ function App() {
           <div style={{ color: '#78716c', fontSize: 13 }}>אונליין · 2–6 שחקנים</div>
         </div>
         <MenuCards items={[
-          { key: 'practice', title: 'אימון', sub: 'מול המחשב · חינם', icon: 'bot',
-            colors: ['#166534', '#064e3b'], border: '#4ade80', onClick: () => go('practice') },
-          { key: 'online', title: 'צור חדר', sub: 'דמי כניסה ופרס לזוכים', icon: 'coins',
-            colors: ['#1d4ed8', '#312e81'], border: '#60a5fa', onClick: () => go('online') },
-          { key: 'join', title: 'הצטרף לחדר', sub: 'עם קוד מחבר', icon: 'users',
-            colors: ['#9f1239', '#4c0519'], border: '#fb923c', onClick: () => { setError(''); setShowJoin(true); } },
-          { key: 'rank', title: 'דירוג', sub: 'טבלת הגביעים', icon: 'trophy',
-            colors: ['#86198f', '#3b0764'], border: '#e879f9', onClick: () => go('leaderboard') },
-          { key: 'store', title: 'חנות', sub: 'מטבעות וסרטונים', icon: 'cart', badge: 'דמו',
-            colors: ['#a16207', '#78350f'], border: '#facc15', onClick: () => go('store') },
+          { key: 'practice', title: 'אימון', sub: 'מול המחשב · חינם', icon: 'bot', suit: '♣',
+            onClick: () => go('practice') },
+          { key: 'online', title: 'צור חדר', sub: 'דמי כניסה ופרס לזוכים', icon: 'coins', suit: '♦',
+            onClick: () => go('online') },
+          { key: 'join', title: 'הצטרף לחדר', sub: 'עם קוד מחבר', icon: 'users', suit: '♥',
+            onClick: () => { setError(''); setShowJoin(true); } },
+          { key: 'rank', title: 'דירוג', sub: 'טבלת הגביעים', icon: 'trophy', suit: '♠',
+            onClick: () => go('leaderboard') },
+          { key: 'store', title: 'חנות', sub: 'מטבעות וסרטונים', icon: 'cart', suit: '♦', badge: 'דמו',
+            onClick: () => go('store') },
         ]} />
         {showJoin && <JoinDialog code={code} setCode={setCode} busy={connecting} error={error}
                                  onJoin={handleJoin} onClose={() => setShowJoin(false)} />}
@@ -324,6 +326,7 @@ function App() {
     <>
       {screenEl}
       {showProfile && profile && <ProfileSheet profile={profile} onClose={() => setShowProfile(false)} />}
+      {showSettings && <SettingsSheet version={APP_VERSION} onClose={() => setShowSettings(false)} />}
       {notes && <ReleaseNotes onClose={closeNotes} current={APP_VERSION} />}
     </>
   );

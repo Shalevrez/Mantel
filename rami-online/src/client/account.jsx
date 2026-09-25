@@ -76,7 +76,7 @@ export function Avatar({ profile, size = 46, level }) {
 // ── Top bar ──────────────────────────────────────────
 // Who's playing, their level and progress to the next, trophies, and
 // the wallet with its "get coins" button — on every hub screen.
-export function TopBar({ profile, onProfile, onCoins }) {
+export function TopBar({ profile, onProfile, onCoins, onSettings }) {
   const lv = levelInfo(profile.xp);
   return (
     <div style={{
@@ -116,6 +116,13 @@ export function TopBar({ profile, onProfile, onCoins }) {
                 border: 'none', fontWeight: 800, fontSize: 11.5, whiteSpace: 'nowrap',
               }}>קבל מטבעות</button>
             )} />
+      {onSettings && (
+        <button onClick={onSettings} title="הגדרות" style={{
+          width: 38, height: 38, borderRadius: '50%', cursor: 'pointer', flexShrink: 0,
+          background: PANEL, border: `1px solid ${LINE}`, color: GOLD,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}><Icon name="gear" size={20} /></button>
+      )}
     </div>
   );
 }
@@ -137,13 +144,13 @@ function Pill({ icon, color, value, title, action }) {
 // ── Hub frame ────────────────────────────────────────
 // Top bar, the screen itself, and a bottom strip with the way back and
 // the screen's name (the layout of the reference game's menus).
-export function Hub({ profile, title, onBack, onProfile, onCoins, children, footer }) {
+export function Hub({ profile, title, onBack, onProfile, onCoins, onSettings, children, footer }) {
   return (
     <div style={{
       minHeight: '100dvh', background: HUB_BG, color: FELTD, direction: 'rtl',
       display: 'flex', flexDirection: 'column',
     }}>
-      <TopBar profile={profile} onProfile={onProfile} onCoins={onCoins} />
+      <TopBar profile={profile} onProfile={onProfile} onCoins={onCoins} onSettings={onSettings} />
       <div style={{ flex: 1, padding: '18px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <div style={{ width: '100%', maxWidth: 820 }}>{children}</div>
       </div>
@@ -168,11 +175,12 @@ export function Hub({ profile, title, onBack, onProfile, onCoins, children, foot
   );
 }
 
+// The main action on a hub screen — navy and gold, like the table's own buttons.
 export const hubBtn = {
   padding: '13px 0', width: '100%', borderRadius: 14, cursor: 'pointer',
-  background: 'linear-gradient(#4ade80, #15803d)', color: '#052e16',
+  background: `linear-gradient(${FELT}, ${FELTD})`, color: GOLD,
   border: `2px solid ${GOLD}`, fontSize: 19, fontWeight: 800, letterSpacing: 1,
-  boxShadow: '0 6px 22px rgba(22, 163, 74, .35)',
+  boxShadow: `0 6px 22px ${FELT}66`,
 };
 export const hubInput = {
   width: '100%', padding: '12px 14px', borderRadius: 11, fontSize: 15,
@@ -313,33 +321,77 @@ const linkBtn = {
 // HOME MENU — the big cards
 // ═══════════════════════════════════════════════════════
 
-// `items`: [{ key, title, sub, icon, colors: [from, to], onClick }]
+// `items`: [{ key, title, sub, icon, suit, badge, onClick }]
+// Each card is drawn like one of the game's own cards turned over: the navy
+// back with its gold frame, a suit in two corners (red for ♥ ♦), and the
+// icon in gold on a cream disc.
+const RED_SUITS = new Set(['♥', '♦']);
 export function MenuCards({ items }) {
   return (
     <div style={{
       display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 14,
     }}>
-      {items.map(it => (
-        <button key={it.key} onClick={it.onClick} style={{
-          position: 'relative', minHeight: 150, borderRadius: 18, cursor: 'pointer',
-          background: `linear-gradient(160deg, ${it.colors[0]}, ${it.colors[1]})`,
-          border: `2px solid ${it.border || 'rgba(255,255,255,.18)'}`,
-          boxShadow: '0 10px 28px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.15)',
-          color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center',
-          justifyContent: 'center', gap: 8, padding: '16px 10px',
-        }}>
-          {it.badge && (
+      {items.map(it => {
+        const suitColor = RED_SUITS.has(it.suit) ? '#f87171' : CREAM;
+        const corner = (pos) => it.suit && (
+          <span style={{
+            position: 'absolute', ...pos, fontSize: 18, lineHeight: 1, color: suitColor, opacity: .75,
+          }}>{it.suit}</span>
+        );
+        return (
+          <button key={it.key} onClick={it.onClick} style={{
+            position: 'relative', minHeight: 150, borderRadius: 18, cursor: 'pointer',
+            background: `linear-gradient(160deg, ${FELT}, ${FELTD})`,
+            border: `2px solid ${GOLD}`,
+            boxShadow: `0 10px 26px rgba(19, 40, 79, .35), inset 0 0 0 4px ${FELTD}, inset 0 0 0 5px ${GOLD}55`,
+            color: CREAM, display: 'flex', flexDirection: 'column', alignItems: 'center',
+            justifyContent: 'center', gap: 8, padding: '18px 10px',
+          }}>
+            {corner({ top: 10, right: 12 })}
+            {corner({ bottom: 10, left: 12, transform: 'rotate(180deg)' })}
+            {it.badge && (
+              <span style={{
+                position: 'absolute', top: 10, left: 10, padding: '2px 8px', borderRadius: 99,
+                background: GOLD, fontSize: 11, fontWeight: 800, color: FELTD,
+              }}>{it.badge}</span>
+            )}
             <span style={{
-              position: 'absolute', top: 10, insetInlineStart: 10, padding: '2px 8px', borderRadius: 99,
-              background: 'rgba(0,0,0,.35)', fontSize: 11, fontWeight: 700, color: '#fde68a',
-            }}>{it.badge}</span>
-          )}
-          <Icon name={it.icon} size={46} strokeWidth={1.6} color="#fff" />
-          <div style={{ fontSize: 19, fontWeight: 800, textShadow: '0 2px 6px rgba(0,0,0,.4)' }}>{it.title}</div>
-          {it.sub && <div style={{ fontSize: 12, color: 'rgba(255,255,255,.8)', lineHeight: 1.4 }}>{it.sub}</div>}
-        </button>
-      ))}
+              width: 62, height: 62, borderRadius: '50%', background: CREAM,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: `0 0 0 2px ${GOLD}, 0 4px 12px rgba(0,0,0,.35)`,
+            }}>
+              <Icon name={it.icon} size={34} strokeWidth={1.8} color={FELT} />
+            </span>
+            <div style={{ fontSize: 19, fontWeight: 800, color: GOLD }}>{it.title}</div>
+            {it.sub && <div style={{ fontSize: 12, color: '#c7d2e3', lineHeight: 1.4 }}>{it.sub}</div>}
+          </button>
+        );
+      })}
     </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
+// SETTINGS — a place for them; nothing to set yet
+// ═══════════════════════════════════════════════════════
+
+export function SettingsSheet({ onClose, version }) {
+  return (
+    <Modal onClose={onClose} width={360}>
+      <div style={{ textAlign: 'center', marginBottom: 14 }}>
+        <Icon name="gear" size={40} color={GOLD} strokeWidth={1.7} />
+        <h2 style={{ margin: '6px 0 2px', fontSize: 21 }}>הגדרות</h2>
+      </div>
+      <div style={{
+        padding: '18px 14px', borderRadius: 12, border: `1px dashed ${LINE}`,
+        color: SOFT, fontSize: 13.5, textAlign: 'center', lineHeight: 1.6,
+      }}>
+        עוד אין כאן הגדרות.<br />בקרוב: צלילים, רטט, מראה הקלפים ועוד.
+      </div>
+      {version && (
+        <div style={{ textAlign: 'center', color: SOFT, fontSize: 11.5, marginTop: 12, direction: 'ltr' }}>v{version}</div>
+      )}
+    </Modal>
   );
 }
 
