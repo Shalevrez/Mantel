@@ -6,7 +6,7 @@
 // ═══════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef } from "react";
-import { GOLD, FELTD, CREAM } from "../game-core.js";
+import { GOLD, GOLDD, FELT, FELTD, CREAM } from "../game-core.js";
 import { STORE_PACKS, AD_REWARD, AD_SECONDS, AD_DAILY } from "../economy.js";
 import { Icon, IconLabel } from "./icons.jsx";
 import { LINE, SOFT, MUTED, hubBtn, Modal, DemoTag } from "./account.jsx";
@@ -32,20 +32,27 @@ export function StoreScreen() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 14 }}>
-        {/* Rewarded video */}
-        <Card highlight>
-          <div style={{ fontSize: 19, fontWeight: 800, lineHeight: 1.3 }}>צפו בסרטון<br />וקבלו מטבעות!</div>
-          <Amount coins={AD_REWARD} />
-          <Icon name="gift" size={44} color="#facc15" strokeWidth={1.5} />
-          <div style={{ fontSize: 11.5, color: SOFT }}>נשארו היום: {left}/{AD_DAILY}</div>
-          <PriceBtn disabled={left <= 0} onClick={() => setWatching(true)}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 16, paddingTop: 6 }}>
+        {/* Rewarded video — a card turned face up, so it never reads as a purchase */}
+        <div style={{
+          position: 'relative', borderRadius: 18, padding: '22px 12px 16px', minHeight: 250,
+          background: CREAM, color: FELTD, border: `2px solid ${GOLD}`,
+          boxShadow: `0 10px 26px rgba(19, 40, 79, .25), inset 0 0 0 4px ${CREAM}, inset 0 0 0 5px ${GOLD}66`,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+          textAlign: 'center',
+        }}>
+          <Corners suit="★" color={GOLDD} />
+          <div style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.3 }}>צפו בסרטון<br />וקבלו מטבעות!</div>
+          <Amount coins={AD_REWARD} dark />
+          <Icon name="gift" size={44} color={GOLDD} strokeWidth={1.5} />
+          <div style={{ fontSize: 11.5, color: MUTED }}>נשארו היום: {left}/{AD_DAILY}</div>
+          <PriceBtn gold disabled={left <= 0} onClick={() => setWatching(true)}>
             {left > 0 ? <IconLabel name="play">צפה</IconLabel> : 'נגמרו להיום'}
           </PriceBtn>
-        </Card>
+        </div>
 
-        {STORE_PACKS.map(p => (
-          <Card key={p.id} tag={p.tag}>
+        {STORE_PACKS.map((p, i) => (
+          <Card key={p.id} tag={p.tag} tier={TIERS[Math.min(i, TIERS.length - 1)]}>
             <Amount coins={p.coins} />
             <CoinPile n={p.coins} />
             <PriceBtn onClick={() => setConfirm(p)}>₪{p.price}</PriceBtn>
@@ -89,22 +96,59 @@ export function StoreScreen() {
   );
 }
 
-function Card({ children, tag, highlight }) {
+// ── Pack tiers ───────────────────────────────────────
+// Every pack is the navy back of a game card; the bigger the pack, the richer
+// the card: a silver frame, then gold, then a double gold frame, then a double
+// frame with a glow — and a warmer shine in the middle each step up. One entry
+// per pack, in the order of STORE_PACKS.
+const TIERS = [
+  { frame: '#cbd5e1', inner: false, glow: false, suit: '♣', suitColor: CREAM,
+    bg: `linear-gradient(160deg, ${FELTD}, #0d1d3b)` },
+  { frame: GOLD, inner: false, glow: false, suit: '♦', suitColor: '#f87171',
+    bg: `linear-gradient(160deg, ${FELT}, ${FELTD})` },
+  { frame: GOLD, inner: true, glow: false, suit: '♥', suitColor: '#f87171',
+    bg: `radial-gradient(circle at 50% 42%, rgba(201,151,58,.22), transparent 62%), linear-gradient(160deg, ${FELT}, ${FELTD})` },
+  { frame: GOLD, inner: true, glow: true, suit: '♠♠', suitColor: GOLD,
+    bg: `radial-gradient(circle at 50% 42%, rgba(201,151,58,.38), transparent 66%), linear-gradient(160deg, #24497a, ${FELTD})` },
+];
+
+// The ribbons, in the game's own colours.
+function ribbonStyle(tag) {
+  if (tag.includes('בונוס')) return { background: '#b91c1c', color: '#fff' };
+  if (tag.includes('פופולרי')) return { background: FELT, color: GOLD, border: `1.5px solid ${GOLD}` };
+  return { background: GOLD, color: FELTD };
+}
+
+function Corners({ suit, color }) {
+  const s = { position: 'absolute', fontSize: 17, lineHeight: 1, color, opacity: .8, letterSpacing: -2 };
+  return (
+    <>
+      <span style={{ ...s, top: 10, right: 12 }}>{suit}</span>
+      <span style={{ ...s, bottom: 10, left: 12, transform: 'rotate(180deg)' }}>{suit}</span>
+    </>
+  );
+}
+
+function Card({ children, tag, tier }) {
+  const ring = tier.inner
+    ? `inset 0 0 0 4px ${FELTD}, inset 0 0 0 5.5px ${tier.frame}`
+    : `inset 0 0 0 4px ${FELTD}, inset 0 0 0 5px ${tier.frame}33`;
+  const glow = tier.glow ? `, 0 0 0 3px ${GOLD}55, 0 0 26px ${GOLD}88` : '';
   return (
     <div style={{
       position: 'relative', borderRadius: 18, padding: '26px 12px 16px', minHeight: 250,
-      background: highlight ? 'linear-gradient(160deg, #5b2169, #2a1450)' : 'linear-gradient(160deg, #1f4580, #13284f)',
-      border: `2px solid ${highlight ? GOLD : 'rgba(96,165,250,.35)'}`,
-      boxShadow: '0 10px 28px rgba(0,0,0,.4)',
+      background: tier.bg, border: `2px solid ${tier.frame}`,
+      boxShadow: `0 10px 26px rgba(19, 40, 79, .35), ${ring}${glow}`,
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', gap: 10,
       textAlign: 'center', color: CREAM,
     }}>
+      <Corners suit={tier.suit} color={tier.suitColor} />
       {tag && (
         <div style={{
-          position: 'absolute', top: -11, insetInlineStart: 12, padding: '4px 12px', borderRadius: 8,
-          background: tag.includes('בונוס') ? '#dc2626' : tag.includes('פופולרי') ? '#2563eb' : '#16a34a',
-          color: '#fff', fontSize: 12.5, fontWeight: 800, transform: 'rotate(-4deg)',
-          boxShadow: '0 4px 10px rgba(0,0,0,.35)',
+          position: 'absolute', top: -12, left: '50%', transform: 'translateX(-50%) rotate(-3deg)',
+          padding: '4px 12px', borderRadius: 8, whiteSpace: 'nowrap',
+          fontSize: 12.5, fontWeight: 800, boxShadow: '0 4px 10px rgba(0,0,0,.3)',
+          ...ribbonStyle(tag),
         }}>{tag}</div>
       )}
       {children}
@@ -112,10 +156,13 @@ function Card({ children, tag, highlight }) {
   );
 }
 
-function Amount({ coins }) {
+function Amount({ coins, dark }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 26, fontWeight: 800, color: '#fde68a', direction: 'ltr' }}>
-      <Icon name="coins" size={24} color="#facc15" />{coins.toLocaleString('en-US')}
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 6, fontSize: 26, fontWeight: 800,
+      color: dark ? FELTD : GOLD, direction: 'ltr',
+    }}>
+      <Icon name="coins" size={24} color={dark ? GOLDD : '#facc15'} />{coins.toLocaleString('en-US')}
     </div>
   );
 }
@@ -142,12 +189,14 @@ function CoinPile({ n }) {
   );
 }
 
-function PriceBtn({ children, onClick, disabled }) {
+// Navy with gold for a price; gold with navy for the video's "watch".
+function PriceBtn({ children, onClick, disabled, gold }) {
   return (
     <button onClick={onClick} disabled={disabled} style={{
       width: '90%', padding: '10px 0', borderRadius: 99, cursor: disabled ? 'default' : 'pointer',
-      background: 'linear-gradient(#1e293b, #0f172a)', color: '#fff', fontWeight: 800, fontSize: 16,
-      border: `2px solid ${GOLD}`, opacity: disabled ? 0.5 : 1, direction: 'ltr',
+      background: gold ? `linear-gradient(${GOLD}, #a37624)` : FELTD,
+      color: gold ? FELTD : GOLD, fontWeight: 800, fontSize: 16,
+      border: `2px solid ${gold ? GOLDD : GOLD}`, opacity: disabled ? 0.5 : 1, direction: 'ltr',
     }}>{children}</button>
   );
 }
