@@ -85,12 +85,12 @@ createRoot(document.getElementById('root')).render(
             dispatch={(a) => console.log('dispatch', a)} onLeave={() => {}} />
     )
   : screen === 'round' ? <RoundEnd state={ended} dispatch={() => {}} onLeave={() => {}} />
-  : screen === 'end' ? <GameEnd state={ended} onRestart={() => {}} />
+  : screen === 'end' ? <GameEnd state={ended} onRestart={() => {}} onExit={() => {}} />
   // ?screen=paid — the game-over screen of a paid online room, with the rewards strip.
   : screen === 'paid' ? (() => {
       const paid = { ...ended, room: { mode: 'online', fee: 500, gameId: 'harness' } };
       const res = settle(paid);
-      return <GameEnd state={paid} onRestart={() => {}} extra={<RewardStrip r={res.seats[0]} fee={res.fee} />} />;
+      return <GameEnd state={paid} onRestart={() => {}} onExit={() => {}} extra={<RewardStrip r={res.seats[0]} fee={res.fee} />} />;
     })()
   : screen === 'score' ? <ScoreModal state={ended} onClose={() => {}} />
   : <Game state={{ ...withHistory, msg: params.get('msg') || '' }} dispatch={(a) => console.log('dispatch', a)} onLeave={() => {}} />
