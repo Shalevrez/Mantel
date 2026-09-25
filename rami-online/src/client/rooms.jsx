@@ -92,10 +92,15 @@ export function PracticeSetup({ busy, error, onPlay }) {
 // ONLINE ROOM — entry fee, prize pot by place
 // ═══════════════════════════════════════════════════════
 
+// The fee stepper starts at "free": a friendly game with no coins, XP or
+// trophies (computer players allowed), then the paid fees from economy.js.
+const ROOM_FEES = [0, ...ENTRY_FEES];
+
 export function OnlineSetup({ coins, busy, error, onPlay, onGetCoins }) {
   const [players, setPlayers] = useState(3);
-  const [fi, setFi] = useState(Math.max(0, ENTRY_FEES.indexOf(DEFAULT_FEE)));
-  const fee = ENTRY_FEES[fi];
+  const [fi, setFi] = useState(Math.max(0, ROOM_FEES.indexOf(DEFAULT_FEE)));
+  const fee = ROOM_FEES[fi];
+  const free = fee === 0;
   const pot = fee * players;
   const shares = prizeShares(players);
   const short = coins < fee;
@@ -105,9 +110,19 @@ export function OnlineSetup({ coins, busy, error, onPlay, onGetCoins }) {
         <Stepper value={players} unit="P" label="שחקנים"
                  canMinus={players > 2} canPlus={players < 6}
                  onMinus={() => setPlayers(players - 1)} onPlus={() => setPlayers(players + 1)} />
-        <Stepper value={shortNum(fee).replace(/K$/, '')} unit={fee >= 1000 ? 'K' : ''} label="דמי כניסה"
-                 canMinus={fi > 0} canPlus={fi < ENTRY_FEES.length - 1}
+        <Stepper value={free ? 'חינם' : shortNum(fee).replace(/K$/, '')} unit={fee >= 1000 ? 'K' : ''} label="דמי כניסה"
+                 canMinus={fi > 0} canPlus={fi < ROOM_FEES.length - 1}
                  onMinus={() => setFi(fi - 1)} onPlus={() => setFi(fi + 1)} />
+        {free ? (
+          <Side>
+            <div style={{ fontSize: 22, fontWeight: 700 }}>חדר חינמי</div>
+            <div style={{ fontSize: 12.5, color: MUTED, lineHeight: 1.6, marginTop: 4 }}>
+              משחק ידידותי עם חברים: בלי דמי כניסה ובלי פרסים.<br />
+              * משחק חינמי לא מזכה ב־XP, גביעים או מטבעות.<br />
+              אפשר להוסיף גם שחקני מחשב.
+            </div>
+          </Side>
+        ) : (
         <Side>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
             <Icon name="coins" color="#ca8a04" size={30} />
@@ -130,6 +145,7 @@ export function OnlineSetup({ coins, busy, error, onPlay, onGetCoins }) {
             הקופה לפי מספר השחקנים שיושבים כשהמשחק מתחיל, ועוד הקניות. עוזבים באמצע? מה ששילמתם נשאר בקופה.
           </div>
         </Side>
+        )}
       </Row>
       {short && (
         <div style={{ ...hubError, maxWidth: 420, margin: '14px auto 0' }}>
@@ -188,7 +204,15 @@ export function JoinDialog({ code, setCode, busy, error, onJoin, onClose }) {
 
 // Drawn on the cream lobby card. `players` is how many are seated now.
 export function RoomTerms({ lobby, coins }) {
-  if (!lobby || lobby.mode !== 'online' || !lobby.fee) return null;
+  if (!lobby || lobby.mode !== 'online') return null;
+  if (!lobby.fee) return (
+    <div style={{
+      marginBottom: 14, padding: '8px 12px', borderRadius: 11, textAlign: 'center',
+      background: '#fafaf9', border: '2px solid #e7e5e4', color: '#57534e', fontSize: 12.5,
+    }}>
+      חדר חינמי — בלי דמי כניסה, פרסים, XP או גביעים
+    </div>
+  );
   const n = (lobby.players || []).length;
   const pot = lobby.fee * Math.max(n, 2);
   const short = coins != null && coins < lobby.fee;
