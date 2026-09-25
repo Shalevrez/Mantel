@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "test": "node tests/host-reconnect.mjs && node tests/room-lifetime.mjs && node tests/ai-seats.mjs && node tests/scoreboard.mjs && node tests/reorder.mjs && node tests/attach-mark.mjs && node tests/resume.mjs && node tests/leave.mjs && node tests/last-card.mjs && node tests/joker-position.mjs && node tests/opening-discard.mjs && node tests/private-msg.mjs",
+    "test": "node tests/host-reconnect.mjs && node tests/room-lifetime.mjs && node tests/ai-seats.mjs && node tests/scoreboard.mjs && node tests/reorder.mjs && node tests/attach-mark.mjs && node tests/resume.mjs && node tests/leave.mjs && node tests/last-card.mjs && node tests/joker-position.mjs && node tests/opening-discard.mjs && node tests/private-msg.mjs && node tests/economy.mjs && node tests/profile.mjs && node tests/room-mode.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "deploy": "npm run build && wrangler deploy",
