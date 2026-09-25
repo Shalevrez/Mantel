@@ -58,5 +58,16 @@ st = G(st, { type: 'DRAW' });
 st = G(st, { type: 'DISCARD', cid: st.players[1].hand[0].id });
 check('the notice clears once the player on turn discards', st.buyNote === null);
 
+// Taking the discard on your turn is announced too; drawing from the deck is not.
+st = { ...room.state, sivuv: 2, phase: 'buying', cur: 1, buy: { checker: 1, origNext: 1, prev: 0 }, msg: '', buyNote: null };
+st = G(st, { type: 'TAKE_FREE' });
+check('taking from the discard records a public notice',
+  st.buyNote && st.buyNote.seat === 1 && !st.buyNote.paid && st.buyNote.onTurn);
+st = G(st, { type: 'DISCARD', cid: st.players[1].hand[0].id });
+check('the take notice clears on the discard', st.buyNote === null);
+st = { ...room.state, sivuv: 2, phase: 'draw', cur: 1, buy: null, msg: '', buyNote: null };
+st = G(st, { type: 'DRAW' });
+check('drawing from the deck records no notice', st.buyNote === null);
+
 if (failures) { console.error(`\n${failures} check(s) failed`); process.exit(1); }
 console.log('\nall private-msg checks passed');

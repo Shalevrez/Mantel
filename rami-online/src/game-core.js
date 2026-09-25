@@ -518,6 +518,9 @@ function G(state, action) {
       players, sel: [], staging: [], msg: '',
       laidAtTurnStart: p.hasLaid, attachedThisTurn: false, tookBeit: false,
       undoBefore: { hand: [...p.hand, top], board: state.board, hasLaid: p.hasLaid, beit: state.beit },
+      // Public: everyone sees the player on turn took the discard (a draw from
+      // the deck is not announced). Clears when they discard.
+      buyNote: { seat: state.cur, paid: false, onTurn: true },
       log: [...state.log, `↑ ${state.players[state.cur].name} לקח מהאשפה`],
     };
   }
