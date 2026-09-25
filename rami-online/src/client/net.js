@@ -29,9 +29,13 @@ export function playerId() {
   return pid;
 }
 
-// Ask the server to mint a new room; returns its code.
-export async function createRoom() {
-  const r = await fetch('/api/new');
+// Ask the server to mint a new room; returns its code. `terms` are the room's
+// { mode: 'practice'|'online', fee, seats } — all optional (a free 6-seat room).
+export async function createRoom(terms = {}) {
+  const q = new URLSearchParams();
+  for (const k of ['mode', 'fee', 'seats']) if (terms[k] != null) q.set(k, String(terms[k]));
+  const qs = q.toString();
+  const r = await fetch(`/api/new${qs ? `?${qs}` : ''}`);
   if (!r.ok) throw new Error('failed to create room');
   const { code } = await r.json();
   return code;

@@ -17,6 +17,7 @@ const ICONS = {
   x:          [P('M18 6 6 18'), P('M6 6l12 12')],
   check:      [P('M20 6 9 17l-5-5')],
   plus:       [P('M12 5v14'), P('M5 12h14')],
+  minus:      [P('M5 12h14')],
   arrowRight: [P('M5 12h14'), P('M12 5l7 7-7 7')],
   arrowLeft:  [P('M19 12H5'), P('M12 19l-7-7 7-7')],
   arrowDown:  [P('M12 5v14'), P('M19 12l-7 7-7-7')],

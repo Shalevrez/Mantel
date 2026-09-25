@@ -988,7 +988,9 @@ function RoundEnd({ state, dispatch, onLeave }) {
 // GAME END
 // ═══════════════════════════════════════════════════════
 
-function GameEnd({ state, onRestart }) {
+// `extra` is drawn under the winner's name — the account's rewards for this
+// game (see RewardStrip in account.jsx).
+function GameEnd({ state, onRestart, extra }) {
   const sorted = [...state.players].sort((a, b) => a.totalScore - b.totalScore);
   // The final table is the point of this screen, so it opens on the standings;
   // the round-by-round grid and the last board are behind the other two tabs.
@@ -1016,6 +1018,7 @@ function GameEnd({ state, onRestart }) {
             {sorted[0].name} ניצח!
           </p>
         </div>
+        {extra}
 
         <SegTabs
           active={tab} onPick={setTab}
