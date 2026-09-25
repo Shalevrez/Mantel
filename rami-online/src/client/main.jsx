@@ -247,8 +247,9 @@ function App() {
              <button onClick={() => setNotes(true)} style={hubLink}><IconLabel name="sparkles">מה חדש ב־{LATEST_RELEASE.version}</IconLabel></button>
            </>}>
         <div style={{ textAlign: 'center', margin: '4px 0 18px' }}>
-          <h1 style={{ margin: 0, fontSize: 30, color: GOLD, letterSpacing: 2 }}>מנטל</h1>
-          <div style={{ color: '#9fb3d1', fontSize: 13 }}>אונליין · 2–6 שחקנים</div>
+          <h1 style={{ margin: 0, fontSize: 30, color: FELTD, letterSpacing: 2 }}>מנטל</h1>
+          <div style={{ width: 50, height: 2, background: GOLD, margin: '6px auto' }} />
+          <div style={{ color: '#78716c', fontSize: 13 }}>אונליין · 2–6 שחקנים</div>
         </div>
         <MenuCards items={[
           { key: 'practice', title: 'אימון', sub: 'מול המחשב · חינם', icon: 'bot',

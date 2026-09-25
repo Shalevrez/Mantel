@@ -9,7 +9,7 @@ import { useState, useEffect, useRef } from "react";
 import { GOLD, FELTD, CREAM } from "../game-core.js";
 import { STORE_PACKS, AD_REWARD, AD_SECONDS, AD_DAILY } from "../economy.js";
 import { Icon, IconLabel } from "./icons.jsx";
-import { LINE, SOFT, hubBtn, Modal, DemoTag } from "./account.jsx";
+import { LINE, SOFT, MUTED, hubBtn, Modal, DemoTag } from "./account.jsx";
 import * as P from "./profile.js";
 
 export function StoreScreen() {
@@ -27,7 +27,7 @@ export function StoreScreen() {
     <>
       <div style={{ textAlign: 'center', marginBottom: 14 }}>
         <DemoTag />
-        <div style={{ color: SOFT, fontSize: 12.5, marginTop: 6 }}>
+        <div style={{ color: MUTED, fontSize: 12.5, marginTop: 6 }}>
           חנות לדוגמה: שום כרטיס לא מחויב, והמטבעות נשמרים בדפדפן הזה בלבד.
         </div>
       </div>

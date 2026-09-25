@@ -6,10 +6,10 @@
 // ═══════════════════════════════════════════════════════
 
 import { useState } from "react";
-import { GOLD, FELTD, CREAM, AI_LEVELS, AI_LEVEL_NAMES } from "../game-core.js";
+import { GOLD, GOLDD, FELTD, CREAM, AI_LEVELS, AI_LEVEL_NAMES } from "../game-core.js";
 import { ENTRY_FEES, DEFAULT_FEE, prizeShares, shortNum } from "../economy.js";
 import { Icon, IconLabel } from "./icons.jsx";
-import { PANEL, LINE, SOFT, hubBtn, hubInput, hubError, Modal, DemoTag } from "./account.jsx";
+import { LINE, SOFT, CARD, CARD_LINE, MUTED, hubBtn, hubInput, hubError, Modal, DemoTag } from "./account.jsx";
 
 // ── One setting: a big value over its name, with − / + under it ──
 function Stepper({ value, unit, label, onMinus, onPlus, canMinus, canPlus }) {
@@ -23,11 +23,11 @@ function Stepper({ value, unit, label, onMinus, onPlus, canMinus, canPlus }) {
   );
   return (
     <div style={{ flex: '1 1 130px', minWidth: 120, textAlign: 'center' }}>
-      <div style={{ fontSize: 50, fontWeight: 800, lineHeight: 1, color: '#fff', direction: 'ltr', whiteSpace: 'nowrap' }}>
-        {value}{unit && <span style={{ fontSize: 26, color: SOFT, marginInlineStart: 2 }}>{unit}</span>}
+      <div style={{ fontSize: 50, fontWeight: 800, lineHeight: 1, color: FELTD, direction: 'ltr', whiteSpace: 'nowrap' }}>
+        {value}{unit && <span style={{ fontSize: 26, color: MUTED, marginInlineStart: 2 }}>{unit}</span>}
       </div>
-      <div style={{ height: 1, background: 'linear-gradient(90deg, transparent, rgba(255,255,255,.5), transparent)', margin: '10px 12px 6px' }} />
-      <div style={{ color: GOLD, fontSize: 16, fontWeight: 700, marginBottom: 10 }}>{label}</div>
+      <div style={{ height: 1, background: `linear-gradient(90deg, transparent, ${FELTD}66, transparent)`, margin: '10px 12px 6px' }} />
+      <div style={{ color: GOLDD, fontSize: 16, fontWeight: 700, marginBottom: 10 }}>{label}</div>
       {/* The pair keeps − on the left and + on the right, as on any stepper,
           whatever the page direction. */}
       <div style={{
@@ -44,8 +44,9 @@ function Stepper({ value, unit, label, onMinus, onPlus, canMinus, canPlus }) {
 function Side({ children }) {
   return (
     <div style={{
-      flex: '1 1 220px', minWidth: 200, padding: '18px 16px', borderRadius: 20, background: PANEL,
-      border: `1.5px solid ${LINE}`, textAlign: 'center', alignSelf: 'stretch',
+      flex: '1 1 220px', minWidth: 200, padding: '18px 16px', borderRadius: 20, background: CARD,
+      border: `2px solid ${CARD_LINE}`, textAlign: 'center', alignSelf: 'stretch',
+      boxShadow: '0 8px 24px rgba(19, 40, 79, .12)',
       display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 6,
     }}>{children}</div>
   );
@@ -75,8 +76,8 @@ export function PracticeSetup({ busy, error, onPlay }) {
                  onMinus={() => setLi(li - 1)} onPlus={() => setLi(li + 1)} />
         <Side>
           <div style={{ fontSize: 22, fontWeight: 700 }}>דמי כניסה:</div>
-          <div style={{ fontSize: 30, fontWeight: 800, color: GOLD }}>חינם</div>
-          <div style={{ fontSize: 12.5, color: SOFT, lineHeight: 1.5, marginTop: 6 }}>
+          <div style={{ fontSize: 30, fontWeight: 800, color: GOLDD }}>חינם</div>
+          <div style={{ fontSize: 12.5, color: MUTED, lineHeight: 1.5, marginTop: 6 }}>
             * ניצחון במצב אימון לא מזכה בנקודות, גביעים או מטבעות.<br />
             את/ה מול {players - 1} שחקני מחשב.
           </div>
@@ -109,7 +110,7 @@ export function OnlineSetup({ coins, busy, error, onPlay, onGetCoins }) {
                  onMinus={() => setFi(fi - 1)} onPlus={() => setFi(fi + 1)} />
         <Side>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-            <Icon name="coins" color="#facc15" size={30} />
+            <Icon name="coins" color="#ca8a04" size={30} />
             <span style={{ fontSize: 44, fontWeight: 800, direction: 'ltr' }}>{shortNum(pot)}</span>
           </div>
           <div style={{ fontSize: 17, fontWeight: 700 }}>סה״כ פרס</div>
@@ -117,13 +118,13 @@ export function OnlineSetup({ coins, busy, error, onPlay, onGetCoins }) {
             {shares.map((pct, i) => (
               <span key={i} style={{
                 padding: '3px 9px', borderRadius: 99, fontSize: 12, fontWeight: 700,
-                background: 'rgba(255,255,255,.08)', border: `1px solid ${LINE}`,
+                background: '#fff', border: '1px solid #e7e5e4',
               }}>
                 מקום {i + 1}: {Math.floor(pot * pct / 100).toLocaleString('en-US')}
               </span>
             ))}
           </div>
-          <div style={{ fontSize: 11.5, color: SOFT, marginTop: 6, lineHeight: 1.5 }}>
+          <div style={{ fontSize: 11.5, color: MUTED, marginTop: 6, lineHeight: 1.5 }}>
             הקופה לפי מספר השחקנים שיושבים כשהמשחק מתחיל. עוזבים באמצע? דמי הכניסה נשארים בקופה.
           </div>
         </Side>
@@ -131,7 +132,7 @@ export function OnlineSetup({ coins, busy, error, onPlay, onGetCoins }) {
       {short && (
         <div style={{ ...hubError, maxWidth: 420, margin: '14px auto 0' }}>
           אין מספיק מטבעות לדמי הכניסה ({fee.toLocaleString('en-US')}).{' '}
-          <button onClick={onGetCoins} style={{ background: 'none', border: 'none', color: '#fde68a', fontWeight: 800, cursor: 'pointer', textDecoration: 'underline' }}>
+          <button onClick={onGetCoins} style={{ background: 'none', border: 'none', color: '#b91c1c', fontWeight: 800, cursor: 'pointer', textDecoration: 'underline' }}>
             לחנות
           </button>
         </div>

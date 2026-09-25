@@ -6,18 +6,22 @@
 // ═══════════════════════════════════════════════════════
 
 import { useState, useEffect } from "react";
-import { FELT, FELTD, GOLD, CREAM } from "../game-core.js";
+import { FELT, FELTD, GOLD, GOLDD, CREAM, CLOTH } from "../game-core.js";
 import { levelInfo, shortNum } from "../economy.js";
 import { Icon, IconLabel } from "./icons.jsx";
 import * as P from "./profile.js";
 
 // ── Palette for the hub screens ──────────────────────
-// The lobby screens are night-blue, like the table, so the cream game
-// screens and the menus around them read as two different places.
-export const HUB_BG = `radial-gradient(ellipse at 50% 35%, #24497a 0%, ${FELTD} 55%, #0b1a36 100%)`;
+// The menus sit on the checkered tablecloth, like the waiting room, with
+// navy strips top and bottom. PANEL/SOFT are for the navy parts (the bars,
+// the modals); CARD/MUTED for what sits on the cloth.
+export const HUB_BG = CLOTH;
 export const PANEL = 'rgba(8, 20, 45, .55)';
 export const LINE = 'rgba(201, 151, 58, .45)';
 export const SOFT = '#9fb3d1';
+export const CARD = 'rgba(255, 255, 255, .9)';
+export const CARD_LINE = `${GOLD}77`;
+export const MUTED = '#57534e';
 
 // The profile the app is signed in as, kept in step with every change.
 export function useProfile() {
@@ -31,8 +35,8 @@ export function DemoTag({ style }) {
   return (
     <span style={{
       display: 'inline-block', padding: '2px 8px', borderRadius: 99,
-      background: 'rgba(244, 114, 182, .16)', border: '1px solid rgba(244, 114, 182, .55)',
-      color: '#f9a8d4', fontSize: 10.5, fontWeight: 700, letterSpacing: .5,
+      background: '#fce7f3', border: '1px solid #f9a8d4',
+      color: '#be185d', fontSize: 10.5, fontWeight: 700, letterSpacing: .5,
       whiteSpace: 'nowrap', ...style,
     }}>מצב הדגמה</span>
   );
@@ -77,7 +81,7 @@ export function TopBar({ profile, onProfile, onCoins }) {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
-      padding: '10px 14px', background: 'rgba(5, 14, 32, .7)',
+      padding: '10px 14px', background: FELTD,
       borderBottom: `1px solid ${LINE}`,
     }}>
       <button onClick={onProfile} style={{
@@ -136,7 +140,7 @@ function Pill({ icon, color, value, title, action }) {
 export function Hub({ profile, title, onBack, onProfile, onCoins, children, footer }) {
   return (
     <div style={{
-      minHeight: '100dvh', background: HUB_BG, color: CREAM, direction: 'rtl',
+      minHeight: '100dvh', background: HUB_BG, color: FELTD, direction: 'rtl',
       display: 'flex', flexDirection: 'column',
     }}>
       <TopBar profile={profile} onProfile={onProfile} onCoins={onCoins} />
@@ -147,7 +151,7 @@ export function Hub({ profile, title, onBack, onProfile, onCoins, children, foot
         <div style={{
           display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px',
           paddingBottom: 'calc(10px + env(safe-area-inset-bottom, 0px))',
-          background: 'rgba(5, 14, 32, .75)', borderTop: `1px solid ${LINE}`,
+          background: 'rgba(5, 14, 32, .88)', borderTop: `1px solid ${LINE}`, color: CREAM,
         }}>
           {onBack && (
             <button onClick={onBack} title="חזרה" style={{
@@ -177,7 +181,7 @@ export const hubInput = {
 };
 export const hubError = {
   marginTop: 10, padding: '9px 12px', borderRadius: 10, fontSize: 13, textAlign: 'center',
-  background: 'rgba(185, 28, 28, .18)', border: '1px solid rgba(248, 113, 113, .6)', color: '#fecaca',
+  background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c',
 };
 
 // ═══════════════════════════════════════════════════════
@@ -213,18 +217,19 @@ export function LoginScreen() {
 
   return (
     <div style={{
-      minHeight: '100dvh', background: HUB_BG, color: CREAM, direction: 'rtl',
+      minHeight: '100dvh', background: HUB_BG, color: FELTD, direction: 'rtl',
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
     }}>
       <div style={{
-        width: '100%', maxWidth: 380, background: PANEL, borderRadius: 22,
-        border: `1.5px solid ${LINE}`, padding: '26px 22px',
-        boxShadow: '0 24px 72px rgba(0,0,0,.55)',
+        width: '100%', maxWidth: 380, background: CREAM, borderRadius: 22,
+        border: `2px solid ${GOLD}77`, padding: '26px 22px',
+        boxShadow: `0 24px 72px rgba(0,0,0,.35), 0 0 0 3px ${GOLD}55`,
       }}>
         <div style={{ textAlign: 'center', marginBottom: 18 }}>
           <div style={{ fontSize: 50, marginBottom: 2 }}>🃏</div>
-          <h1 style={{ margin: 0, fontSize: 32, color: GOLD, letterSpacing: 2 }}>מנטל</h1>
-          <div style={{ color: SOFT, fontSize: 13, marginTop: 4 }}>התחברו כדי לשמור מטבעות, רמה ודירוג</div>
+          <h1 style={{ margin: 0, fontSize: 32, color: FELTD, letterSpacing: 2 }}>מנטל</h1>
+          <div style={{ width: 50, height: 2, background: GOLD, margin: '8px auto' }} />
+          <div style={{ color: MUTED, fontSize: 13, marginTop: 4 }}>התחברו כדי לשמור מטבעות, רמה ודירוג</div>
           <DemoTag style={{ marginTop: 8 }} />
         </div>
 
@@ -232,16 +237,16 @@ export function LoginScreen() {
           {tabs.map(t => (
             <button key={t.key} onClick={() => { setTab(t.key); setError(''); }} style={{
               flex: 1, padding: '9px 0', borderRadius: 10, cursor: 'pointer', fontSize: 13, fontWeight: 700,
-              background: tab === t.key ? GOLD : 'transparent',
-              color: tab === t.key ? FELTD : CREAM,
-              border: `1.5px solid ${tab === t.key ? GOLD : LINE}`,
+              background: tab === t.key ? FELT : '#fff',
+              color: tab === t.key ? GOLD : MUTED,
+              border: `2px solid ${tab === t.key ? FELT : '#e7e5e4'}`,
             }}><IconLabel name={t.icon}>{t.label}</IconLabel></button>
           ))}
         </div>
 
         {tab === 'guest' && (
           <>
-            <p style={{ color: SOFT, fontSize: 13.5, lineHeight: 1.6, margin: '0 0 14px' }}>
+            <p style={{ color: MUTED, fontSize: 13.5, lineHeight: 1.6, margin: '0 0 14px' }}>
               נכנסים מיד, בלי הרשמה. אפשר לשמור את החשבון עם שם משתמש וסיסמה בכל רגע, מתוך הפרופיל,
               בלי לאבד את מה שצברתם.
             </p>
@@ -276,7 +281,7 @@ export function LoginScreen() {
 
         {tab === 'google' && (
           <form onSubmit={e => { e.preventDefault(); run(async () => P.loginGoogleDemo(display, email)); }}>
-            <p style={{ color: SOFT, fontSize: 12.5, lineHeight: 1.6, margin: '0 0 12px' }}>
+            <p style={{ color: MUTED, fontSize: 12.5, lineHeight: 1.6, margin: '0 0 12px' }}>
               זו התחברות מדומה: לא נפתח חלון של Google ושום פרט לא נשלח. אותה כתובת תחזיר תמיד לאותו פרופיל בדפדפן הזה.
             </p>
             <input value={email} onChange={e => setEmail(e.target.value)} placeholder="כתובת Gmail"
@@ -284,7 +289,7 @@ export function LoginScreen() {
             <input value={display} onChange={e => setDisplay(e.target.value)} placeholder="שם תצוגה (לא חובה)"
                    maxLength={16} style={hubInput} />
             <button type="submit" disabled={busy} style={{
-              ...hubBtn, background: '#fff', color: '#1f2937', boxShadow: 'none',
+              ...hubBtn, background: '#fff', color: '#1f2937', boxShadow: 'none', border: '2px solid #d6d3d1',
             }}>
               <span style={{ fontWeight: 800 }}>
                 <span style={{ color: '#4285f4' }}>G</span> המשך עם Google
@@ -300,7 +305,7 @@ export function LoginScreen() {
 }
 
 const linkBtn = {
-  width: '100%', padding: '10px 0', background: 'transparent', color: '#7dd3fc',
+  width: '100%', padding: '10px 0', background: 'transparent', color: FELT,
   border: 'none', fontSize: 13.5, fontWeight: 700, cursor: 'pointer', marginTop: 6,
 };
 
@@ -457,7 +462,7 @@ export function LeaderboardList() {
       <div style={{ textAlign: 'center', marginBottom: 12 }}>
         <Icon name="trophy" size={44} color={GOLD} strokeWidth={1.6} />
         <h2 style={{ margin: '4px 0', fontSize: 24 }}>טבלת הדירוג</h2>
-        <div style={{ color: SOFT, fontSize: 12.5 }}>
+        <div style={{ color: MUTED, fontSize: 12.5 }}>
           לפי גביעים. הפרופילים מהדפדפן הזה, ולצידם יריבים לדוגמה.
         </div>
         <DemoTag style={{ marginTop: 6 }} />
@@ -465,19 +470,19 @@ export function LeaderboardList() {
       {rows.map((r, i) => (
         <div key={r.id} style={{
           display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', marginBottom: 6,
-          borderRadius: 12, background: r.you ? 'rgba(201,151,58,.2)' : PANEL,
-          border: `1.5px solid ${r.you ? GOLD : 'rgba(255,255,255,.08)'}`,
+          borderRadius: 12, background: r.you ? '#fefce8' : CARD,
+          border: `2px solid ${r.you ? GOLD : '#e7e5e4'}`,
         }}>
           <span style={{
             width: 28, textAlign: 'center', fontWeight: 800,
-            color: i === 0 ? '#facc15' : i === 1 ? '#e5e7eb' : i === 2 ? '#fb923c' : SOFT,
+            color: i === 0 ? '#ca8a04' : i === 1 ? '#9ca3af' : i === 2 ? '#c2410c' : MUTED,
           }}>{i + 1}</span>
           <span style={{ flex: 1, fontWeight: 700 }}>
             {r.name}
-            {r.you && <span style={{ color: GOLD, fontWeight: 400 }}> (את/ה)</span>}
-            {r.rival && <span style={{ color: SOFT, fontWeight: 400, fontSize: 11 }}> · לדוגמה</span>}
+            {r.you && <span style={{ color: GOLDD, fontWeight: 400 }}> (את/ה)</span>}
+            {r.rival && <span style={{ color: MUTED, fontWeight: 400, fontSize: 11 }}> · לדוגמה</span>}
           </span>
-          <span style={{ color: SOFT, fontSize: 12 }}>רמה {levelInfo(r.xp).level}</span>
+          <span style={{ color: MUTED, fontSize: 12 }}>רמה {levelInfo(r.xp).level}</span>
           <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontWeight: 800, minWidth: 56, justifyContent: 'flex-end' }}>
             <Icon name="trophy" color={GOLD} size={15} />{r.trophies}
           </span>
