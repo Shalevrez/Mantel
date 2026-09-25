@@ -110,17 +110,25 @@ export function prizes(totals, pot) {
 // The whole result of a finished game, seat by seat. `room` is what the
 // server stamped on the game when it started: { mode, fee, gameId }.
 // A practice game (or one from before rooms had a mode) settles nothing.
+// Only a room with an entry fee settles: a free room (and practice) gives no
+// coins, no XP and no trophies. A seat that walked out (`out`) paid in like
+// everyone else but finishes below all who stayed, and wins nothing; the pot
+// is shared among those still playing, by how many they are.
 export function settle(state) {
   const room = state && state.room;
-  if (!room || room.mode !== 'online') return null;
-  const totals = state.players.map(p => p.totalScore);
-  const n = totals.length;
-  const pl = places(totals);
+  if (!room || room.mode !== 'online' || !(room.fee > 0)) return null;
+  const n = state.players.length;
+  const stay = state.players.map((p, i) => (p.out ? -1 : i)).filter(i => i !== -1);
+  const stayTotals = stay.map(i => state.players[i].totalScore);
+  const stayPlaces = places(stayTotals);
   // The pot: every entry fee, plus whatever was paid for buys along the way.
   const price = buyPrice(room.fee);
   const buys = state.players.reduce((a, p) => a + (p.paidBuys || 0), 0);
   const pot = room.fee * n + price * buys;
-  const pz = prizes(totals, pot);
+  const stayPrizes = prizes(stayTotals, pot);
+  const pl = state.players.map(() => stay.length + 1);
+  const pz = state.players.map(() => 0);
+  stay.forEach((i, k) => { pl[i] = stayPlaces[k]; pz[i] = stayPrizes[k]; });
   return {
     gameId: room.gameId,
     fee: room.fee,

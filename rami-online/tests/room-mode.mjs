@@ -140,5 +140,53 @@ function check(label, cond) {
         bought.players[1].paidBuys === 0 && potOf(bought) === 1510);
 }
 
+// ── 7. Walking out of a paid game: no bot, the fee stays in the pot ──
+{
+  const room = await makeRoom('mode=online&fee=500&seats=4');
+  const host = join(room, { name: 'שלו', pid: 'p1', host: true });
+  const dana = join(room, { name: 'דנה', pid: 'p2' });
+  const yossi = join(room, { name: 'יוסי', pid: 'p3' });
+  const rina = join(room, { name: 'רינה', pid: 'p4' });
+  host.msg({ t: 'start' });
+  await settle0();
+  // Put it on Dana's turn, then she leaves.
+  room.state = { ...room.state, phase: 'draw', buy: null, cur: 1 };
+  dana.msg({ t: 'leave' });
+  await settle0();
+  const st = room.state;
+  check('no bot takes the chair', !room.seats[1].isAI && room.seats[1].left && !st.players[1].isAI);
+  check('the seat is out, its hand off the table', st.players[1].out && st.players[1].hand.length === 0);
+  check('her turn passes to the next player', st.cur === 2 && ['buying', 'draw'].includes(st.phase));
+  check('the table is told', /יצא מהמשחק/.test(host.last('state').state.log.at(-1)));
+  check('the others see her as out', host.last('state').state.players[1].out === true);
+  check('she cannot come back to the seat', (join(room, { name: 'דנה', pid: 'p2' }), room.seats[1].left && !room.seats[1].connected));
+
+  // The out seat is skipped from now on: a full go-around never lands on it.
+  let s2 = { ...room.state, phase: 'action', cur: 0, buy: null, undoBefore: null, tookBeit: false, mustUseJoker: null };
+  const after = G(s2, { type: 'DISCARD', cid: s2.players[0].hand[0].id });
+  check('the turn after seat 0 skips the out seat', after.cur === 2);
+  check('and so does the buying round', !after.buy || after.buy.checker !== 1);
+
+  // A new round deals her nothing.
+  const { startHand } = await import('../src/game-core.js');
+  const next = startHand({ ...room.state, sivuv: 1 });
+  check('a new round deals the out seat no cards', next.players[1].hand.length === 0 && next.players[0].hand.length === 14);
+
+  // Two more leave: one player is left and the game is over.
+  yossi.msg({ t: 'leave' });
+  rina.msg({ t: 'leave' });
+  await settle0();
+  check('with one player left the game ends', room.state.phase === 'game_end');
+  const res = settle(room.state);
+  check('the one who stayed takes the whole pot', res.pot === 2000 && res.seats[0].prize === 2000 && res.seats[0].place === 1);
+  check('those who left win nothing and finish last', [1, 2, 3].every(i => res.seats[i].prize === 0 && res.seats[i].place === 2));
+}
+
+// ── 8. A free room (no fee) or practice settles nothing: no coins, XP or trophies ──
+{
+  const free = { players: [{ totalScore: 5 }, { totalScore: 50 }], room: { mode: 'online', fee: 0, gameId: 'f' } };
+  check('a free online game gives no XP or trophies', settle(free) === null);
+}
+
 if (failures) { console.log(`\n${failures} failed`); process.exit(1); }
 console.log('\nall room-mode checks passed');

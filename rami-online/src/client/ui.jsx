@@ -862,7 +862,8 @@ function Setup({ onStart }) {
 function RoundEnd({ state, dispatch, onLeave }) {
   const { result, players, mk, sivuv } = state;
   const winner = result.w !== null ? players[result.w] : null;
-  const sorted = [...players].sort((a, b) => a.totalScore - b.totalScore);
+  // Anyone who walked out of a paid game (`out`) finishes below all who stayed.
+  const sorted = [...players].sort((a, b) => (a.out ? 1 : 0) - (b.out ? 1 : 0) || a.totalScore - b.totalScore);
   // This round's own tally opens first. The cross-round table and the cards that
   // were laid down are one tap away, and stay there until somebody deals again.
   const [tab, setTab] = useState('round');
@@ -991,7 +992,7 @@ function RoundEnd({ state, dispatch, onLeave }) {
 // `extra` is drawn under the winner's name — the account's rewards for this
 // game (see RewardStrip in account.jsx).
 function GameEnd({ state, onRestart, extra }) {
-  const sorted = [...state.players].sort((a, b) => a.totalScore - b.totalScore);
+  const sorted = [...state.players].sort((a, b) => (a.out ? 1 : 0) - (b.out ? 1 : 0) || a.totalScore - b.totalScore);
   // The final table is the point of this screen, so it opens on the standings;
   // the round-by-round grid and the last board are behind the other two tabs.
   const [tab, setTab] = useState('final');
@@ -1039,6 +1040,7 @@ function GameEnd({ state, onRestart, extra }) {
             }}>
               <span style={{ fontWeight: 700, fontSize: 15 }}>
                 {rankMark(i)} {p.name}
+                {p.out && <span style={{ color: '#b91c1c', fontWeight: 400, fontSize: 12 }}> · יצא</span>}
               </span>
               <span style={{ fontWeight: 700, fontSize: 20, color: FELTD }}>
                 {p.totalScore}<span style={{ fontSize: 12, color: '#78716c', fontWeight: 400 }}> נק׳</span>
@@ -1703,6 +1705,9 @@ function Game({ state, dispatch, onLeave, wallet }) {
               }}>
                 {active ? '▶ ' : ''}{p.name}
               </div>
+              {p.out && (
+                <div style={{ fontSize: 10.5, color: '#fca5a5', marginBottom: 2 }}>יצא מהמשחק</div>
+              )}
               <div className="opp-fan" style={{
                 display: 'flex', justifyContent: 'center', marginBottom: 3,
                 height: 'var(--card-h-sm)',

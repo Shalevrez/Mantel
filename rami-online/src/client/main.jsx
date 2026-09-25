@@ -307,9 +307,9 @@ function App() {
       const me = state.players.findIndex(p => p.you);
       const extra = res && me !== -1
         ? <RewardStrip r={res.seats[me]} fee={res.fee} />
-        : state.room && state.room.mode === 'practice'
+        : state.room
           ? <div style={{ textAlign: 'center', color: '#78716c', fontSize: 12.5, marginBottom: 12 }}>
-              משחק אימון — בלי נקודות, גביעים או מטבעות
+              {state.room.mode === 'practice' ? 'משחק אימון' : 'משחק חינמי'} — בלי XP, גביעים או מטבעות
             </div>
           : null;
       return <GameEnd state={state} onRestart={leaveRoom} extra={extra} />;

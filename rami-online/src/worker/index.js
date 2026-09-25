@@ -8,7 +8,7 @@
 // ═══════════════════════════════════════════════════════
 
 import {
-  G, initGame, cSc, MK, aiLevel as normLevel,
+  G, initGame, cSc, MK, aiLevel as normLevel, retireSeat,
   aiWantCard, findAIGroups, meetsReq, attachPos, aiDiscard,
 } from '../game-core.js';
 import { normFee, normMode } from '../economy.js';
@@ -79,7 +79,7 @@ export function viewFor(state, seat) {
         id: p.id, name: p.name, isAI: p.isAI, seat: i,
         handCount: p.hand.length,
         hasLaid: p.hasLaid, totalScore: p.totalScore,
-        lastScore: p.lastScore, paidBuys: p.paidBuys || 0, you: false,
+        lastScore: p.lastScore, paidBuys: p.paidBuys || 0, out: !!p.out, you: false,
       };
     }),
   };
@@ -172,7 +172,7 @@ export class Room {
       state: this.state,
       seats: this.seats.map(s => ({
         name: s.name, uid: s.uid, connId: s.connId,
-        isAI: s.isAI, ai: s.ai, botNum: s.botNum, downAt: s.downAt || 0,
+        isAI: s.isAI, ai: s.ai, botNum: s.botNum, downAt: s.downAt || 0, left: !!s.left,
       })),
       hostUid: this.hostUid,
       code: this.code,
@@ -328,7 +328,7 @@ export class Room {
     // was theirs, the host role) back.
     let seat = this.seats.findIndex(s => !s.isAI && s.uid === uid);
     // Older clients that reconnect without an id still match by name.
-    if (seat === -1) seat = this.seats.findIndex(s => !s.isAI && s.name === name && !s.connected);
+    if (seat === -1) seat = this.seats.findIndex(s => !s.isAI && !s.left && s.name === name && !s.connected);
 
     // A resume is a page that reloaded mid-game and is looking for the seat it
     // already had — never a request to sit down. With no seat to hand back (the
@@ -457,6 +457,15 @@ export class Room {
 
     if (!this.started) {
       this.seats.splice(seat, 1);
+    } else if (this.paid()) {
+      // A game played for coins: nobody takes the chair over. The seat stays
+      // (every index after it would shift otherwise) but is empty for good, and
+      // the game carries on without it — see retireSeat.
+      Object.assign(s, {
+        left: true, uid: `left:${crypto.randomUUID()}`,
+        connId: null, ws: null, connected: false, downAt: 0,
+      });
+      if (this.state) this.state = retireSeat(this.state, seat);
     } else {
       Object.assign(s, {
         isAI: true, ai: this.aiLevel, uid: `ai:${crypto.randomUUID()}`,
@@ -478,7 +487,7 @@ export class Room {
     }
 
     if (wasHost) {
-      const next = this.seats.find(x => !x.isAI && x.connected) || this.seats.find(x => !x.isAI);
+      const next = this.seats.find(x => !x.isAI && !x.left && x.connected) || this.seats.find(x => !x.isAI && !x.left);
       this.hostUid = next ? next.uid : null;
     }
 
@@ -487,7 +496,7 @@ export class Room {
     if (connId) this.dropSocket(connId);
 
     // Nobody left but computer players: there is no game for anyone to watch.
-    if (!this.seats.some(x => !x.isAI)) return this.closeRoom('empty');
+    if (!this.seats.some(x => !x.isAI && !x.left)) return this.closeRoom('empty');
 
     this.touch();
     this.noteConnections();
@@ -554,7 +563,7 @@ export class Room {
       aiLevel: this.aiLevel,
       aiCount: this.aiCount(),
       players: this.seats.map((s, i) => ({
-        seat: i, name: s.name, connected: s.connected, isAI: s.isAI,
+        seat: i, name: s.name, connected: s.connected, isAI: s.isAI, left: !!s.left,
         ai: s.isAI ? normLevel(s.ai) : null,
         host: i === hostSeat,
       })),

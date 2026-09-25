@@ -79,5 +79,17 @@ check('buys are free in a free room', buyPrice(0) === 0);
   check('the winner takes the bigger pot', s.seats[0].prize === 1040);
 }
 
+// ── A seat that walked out ──
+{
+  const state = {
+    players: [{ totalScore: 80 }, { totalScore: 5, out: true }, { totalScore: 30 }, { totalScore: 60 }],
+    room: { mode: 'online', fee: 100, gameId: 'g3' },
+  };
+  const s = settle(state);
+  check('the leaver paid in: the pot counts every seat', s.pot === 400);
+  check('the leaver finishes last and wins nothing, whatever the score', s.seats[1].place === 4 && s.seats[1].prize === 0);
+  check('the pot is shared among the three who stayed (70/30)', s.seats[2].prize === 280 && s.seats[3].prize === 120 && s.seats[0].prize === 0);
+}
+
 if (failures) { console.log(`\n${failures} failed`); process.exit(1); }
 console.log('\nall economy checks passed');
