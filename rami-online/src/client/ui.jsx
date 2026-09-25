@@ -1192,14 +1192,16 @@ function Game({ state, dispatch, onLeave, wallet }) {
   // What this buy costs in coins: only a buy that brings a penalty card.
   const buyCost       = buy && !isFreeOffer && !isFreeBuy && wallet ? wallet.buyPrice : 0;
   const cantAfford    = buyCost > 0 && wallet.coins < buyCost;
-  // Someone took the discard out of turn: shown to everyone until the next discard.
+  // Someone took the discard (bought it out of turn, or took it on their turn):
+  // shown to everyone until the next discard. A draw from the deck shows nothing.
   const bn = state.buyNote;
-  const buyNoteText = bn && state.players[bn.seat]
-    ? bn.seat === mySeat
-      ? (bn.paid ? '💰 קנית את הקלף' : '🎁 לקחת את הקלף בלי קנס')
-      : (bn.paid ? `💰 ${state.players[bn.seat].name} קנה את הקלף`
-                 : `🎁 ${state.players[bn.seat].name} לקח את הקלף בלי קנס`)
-    : '';
+  const bnName = bn && state.players[bn.seat] ? state.players[bn.seat].name : '';
+  const buyNoteText = !bnName ? ''
+    : bn.seat === mySeat
+      ? (bn.onTurn ? '' : bn.paid ? '💰 קנית את הקלף עם הקנס' : '🎁 לקחת את הקלף בלי קנס')
+      : bn.onTurn ? `↑ ${bnName} לקח מהאשפה`
+      : bn.paid ? `💰 ${bnName} קנה את הקלף עם הקנס`
+      : `🎁 ${bnName} לקח מהאשפה בלי קנס`;
 
   // ── One draw per turn, even on a double-tap ──────────────────────────────
   // The pile stays lit until the server's next state arrives, so two fast taps would
