@@ -991,7 +991,7 @@ function RoundEnd({ state, dispatch, onLeave }) {
 
 // `extra` is drawn under the winner's name — the account's rewards for this
 // game (see RewardStrip in account.jsx).
-function GameEnd({ state, onRestart, extra }) {
+function GameEnd({ state, onRestart, onExit, extra }) {
   const sorted = [...state.players].sort((a, b) => (a.out ? 1 : 0) - (b.out ? 1 : 0) || a.totalScore - b.totalScore);
   // The final table is the point of this screen, so it opens on the standings;
   // the round-by-round grid and the last board are behind the other two tabs.
@@ -1067,6 +1067,16 @@ function GameEnd({ state, onRestart, extra }) {
         }}>
           <IconLabel name="play">משחק חדש</IconLabel>
         </button>
+        {onExit && (
+          <button onClick={onExit} style={{
+            width: '100%', padding: '11px 0', background: 'transparent', color: '#57534e',
+            border: '2px solid #d6d3d1', borderRadius: 13,
+            fontSize: 15, fontWeight: 600, cursor: 'pointer', marginTop: 8, flexShrink: 0,
+            fontFamily: 'inherit',
+          }}>
+            <IconLabel name="logOut">יציאה מהחדר · לתפריט הראשי</IconLabel>
+          </button>
+        )}
       </div>
     </div>
   );

@@ -68,17 +68,25 @@ function roomToResume() {
   const invited = urlCode();
   return active && (!invited || invited === active) ? active : '';
 }
-function leaveRoom() {
+// `next` opens a menu screen straight away (see startScreen) — "משחק חדש" on
+// the final scoreboard lands on the setup of the same kind of game.
+function leaveRoom(next) {
   writeStore(ACTIVE_ROOM_KEY, '');
   // A clean home screen: drop the ?code= so the old room isn't pre-filled.
-  location.href = location.pathname;
+  location.href = location.pathname + (typeof next === 'string' ? `?go=${next}` : '');
+}
+function startScreen() {
+  const go = new URLSearchParams(location.search).get('go');
+  // Once read, gone: a reload later on shouldn't jump back to that screen.
+  if (go) history.replaceState(null, '', location.pathname);
+  return go === 'practice' || go === 'online' ? go : 'home';
 }
 
 function App() {
   const profile = useProfile();
   const [resumeCode] = useState(roomToResume);
   // home | practice | online | leaderboard | store | resume | lobby | game
-  const [screen, setScreen] = useState(() => resumeCode ? 'resume' : 'home');
+  const [screen, setScreen] = useState(() => resumeCode ? 'resume' : startScreen());
   const [code, setCode] = useState(() => urlCode() || lastRoom());
   const [lobby, setLobby] = useState(null);
   const [state, setState] = useState(null);
@@ -225,6 +233,17 @@ function App() {
     leaveRoom();
   }, []);
 
+  // Out of a game that is over. Only hang up: the seat isn't given up, since
+  // leaving a finished paid game would mark the player as walked out on
+  // everyone else's final table (see leaveSeat on the server). The room closes
+  // on its own a few minutes later.
+  const leaveGame = useCallback((next) => {
+    const conn = connRef.current;
+    connRef.current = null;
+    if (conn) conn.close();
+    leaveRoom(next);
+  }, []);
+
   // Dispatch = send an action to the server
   const dispatch = useCallback((action) => {
     connRef.current && connRef.current.action(action);
@@ -314,7 +333,8 @@ function App() {
               {state.room.mode === 'practice' ? 'משחק אימון' : 'משחק חינמי'} — בלי XP, גביעים או מטבעות
             </div>
           : null;
-      return <GameEnd state={state} onRestart={leaveRoom} extra={extra} />;
+      return <GameEnd state={state} onRestart={() => leaveGame(state.room && state.room.mode)}
+                      onExit={() => leaveGame()} extra={extra} />;
     }
     if (state.phase === 'round_end') return <RoundEnd state={state} dispatch={dispatch} onLeave={handleLeave} />;
     const wallet = state.room && state.room.mode === 'online' && state.room.fee > 0
@@ -588,7 +608,7 @@ function RoomClosed({ reason }) {
   const t = CLOSED_TEXT[reason] || CLOSED_TEXT.idle;
   // Back to a clean home screen, so the dead room isn't pre-filled and tapping
   // "הצטרף" doesn't look like it should still work.
-  const home = leaveRoom;
+  const home = () => leaveRoom();
   return (
     <Shell>
       <div style={{ textAlign: 'center' }}>
