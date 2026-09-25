@@ -9,7 +9,7 @@ import { settle, buyPrice } from "../economy.js";
 import * as P from "./profile.js";
 import { useProfile, LoginScreen, Hub, MenuCards, ProfileSheet, SettingsSheet, LeaderboardList, RewardStrip } from "./account.jsx";
 import { PracticeSetup, OnlineSetup, JoinDialog, RoomTerms } from "./rooms.jsx";
-import { StoreScreen } from "./store.jsx";
+import { StoreStall } from "./store.jsx";
 
 // ═══════════════════════════════════════════════════════
 // ONLINE APP
@@ -89,6 +89,7 @@ function App() {
   const [showProfile, setShowProfile] = useState(false);
   const [showRules, setShowRules] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showStore, setShowStore] = useState(false);
   // An invite link opens the join box straight away.
   const [showJoin, setShowJoin] = useState(() => !!urlCode() && !resumeCode);
   const connRef = useRef(null);
@@ -245,13 +246,13 @@ function App() {
 
     const hub = (title, body, back = () => go('home')) => (
       <Hub profile={profile} title={title} onBack={back} onSettings={() => setShowSettings(true)}
-           onProfile={() => setShowProfile(true)} onCoins={() => go('store')}>
+           onProfile={() => setShowProfile(true)} onCoins={() => setShowStore(true)}>
         {body}
       </Hub>
     );
 
     if (screen === 'home') return (
-      <Hub profile={profile} onProfile={() => setShowProfile(true)} onCoins={() => go('store')}
+      <Hub profile={profile} onProfile={() => setShowProfile(true)} onCoins={() => setShowStore(true)}
            onSettings={() => setShowSettings(true)}
            footer={<>
              <button onClick={() => setShowRules(true)} style={hubLink}><IconLabel name="book">חוקים</IconLabel></button>
@@ -272,7 +273,7 @@ function App() {
           { key: 'rank', title: 'דירוג', sub: 'טבלת הגביעים', icon: 'trophy', suit: '♠',
             onClick: () => go('leaderboard') },
           { key: 'store', title: 'חנות', sub: 'מטבעות וסרטונים', icon: 'cart', suit: '♦', badge: 'דמו',
-            onClick: () => go('store') },
+            onClick: () => setShowStore(true) },
         ]} />
         {showJoin && <JoinDialog code={code} setCode={setCode} busy={connecting} error={error}
                                  onJoin={handleJoin} onClose={() => setShowJoin(false)} />}
@@ -284,10 +285,9 @@ function App() {
       return hub('אימון', <PracticeSetup busy={connecting} error={error} onPlay={handlePractice} />);
     if (screen === 'online')
       return hub('חדר אונליין', <OnlineSetup coins={profile.coins} busy={connecting} error={error}
-                                             onGetCoins={() => go('store')}
+                                             onGetCoins={() => setShowStore(true)}
                                              onPlay={({ seats, fee }) => handleCreate({ mode: 'online', seats, fee })} />);
     if (screen === 'leaderboard') return hub('דירוג', <LeaderboardList />);
-    if (screen === 'store') return hub('חנות', <StoreScreen />);
 
     if (screen === 'lobby') {
       // A practice table deals itself; there is no one to wait for.
@@ -326,6 +326,7 @@ function App() {
     <>
       {screenEl}
       {showProfile && profile && <ProfileSheet profile={profile} onClose={() => setShowProfile(false)} />}
+      {showStore && profile && <StoreStall onClose={() => setShowStore(false)} />}
       {showSettings && <SettingsSheet version={APP_VERSION} onClose={() => setShowSettings(false)} />}
       {notes && <ReleaseNotes onClose={closeNotes} current={APP_VERSION} />}
     </>

@@ -6,51 +6,146 @@
 // ═══════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef } from "react";
-import { GOLD, GOLDD, FELT, FELTD, CREAM } from "../game-core.js";
+import { GOLD, GOLDD, FELT, FELTD, CREAM, CLOTH } from "../game-core.js";
 import { STORE_PACKS, AD_REWARD, AD_SECONDS, AD_DAILY } from "../economy.js";
 import { Icon, IconLabel } from "./icons.jsx";
 import { LINE, SOFT, MUTED, hubBtn, Modal, DemoTag } from "./account.jsx";
 import * as P from "./profile.js";
 
-export function StoreScreen() {
-  const [confirm, setConfirm] = useState(null); // the pack being "bought"
-  const [watching, setWatching] = useState(false);
-  const [toast, setToast] = useState('');
-  const left = P.adsLeft();
+// ═══════════════════════════════════════════════════════
+// STORE STALL — the store opens over whatever screen you're on, as a
+// market stall: a striped awning in the game's navy and cream with a
+// gold trim, the tablecloth as the counter, and two tabs at the bottom.
+// ═══════════════════════════════════════════════════════
 
-  function flash(text) {
-    setToast(text);
-    setTimeout(() => setToast(''), 2600);
-  }
+const STALL_CSS = `
+@keyframes stallUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes stallFade { from { opacity: 0; } to { opacity: 1; } }
+`;
+
+export function StoreStall({ onClose }) {
+  const [tab, setTab] = useState('coins'); // coins | free
+  // Escape closes the stall, as a tap outside it does.
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
 
   return (
-    <>
-      <div style={{ textAlign: 'center', marginBottom: 14 }}>
-        <DemoTag />
-        <div style={{ color: MUTED, fontSize: 12.5, marginTop: 6 }}>
-          חנות לדוגמה: שום כרטיס לא מחויב, והמטבעות נשמרים בדפדפן הזה בלבד.
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, zIndex: 150, background: 'rgba(8, 18, 38, .6)',
+      display: 'flex', alignItems: 'flex-end', justifyContent: 'center', direction: 'rtl',
+      animation: 'stallFade .2s ease-out',
+    }}>
+      <style>{STALL_CSS}</style>
+      <div onClick={e => e.stopPropagation()} role="dialog" aria-label="חנות" style={{
+        position: 'relative', width: '100%', maxWidth: 620,
+        height: 'min(86dvh, 820px)', display: 'flex', flexDirection: 'column',
+        animation: 'stallUp .28s cubic-bezier(.2, .8, .3, 1)',
+      }}>
+        <Awning />
+        <button onClick={onClose} title="סגור" style={{
+          position: 'absolute', top: 30, left: 14, zIndex: 3, width: 44, height: 44, borderRadius: '50%',
+          background: `radial-gradient(circle at 35% 30%, #e7c27a, ${GOLD} 60%, #8a6418)`,
+          border: `3px solid ${CREAM}`, color: FELTD, cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxShadow: '0 4px 12px rgba(0,0,0,.4)',
+        }}><Icon name="x" size={20} strokeWidth={3.5} /></button>
+
+        {/* The counter: the tablecloth, framed in gold */}
+        <div style={{
+          flex: 1, minHeight: 0, overflowY: 'auto', background: CLOTH,
+          borderInline: `3px solid ${GOLD}`, padding: '18px 14px 20px',
+        }}>
+          {tab === 'coins' ? <PacksTab /> : <FreeTab />}
+        </div>
+
+        {/* Tabs */}
+        <div style={{
+          display: 'flex', background: FELTD, borderTop: `3px solid ${GOLD}`,
+          borderInline: `3px solid ${GOLD}`,
+          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+        }}>
+          {[
+            { key: 'coins', icon: 'coins', label: 'מטבעות' },
+            { key: 'free', icon: 'gift', label: 'מטבעות חינם' },
+          ].map((t, i) => (
+            <button key={t.key} onClick={() => setTab(t.key)} style={{
+              flex: 1, padding: '12px 0 10px', cursor: 'pointer', border: 'none',
+              borderInlineStart: i ? `1px solid ${LINE}` : 'none',
+              background: tab === t.key ? `linear-gradient(${FELT}, ${FELTD})` : 'transparent',
+              color: tab === t.key ? GOLD : SOFT, fontWeight: 800, fontSize: 13.5,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+              boxShadow: tab === t.key ? `inset 0 3px 0 ${GOLD}` : 'none',
+            }}>
+              <Icon name={t.icon} size={26} strokeWidth={1.8} />
+              {t.label}
+            </button>
+          ))}
         </div>
       </div>
+    </div>
+  );
+}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 16, paddingTop: 6 }}>
-        {/* Rewarded video — a card turned face up, so it never reads as a purchase */}
-        <div style={{
-          position: 'relative', borderRadius: 18, padding: '22px 12px 16px', minHeight: 250,
-          background: CREAM, color: FELTD, border: `2px solid ${GOLD}`,
-          boxShadow: `0 10px 26px rgba(19, 40, 79, .25), inset 0 0 0 4px ${CREAM}, inset 0 0 0 5px ${GOLD}66`,
-          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', gap: 10,
-          textAlign: 'center',
-        }}>
-          <Corners suit="★" color={GOLDD} />
-          <div style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.3 }}>צפו בסרטון<br />וקבלו מטבעות!</div>
-          <Amount coins={AD_REWARD} dark />
-          <Icon name="gift" size={44} color={GOLDD} strokeWidth={1.5} />
-          <div style={{ fontSize: 11.5, color: MUTED }}>נשארו היום: {left}/{AD_DAILY}</div>
-          <PriceBtn gold disabled={left <= 0} onClick={() => setWatching(true)}>
-            {left > 0 ? <IconLabel name="play">צפה</IconLabel> : 'נגמרו להיום'}
-          </PriceBtn>
-        </div>
+// The stall's striped awning: a navy valance with the sign, and scalloped
+// stripes of navy and cream under it, edged in gold.
+function Awning() {
+  const n = 7;
+  return (
+    <div style={{ position: 'relative', flexShrink: 0, pointerEvents: 'none' }}>
+      <div style={{
+        height: 30, background: `linear-gradient(${FELT}, ${FELTD})`,
+        borderRadius: '16px 16px 0 0', border: `3px solid ${GOLD}`, borderBottom: 'none',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+        color: GOLD, fontWeight: 800, fontSize: 14, letterSpacing: 1,
+      }}>
+        <Icon name="cart" size={16} /> חנות <DemoTag style={{ fontSize: 9.5, padding: '1px 6px' }} />
+      </div>
+      <div style={{ display: 'flex', height: 46, borderInline: `3px solid ${GOLD}`, background: GOLD }}>
+        {Array.from({ length: n }, (_, i) => (
+          <div key={i} style={{
+            flex: 1, height: '100%',
+            background: i % 2
+              ? `linear-gradient(${CREAM}, #efe4cf)`
+              : `linear-gradient(${FELT}, ${FELTD})`,
+            borderRadius: '0 0 50% 50% / 0 0 38% 38%',
+            boxShadow: `inset 0 -3px 0 ${GOLD}`,
+          }} />
+        ))}
+      </div>
+      {/* The awning's shadow falling on the counter */}
+      <div style={{
+        position: 'absolute', left: 3, right: 3, bottom: -10, height: 10,
+        background: 'linear-gradient(rgba(19,40,79,.25), transparent)',
+      }} />
+    </div>
+  );
+}
 
+function useToast() {
+  const [toast, setToast] = useState('');
+  const flash = (text) => { setToast(text); setTimeout(() => setToast(''), 2600); };
+  const el = toast && (
+    <div style={{
+      position: 'fixed', bottom: 110, left: '50%', transform: 'translateX(-50%)', zIndex: 300,
+      padding: '10px 18px', borderRadius: 99, background: FELTD, color: GOLD,
+      border: `2px solid ${GOLD}`, fontWeight: 800, boxShadow: '0 8px 24px rgba(0,0,0,.4)', whiteSpace: 'nowrap',
+    }}>{toast}</div>
+  );
+  return [el, flash];
+}
+
+function PacksTab() {
+  const [confirm, setConfirm] = useState(null); // the pack being "bought"
+  const [toastEl, flash] = useToast();
+  return (
+    <>
+      <div style={{ textAlign: 'center', color: MUTED, fontSize: 12, marginBottom: 14 }}>
+        חנות לדוגמה: שום כרטיס לא מחויב, והמטבעות נשמרים בדפדפן הזה בלבד.
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 16, paddingTop: 6 }}>
         {STORE_PACKS.map((p, i) => (
           <Card key={p.id} tag={p.tag} tier={TIERS[Math.min(i, TIERS.length - 1)]}>
             <Amount coins={p.coins} />
@@ -59,15 +154,7 @@ export function StoreScreen() {
           </Card>
         ))}
       </div>
-
-      {toast && (
-        <div style={{
-          position: 'fixed', bottom: 90, left: '50%', transform: 'translateX(-50%)', zIndex: 300,
-          padding: '10px 18px', borderRadius: 99, background: '#15803d', color: '#fff',
-          fontWeight: 800, boxShadow: '0 8px 24px rgba(0,0,0,.4)', whiteSpace: 'nowrap',
-        }}>{toast}</div>
-      )}
-
+      {toastEl}
       {confirm && (
         <Modal onClose={() => setConfirm(null)} width={340}>
           <div style={{ textAlign: 'center' }}>
@@ -85,7 +172,36 @@ export function StoreScreen() {
           </div>
         </Modal>
       )}
+    </>
+  );
+}
 
+// The rewarded video — a card turned face up, so it never reads as a purchase.
+function FreeTab() {
+  const [watching, setWatching] = useState(false);
+  const [toastEl, flash] = useToast();
+  const left = P.adsLeft();
+  return (
+    <>
+      <div style={{ maxWidth: 300, margin: '6px auto 0' }}>
+        <div style={{
+          position: 'relative', borderRadius: 18, padding: '26px 16px 18px', minHeight: 300,
+          background: CREAM, color: FELTD, border: `2px solid ${GOLD}`,
+          boxShadow: `0 10px 26px rgba(19, 40, 79, .25), inset 0 0 0 4px ${CREAM}, inset 0 0 0 5px ${GOLD}66`,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+          textAlign: 'center',
+        }}>
+          <Corners suit="★" color={GOLDD} />
+          <div style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.3 }}>צפו בסרטון<br />וקבלו מטבעות!</div>
+          <Amount coins={AD_REWARD} dark />
+          <Icon name="gift" size={54} color={GOLDD} strokeWidth={1.5} />
+          <div style={{ fontSize: 12, color: MUTED }}>נשארו היום: {left}/{AD_DAILY} · {AD_SECONDS} שניות כל סרטון</div>
+          <PriceBtn gold disabled={left <= 0} onClick={() => setWatching(true)}>
+            {left > 0 ? <IconLabel name="play">צפה</IconLabel> : 'נגמרו להיום'}
+          </PriceBtn>
+        </div>
+      </div>
+      {toastEl}
       {watching && (
         <AdPlayer
           onClose={() => setWatching(false)}
@@ -136,7 +252,7 @@ function Card({ children, tag, tier }) {
   const glow = tier.glow ? `, 0 0 0 3px ${GOLD}55, 0 0 26px ${GOLD}88` : '';
   return (
     <div style={{
-      position: 'relative', borderRadius: 18, padding: '26px 12px 16px', minHeight: 250,
+      position: 'relative', borderRadius: 18, padding: '26px 12px 16px', minHeight: 230,
       background: tier.bg, border: `2px solid ${tier.frame}`,
       boxShadow: `0 10px 26px rgba(19, 40, 79, .35), ${ring}${glow}`,
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', gap: 10,
