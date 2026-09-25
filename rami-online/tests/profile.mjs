@@ -54,6 +54,18 @@ function check(label, cond) {
   check('forfeit: the fee stays gone', P.current().coins === before - 100 && P.refundPending() === 0);
 }
 
+// ── Paying for buys ──
+{
+  const before = P.current().coins;
+  P.chargeEntry('g5', 500);
+  check('buys: the first one is charged', P.chargeBuys('g5', 1, 10) === 10 && P.current().coins === before - 510);
+  check('buys: the same count again charges nothing', P.chargeBuys('g5', 1, 10) === 0);
+  check('buys: only the new ones are charged', P.chargeBuys('g5', 3, 10) === 20 && P.current().coins === before - 530);
+  check('buys: a room closing early hands back fee and buys', P.refundPending() === 530 && P.current().coins === before);
+  check('buys: nothing is charged for a finished game', P.chargeBuys('g5', 5, 10) === 0 && P.current().coins === before);
+  check('buys: a free room charges nothing', P.chargeBuys('g6', 2, 0) === 0);
+}
+
 // ── Store and ads ──
 {
   const before = P.current().coins;

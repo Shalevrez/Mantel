@@ -7,7 +7,7 @@
 
 import { useState } from "react";
 import { GOLD, GOLDD, FELTD, CREAM, AI_LEVELS, AI_LEVEL_NAMES } from "../game-core.js";
-import { ENTRY_FEES, DEFAULT_FEE, prizeShares, shortNum } from "../economy.js";
+import { ENTRY_FEES, DEFAULT_FEE, prizeShares, shortNum, buyPrice } from "../economy.js";
 import { Icon, IconLabel } from "./icons.jsx";
 import { LINE, SOFT, CARD, CARD_LINE, MUTED, hubBtn, hubInput, hubError, Modal, DemoTag } from "./account.jsx";
 
@@ -125,7 +125,8 @@ export function OnlineSetup({ coins, busy, error, onPlay, onGetCoins }) {
             ))}
           </div>
           <div style={{ fontSize: 11.5, color: MUTED, marginTop: 6, lineHeight: 1.5 }}>
-            הקופה לפי מספר השחקנים שיושבים כשהמשחק מתחיל. עוזבים באמצע? דמי הכניסה נשארים בקופה.
+            קנייה עם קנס: <b>{buyPrice(fee)} מטבעות</b> — נכנסים לקופה.<br />
+            הקופה לפי מספר השחקנים שיושבים כשהמשחק מתחיל, ועוד הקניות. עוזבים באמצע? מה ששילמתם נשאר בקופה.
           </div>
         </Side>
       </Row>
@@ -208,6 +209,9 @@ export function RoomTerms({ lobby, coins }) {
             <Icon name="coins" size={15} /> {pot.toLocaleString('en-US')}
           </div>
         </div>
+      </div>
+      <div style={{ textAlign: 'center', fontSize: 11.5, color: SOFT, marginTop: 6 }}>
+        קנייה עם קנס: {buyPrice(lobby.fee)} מטבעות, נכנסים לקופה
       </div>
       <div style={{ textAlign: 'center', marginTop: 6 }}><DemoTag /></div>
       {short && (

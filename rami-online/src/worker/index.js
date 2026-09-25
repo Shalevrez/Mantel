@@ -79,7 +79,7 @@ export function viewFor(state, seat) {
         id: p.id, name: p.name, isAI: p.isAI, seat: i,
         handCount: p.hand.length,
         hasLaid: p.hasLaid, totalScore: p.totalScore,
-        lastScore: p.lastScore, you: false,
+        lastScore: p.lastScore, paidBuys: p.paidBuys || 0, you: false,
       };
     }),
   };

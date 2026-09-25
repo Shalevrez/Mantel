@@ -77,6 +77,13 @@ const ended = {
 
 createRoot(document.getElementById('root')).render(
   screen === 'buying' ? <Game state={buying} dispatch={(a) => console.log('dispatch', a)} />
+  // ?screen=buypaid / buybroke — a buy with a penalty card in a 500-coin room,
+  // with enough coins for it, and without.
+  : screen === 'buypaid' || screen === 'buybroke' ? (
+      <Game state={viewFor({ ...st, phase: 'buying', cur: 1, buy: { checker: 0, origNext: 2 % n, prev: 1, free: false } }, 0)}
+            wallet={{ coins: screen === 'buybroke' ? 5 : 1500, buyPrice: 10 }}
+            dispatch={(a) => console.log('dispatch', a)} onLeave={() => {}} />
+    )
   : screen === 'round' ? <RoundEnd state={ended} dispatch={() => {}} onLeave={() => {}} />
   : screen === 'end' ? <GameEnd state={ended} onRestart={() => {}} />
   // ?screen=paid — the game-over screen of a paid online room, with the rewards strip.

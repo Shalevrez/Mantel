@@ -1131,7 +1131,10 @@ function LeaveConfirm({ started, onConfirm, onClose }) {
 // ═══════════════════════════════════════════════════════
 
 
-function Game({ state, dispatch, onLeave }) {
+// `wallet` is the player's demo wallet in a paid room — { coins, buyPrice } —
+// or null. A buy with a penalty card costs buyPrice coins, and is locked when
+// the wallet can't cover it (skipping, and drawing on your turn, stay open).
+function Game({ state, dispatch, onLeave, wallet }) {
   const [attachMode, setAttachMode] = useState(false);
   // { opts, action }: a lay/attach waiting for the player to say where the joker goes.
   const [jokerPick, setJokerPick] = useState(null);
@@ -1184,6 +1187,9 @@ function Game({ state, dispatch, onLeave }) {
   const isFreeOffer   = buy && buy.checker === buy.origNext;
   // The opening discard of a mishkakon's first round carries no penalty for anyone.
   const isFreeBuy     = buy && !isFreeOffer && !!buy.free;
+  // What this buy costs in coins: only a buy that brings a penalty card.
+  const buyCost       = buy && !isFreeOffer && !isFreeBuy && wallet ? wallet.buyPrice : 0;
+  const cantAfford    = buyCost > 0 && wallet.coins < buyCost;
   // Someone took the discard out of turn: shown to everyone until the next discard.
   const bn = state.buyNote;
   const buyNoteText = bn && state.players[bn.seat]
@@ -1837,7 +1843,7 @@ function Game({ state, dispatch, onLeave }) {
           <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8 }}>
             {(isFreeOffer || isFreeBuy)
               ? `קח את ${discard ? cTxt(discard) : '?'} מהאשפה — בחינם?`
-              : `לקנות ${discard ? cTxt(discard) : '?'}? (+קלף קנס מהחבילה)`
+              : `לקנות ${discard ? cTxt(discard) : '?'}? (+קלף קנס מהחבילה${buyCost ? ` · ${buyCost} מטבעות` : ''})`
             }
           </div>
           {discard && (
@@ -1849,15 +1855,17 @@ function Game({ state, dispatch, onLeave }) {
             <button
               onClick={() => isFreeOffer
                 ? dispatch({ type: 'TAKE_FREE' })
-                : dispatch({ type: 'BUY', idx: buy.checker })
+                : !cantAfford && dispatch({ type: 'BUY', idx: buy.checker })
               }
+              disabled={cantAfford}
               style={{
-                padding: '9px 24px', background: '#16a34a', color: 'white',
-                border: 'none', borderRadius: 9, cursor: 'pointer',
+                padding: '9px 24px', background: cantAfford ? '#64748b' : '#16a34a', color: 'white',
+                border: 'none', borderRadius: 9, cursor: cantAfford ? 'not-allowed' : 'pointer',
+                opacity: cantAfford ? 0.6 : 1,
                 fontSize: 14, fontWeight: 700, fontFamily: 'inherit',
               }}
             >
-              <IconText text={(isFreeOffer || isFreeBuy) ? '✓ קח' : '💰 קנה'} />
+              <IconText text={(isFreeOffer || isFreeBuy) ? '✓ קח' : buyCost ? `💰 קנה · ${buyCost}` : '💰 קנה'} />
             </button>
             <button
               onClick={() => dispatch({ type: 'SKIP' })}
@@ -1870,6 +1878,11 @@ function Game({ state, dispatch, onLeave }) {
               <Icon name="x" /> וותר
             </button>
           </div>
+          {cantAfford && (
+            <div style={{ fontSize: 12, color: '#fca5a5', marginTop: 7 }}>
+              אין מספיק מטבעות לקנייה ({buyCost}) — אפשר לוותר ולשלוף בתורך
+            </div>
+          )}
         </div>
       )}
 

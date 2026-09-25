@@ -339,6 +339,9 @@ function initGame(configs) {
   const players = configs.map((c, i) => ({
     id: i, name: c.name, isAI: c.isAI, ai: c.ai || 'medium',
     hand: [], hasLaid: false, totalScore: 0,
+    // Buys that came with a penalty card, over the whole game — in a paid
+    // room each one costs coins that go into the pot (economy.buyPrice).
+    paidBuys: 0,
   }));
   return startHand({ players, mk: 0, sivuv: 0, history: [], log: ['🃏 המשחק התחיל!'] });
 }
@@ -482,7 +485,8 @@ function G(state, action) {
       i === action.idx
         ? free
           ? { ...p, hand: [...p.hand, top], newIds: [...(p.newIds || []), top.id] }
-          : { ...p, hand: [...p.hand, top, pen], newIds: [...(p.newIds || []), top.id, pen.id] }
+          : { ...p, hand: [...p.hand, top, pen], newIds: [...(p.newIds || []), top.id, pen.id],
+              paidBuys: (p.paidBuys || 0) + 1 }
         : p
     );
     return {

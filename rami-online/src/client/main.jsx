@@ -5,7 +5,7 @@ import { Game, RoundEnd, GameEnd, RulesModal, ReleaseNotes, LeaveConfirm } from 
 import { Icon, IconLabel } from "./icons.jsx";
 import { LATEST_RELEASE } from "../releases.js";
 import { createRoom, joinRoom } from "./net.js";
-import { settle } from "../economy.js";
+import { settle, buyPrice } from "../economy.js";
 import * as P from "./profile.js";
 import { useProfile, LoginScreen, Hub, MenuCards, ProfileSheet, LeaderboardList, RewardStrip } from "./account.jsx";
 import { PracticeSetup, OnlineSetup, JoinDialog, RoomTerms } from "./rooms.jsx";
@@ -121,9 +121,18 @@ function App() {
     const room = s && s.room;
     if (!room || room.mode !== 'online' || !room.gameId) return;
     gameIdRef.current = room.gameId;
-    if (s.phase !== 'game_end') { P.chargeEntry(room.gameId, room.fee || 0); return; }
-    const res = settle(s);
     const me = s.players.findIndex(p => p.you);
+    // Buys with a penalty card, paid as they happen (the server counts them).
+    // Charged before the game is settled, so the last buy still counts.
+    const chargeMyBuys = () => me !== -1 &&
+      P.chargeBuys(room.gameId, s.players[me].paidBuys || 0, buyPrice(room.fee));
+    if (s.phase !== 'game_end') {
+      P.chargeEntry(room.gameId, room.fee || 0);
+      chargeMyBuys();
+      return;
+    }
+    chargeMyBuys();
+    const res = settle(s);
     if (res && me !== -1) P.applyGameResult(room.gameId, res.seats[me]);
   }, []);
 
@@ -306,7 +315,9 @@ function App() {
       return <GameEnd state={state} onRestart={leaveRoom} extra={extra} />;
     }
     if (state.phase === 'round_end') return <RoundEnd state={state} dispatch={dispatch} onLeave={handleLeave} />;
-    return <Game state={state} dispatch={dispatch} onLeave={handleLeave} />;
+    const wallet = state.room && state.room.mode === 'online' && state.room.fee > 0
+      ? { coins: profile.coins, buyPrice: buyPrice(state.room.fee) } : null;
+    return <Game state={state} dispatch={dispatch} onLeave={handleLeave} wallet={wallet} />;
   })();
 
   return (

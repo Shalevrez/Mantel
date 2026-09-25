@@ -27,6 +27,16 @@ export function normMode(mode) {
   return MODES.includes(mode) ? mode : 'online';
 }
 
+// ── Buying with a penalty card ───────────────────────
+// Buying the discard out of turn (the one that comes with a penalty card from
+// the deck) also costs coins in a paid room: 2% of the entry fee, rounded —
+// 100 → 2, 500 → 10, 5000 → 100. The coins go into the pot. Free takes, the
+// penalty-free opening discard, practice and free rooms cost nothing.
+export const BUY_RATE = 0.02;
+export function buyPrice(fee) {
+  return Math.round((fee || 0) * BUY_RATE);
+}
+
 // ── Levels ───────────────────────────────────────────
 // Each level asks for 500 XP more than the one before: 1000 to reach
 // level 2, 1500 more for level 3, and so on.
@@ -74,12 +84,12 @@ export function prizeShares(n) {
   if (n === 4) return [60, 30, 10];
   return [50, 30, 20];
 }
-// Each seat's prize. Players who tie share the places they cover: two
-// tied for first at a 4-player table split 60% + 30% between them. Any
-// coin that doesn't divide evenly goes to the earliest seat of the tie.
-export function prizes(totals, fee) {
+// Each seat's share of the pot. Players who tie share the places they
+// cover: two tied for first at a 4-player table split 60% + 30% between
+// them. Any coin that doesn't divide evenly goes to the earliest seat of
+// the tie.
+export function prizes(totals, pot) {
   const n = totals.length;
-  const pot = fee * n;
   const shares = prizeShares(n);
   const pl = places(totals);
   const out = totals.map(() => 0);
@@ -106,11 +116,17 @@ export function settle(state) {
   const totals = state.players.map(p => p.totalScore);
   const n = totals.length;
   const pl = places(totals);
-  const pz = prizes(totals, room.fee);
+  // The pot: every entry fee, plus whatever was paid for buys along the way.
+  const price = buyPrice(room.fee);
+  const buys = state.players.reduce((a, p) => a + (p.paidBuys || 0), 0);
+  const pot = room.fee * n + price * buys;
+  const pz = prizes(totals, pot);
   return {
     gameId: room.gameId,
     fee: room.fee,
-    pot: room.fee * n,
+    buyPrice: price,
+    buys,
+    pot,
     seats: pl.map((place, i) => ({
       place,
       prize: pz[i],

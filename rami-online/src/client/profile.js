@@ -56,7 +56,8 @@ function blank(fields) {
     coins: START_COINS, xp: 0, trophies: 0, games: 0, wins: 0,
     createdAt: Date.now(),
     done: [],      // gameIds already settled — a reload must not pay twice
-    pending: {},   // gameId → entry fee paid for a game still under way
+    pending: {},   // gameId → coins paid (fee + buys) for a game still under way
+    buys: {},      // gameId → how many paid buys have been charged so far
     ads: { day: '', count: 0 },
     ...fields,
   };
@@ -183,6 +184,25 @@ export function chargeEntry(gameId, fee) {
   return true;
 }
 
+// Pay for buys with a penalty card: `count` is this seat's total for the
+// game so far, and only the ones not charged yet are taken. The server counts
+// them, so a reload or a repeated state never charges twice. The coins join
+// what's held for the game, so a room that closes early hands them back.
+export function chargeBuys(gameId, count, price) {
+  const u = current();
+  if (!u || !gameId || !price || u.done.includes(gameId)) return 0;
+  const already = (u.buys || {})[gameId] || 0;
+  const fresh = Math.max(0, (count || 0) - already);
+  if (!fresh) return 0;
+  const cost = fresh * price;
+  update(x => {
+    x.buys = { ...(x.buys || {}), [gameId]: already + fresh };
+    x.coins = Math.max(0, x.coins - cost);
+    x.pending[gameId] = (x.pending[gameId] || 0) + cost;
+  });
+  return cost;
+}
+
 // Credit a finished game: this seat's { place, prize, xp, trophies }.
 // Idempotent on gameId, like the charge.
 export function applyGameResult(gameId, r) {
@@ -195,6 +215,7 @@ export function applyGameResult(gameId, r) {
     x.games += 1;
     if (r.place === 1) x.wins += 1;
     delete x.pending[gameId];
+    if (x.buys) delete x.buys[gameId];
     x.done = [...x.done, gameId].slice(-50);
   });
   return true;
