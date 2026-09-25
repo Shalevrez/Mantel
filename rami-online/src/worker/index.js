@@ -405,10 +405,15 @@ export class Room {
 
   // ── Computer players ─────────────────────────────────
   aiCount() { return this.seats.filter(s => s.isAI).length; }
+  // A room with an entry fee is played for coins, and games against the
+  // computer never are: bots belong to practice (and free rooms).
+  paid() { return this.mode === 'online' && this.fee > 0; }
+  maxAI() { return this.paid() ? 0 : Math.min(MAX_AI, this.cap - 1); }
 
   // Seat one more bot. Returns why it couldn't, or null when it sat down.
   addAISeat() {
     if (this.started) return 'המשחק כבר התחיל';
+    if (this.paid()) return 'בחדר עם דמי כניסה משחקים רק מול אנשים — מול המחשב משחקים באימון';
     if (this.aiCount() >= MAX_AI) return `אפשר להוסיף עד ${MAX_AI} שחקני מחשב`;
     if (this.seats.length >= this.cap) return `החדר מלא (${this.cap} שחקנים)`;
     // Lowest free number, so removing "מחשב 2" and adding another gives back a
@@ -545,7 +550,7 @@ export class Room {
       maxSeats: this.cap,
       mode: this.mode,
       fee: this.fee,
-      maxAI: Math.min(MAX_AI, this.cap - 1),
+      maxAI: this.maxAI(),
       aiLevel: this.aiLevel,
       aiCount: this.aiCount(),
       players: this.seats.map((s, i) => ({

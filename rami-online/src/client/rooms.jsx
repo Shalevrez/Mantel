@@ -125,6 +125,7 @@ export function OnlineSetup({ coins, busy, error, onPlay, onGetCoins }) {
             ))}
           </div>
           <div style={{ fontSize: 11.5, color: MUTED, marginTop: 6, lineHeight: 1.5 }}>
+            משחקים מול אנשים בלבד (מול המחשב — באימון).<br />
             קנייה עם קנס: <b>{buyPrice(fee)} מטבעות</b> — נכנסים לקופה.<br />
             הקופה לפי מספר השחקנים שיושבים כשהמשחק מתחיל, ועוד הקניות. עוזבים באמצע? מה ששילמתם נשאר בקופה.
           </div>

@@ -352,7 +352,7 @@ function Lobby({ lobby, code, error, coins, onStart, onAddAI, onRemoveAI, onAILe
   // The server owns these limits; the fallbacks only matter if an old server
   // answers a new client.
   const maxSeats = lobby.maxSeats || 6;
-  const maxAI = lobby.maxAI || 5;
+  const maxAI = lobby.maxAI ?? 5;
   const aiCount = lobby.aiCount ?? players.filter(p => p.isAI).length;
   const level = lobby.aiLevel || 'medium';
   const canAddAI = aiCount < maxAI && players.length < maxSeats;
@@ -469,6 +469,17 @@ function Lobby({ lobby, code, error, coins, onStart, onAddAI, onRemoveAI, onAILe
 
       {lobby.youHost ? (
         <>
+          {maxAI === 0 ? (
+            // A paid room: coins are only ever won against people.
+            <div style={{
+              border: '2px dashed #e7e5e4', borderRadius: 13, padding: '10px 14px', marginBottom: 12,
+              color: '#78716c', fontSize: 12.5, textAlign: 'center', lineHeight: 1.5,
+            }}>
+              <Icon name="bot" /> בחדר עם דמי כניסה משחקים רק מול אנשים.<br />
+              רוצים לשחק מול המחשב? זה במצב אימון, בלי מטבעות.
+            </div>
+          ) : (
+          <>
           {/* Computer players — the host decides how many sit down, and how
               well they play. They join the room the moment they're added, so
               everyone waiting can see the table filling up. */}
@@ -512,6 +523,8 @@ function Lobby({ lobby, code, error, coins, onStart, onAddAI, onRemoveAI, onAILe
               {LEVEL_HINT[level]}
             </div>
           </div>
+          </>
+          )}
 
           <button
             onClick={onStart}
@@ -522,7 +535,7 @@ function Lobby({ lobby, code, error, coins, onStart, onAddAI, onRemoveAI, onAILe
           </button>
           {players.length < 2 && (
             <div style={{ textAlign: 'center', color: '#a8a29e', fontSize: 12, marginTop: 8 }}>
-              צריך לפחות 2 שחקנים — הזמינו חבר או הוסיפו מחשב
+              {maxAI === 0 ? 'צריך לפחות 2 שחקנים — הזמינו חברים עם הקוד' : 'צריך לפחות 2 שחקנים — הזמינו חבר או הוסיפו מחשב'}
             </div>
           )}
         </>

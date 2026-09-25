@@ -47,7 +47,11 @@ function check(label, cond) {
   const host = join(room, { name: 'שלו', pid: 'p1', host: true });
   const lobby = host.last('lobby');
   check('the lobby shows the terms', lobby.mode === 'online' && lobby.fee === 500 && lobby.maxSeats === 3);
-  check('bots are capped to the table', lobby.maxAI === 2);
+  check('a paid room takes no bots', lobby.maxAI === 0);
+  host.msg({ t: 'addAI' });
+  check('adding a bot to a paid room is refused', room.seats.length === 1 && /רק מול אנשים/.test(host.last('error').msg));
+  host.msg({ t: 'start', fillAI: true, minPlayers: 3 });
+  check('and the old fill-with-bots start adds none either', !room.started && room.seats.length === 1);
   join(room, { name: 'דנה', pid: 'p2' });
   join(room, { name: 'יוסי', pid: 'p3' });
   const late = join(room, { name: 'רון', pid: 'p4' });
@@ -108,6 +112,32 @@ function check(label, cond) {
   const take = G({ ...buying, cur: 1, buy: { checker: 1, origNext: 1, prev: 0, free: false } }, { type: 'TAKE_FREE' });
   check('a free take is not counted', take.players[1].paidBuys === 0);
   check('everyone sees how many times a player bought', viewFor(paid, 0).players[2].paidBuys === 1);
+}
+
+// ── 6. Taking a card at the start of your own turn never costs coins ──
+// Only a buy with a penalty card is counted (and so charged). Drawing from the
+// deck, taking the discard on your turn, or taking the beit are all free.
+{
+  const base = initGame([{ name: 'א', isAI: false }, { name: 'ב', isAI: false }, { name: 'ג', isAI: false }]);
+  const room = { mode: 'online', fee: 500, gameId: 'g' };
+  const potOf = st => settle({ ...st, room }).pot;
+  const fresh = { ...base, room, sivuv: 2, cur: 1 };
+  const draw = G({ ...fresh, phase: 'draw', buy: null }, { type: 'DRAW' });
+  check('drawing from the deck is free', draw.players[1].hand.length === base.players[1].hand.length + 1 &&
+        draw.players.every(p => p.paidBuys === 0) && potOf(draw) === 1500);
+  // The player on turn is offered the discard first (checker === origNext),
+  // and not only in the first round: here it's round 2, where buys cost.
+  const offer = { ...fresh, phase: 'buying', buy: { checker: 1, origNext: 1, prev: 0, free: false } };
+  const took = G(offer, { type: 'TAKE_FREE' });
+  check('taking the discard on your turn is free', took.phase === 'action' &&
+        took.players.every(p => p.paidBuys === 0) && potOf(took) === 1500);
+  const beit = G({ ...fresh, phase: 'draw', buy: null, canLay: true }, { type: 'TAKE_BEIT' });
+  check('taking the beit is free', beit.players.every(p => p.paidBuys === 0));
+  // ...and after passing it on, the next seat's buy is the one that costs.
+  const passed = G(offer, { type: 'SKIP' });
+  const bought = G(passed, { type: 'BUY', idx: passed.buy.checker });
+  check('only a buy out of turn costs (10 coins into the pot)', bought.players[passed.buy.checker].paidBuys === 1 &&
+        bought.players[1].paidBuys === 0 && potOf(bought) === 1510);
 }
 
 if (failures) { console.log(`\n${failures} failed`); process.exit(1); }
