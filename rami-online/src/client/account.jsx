@@ -548,11 +548,12 @@ export function LeaderboardList() {
 // GAME REWARD — what the game over screen adds for you
 // ═══════════════════════════════════════════════════════
 
-// `r` is this seat's settlement: { place, prize, xp, trophies }; `fee` the
-// entry fee paid. Drawn on the cream game-over card, so in its colours.
+// `r` is this seat's settlement: { place, prize, paid, xp, trophies } — `paid`
+// is the entry fee plus the buys. Drawn on the cream game-over card, so in its
+// colours.
 export function RewardStrip({ r, fee }) {
   if (!r) return null;
-  const net = r.prize - (fee || 0);
+  const net = r.prize - (r.paid ?? fee ?? 0);
   const item = (icon, color, text, sub) => (
     <div style={{ flex: 1, textAlign: 'center', padding: '8px 4px', borderRadius: 10, background: '#fff', border: '1.5px solid #e7e5e4' }}>
       <div style={{ color, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 4, fontWeight: 800, fontSize: 16, direction: 'ltr' }}>
@@ -567,7 +568,7 @@ export function RewardStrip({ r, fee }) {
         {item('star', '#7c3aed', `+${r.xp}`, 'XP')}
         {item('trophy', r.trophies >= 0 ? '#16a34a' : '#b91c1c', `${r.trophies >= 0 ? '+' : ''}${r.trophies}`, 'גביעים')}
         {fee > 0 && item('coins', '#a16207', `+${r.prize.toLocaleString('en-US')}`,
-                        net >= 0 ? `פרס (רווח ${net.toLocaleString('en-US')})` : 'פרס')}
+                        net >= 0 ? `פרס (רווח ${net.toLocaleString('en-US')})` : `פרס (הפסד ${(-net).toLocaleString('en-US')})`)}
       </div>
       <div style={{ textAlign: 'center', marginTop: 5 }}>
         <span style={{ fontSize: 10.5, color: '#be185d' }}>מצב הדגמה — נשמר בדפדפן הזה בלבד</span>

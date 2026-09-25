@@ -77,6 +77,7 @@ check('buys are free in a free room', buyPrice(0) === 0);
   const s = settle(state);
   check('paid buys go into the pot', s.buys === 4 && s.buyPrice === 10 && s.pot === 1000 + 40);
   check('the winner takes the bigger pot', s.seats[0].prize === 1040);
+  check('each seat knows what it put in (fee + buys)', s.seats[0].paid === 530 && s.seats[1].paid === 510);
 }
 
 // ── A seat that walked out ──

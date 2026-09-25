@@ -138,6 +138,8 @@ export function settle(state) {
     seats: pl.map((place, i) => ({
       place,
       prize: pz[i],
+      // What this seat put in: the entry fee and every paid buy.
+      paid: room.fee + price * (state.players[i].paidBuys || 0),
       xp: gameXp(place, n),
       trophies: trophyDelta(place, n),
     })),
