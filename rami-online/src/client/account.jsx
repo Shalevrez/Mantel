@@ -158,7 +158,9 @@ export function Hub({ profile, title, onBack, onProfile, onCoins, onSettings, ch
         <div style={{
           display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px',
           paddingBottom: 'calc(10px + env(safe-area-inset-bottom, 0px))',
-          background: 'rgba(5, 14, 32, .88)', borderTop: `1px solid ${LINE}`, color: CREAM,
+          background: 'rgba(5, 14, 32, .94)', borderTop: `1px solid ${LINE}`, color: CREAM,
+          // Stays on screen while a long page scrolls under it.
+          position: 'sticky', bottom: 0, zIndex: 20,
         }}>
           {onBack && (
             <button onClick={onBack} title="חזרה" style={{

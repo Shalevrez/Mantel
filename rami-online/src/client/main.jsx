@@ -266,7 +266,7 @@ function App() {
         <MenuCards items={[
           { key: 'practice', title: 'אימון', sub: 'מול המחשב · חינם', icon: 'bot', suit: '♣',
             onClick: () => go('practice') },
-          { key: 'online', title: 'צור חדר', sub: 'דמי כניסה ופרס לזוכים', icon: 'coins', suit: '♦',
+          { key: 'online', title: 'צור חדר', sub: 'חינמי או על מטבעות', icon: 'coins', suit: '♦',
             onClick: () => go('online') },
           { key: 'join', title: 'הצטרף לחדר', sub: 'עם קוד מחבר', icon: 'users', suit: '♥',
             onClick: () => { setError(''); setShowJoin(true); } },
