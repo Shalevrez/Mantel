@@ -862,7 +862,8 @@ function Setup({ onStart }) {
 function RoundEnd({ state, dispatch, onLeave }) {
   const { result, players, mk, sivuv } = state;
   const winner = result.w !== null ? players[result.w] : null;
-  const sorted = [...players].sort((a, b) => a.totalScore - b.totalScore);
+  // Anyone who walked out of a paid game (`out`) finishes below all who stayed.
+  const sorted = [...players].sort((a, b) => (a.out ? 1 : 0) - (b.out ? 1 : 0) || a.totalScore - b.totalScore);
   // This round's own tally opens first. The cross-round table and the cards that
   // were laid down are one tap away, and stay there until somebody deals again.
   const [tab, setTab] = useState('round');
@@ -988,8 +989,10 @@ function RoundEnd({ state, dispatch, onLeave }) {
 // GAME END
 // ═══════════════════════════════════════════════════════
 
-function GameEnd({ state, onRestart }) {
-  const sorted = [...state.players].sort((a, b) => a.totalScore - b.totalScore);
+// `extra` is drawn under the winner's name — the account's rewards for this
+// game (see RewardStrip in account.jsx).
+function GameEnd({ state, onRestart, extra }) {
+  const sorted = [...state.players].sort((a, b) => (a.out ? 1 : 0) - (b.out ? 1 : 0) || a.totalScore - b.totalScore);
   // The final table is the point of this screen, so it opens on the standings;
   // the round-by-round grid and the last board are behind the other two tabs.
   const [tab, setTab] = useState('final');
@@ -1016,6 +1019,7 @@ function GameEnd({ state, onRestart }) {
             {sorted[0].name} ניצח!
           </p>
         </div>
+        {extra}
 
         <SegTabs
           active={tab} onPick={setTab}
@@ -1036,6 +1040,7 @@ function GameEnd({ state, onRestart }) {
             }}>
               <span style={{ fontWeight: 700, fontSize: 15 }}>
                 {rankMark(i)} {p.name}
+                {p.out && <span style={{ color: '#b91c1c', fontWeight: 400, fontSize: 12 }}> · יצא</span>}
               </span>
               <span style={{ fontWeight: 700, fontSize: 20, color: FELTD }}>
                 {p.totalScore}<span style={{ fontSize: 12, color: '#78716c', fontWeight: 400 }}> נק׳</span>
@@ -1128,7 +1133,10 @@ function LeaveConfirm({ started, onConfirm, onClose }) {
 // ═══════════════════════════════════════════════════════
 
 
-function Game({ state, dispatch, onLeave }) {
+// `wallet` is the player's demo wallet in a paid room — { coins, buyPrice } —
+// or null. A buy with a penalty card costs buyPrice coins, and is locked when
+// the wallet can't cover it (skipping, and drawing on your turn, stay open).
+function Game({ state, dispatch, onLeave, wallet }) {
   const [attachMode, setAttachMode] = useState(false);
   // { opts, action }: a lay/attach waiting for the player to say where the joker goes.
   const [jokerPick, setJokerPick] = useState(null);
@@ -1181,6 +1189,9 @@ function Game({ state, dispatch, onLeave }) {
   const isFreeOffer   = buy && buy.checker === buy.origNext;
   // The opening discard of a mishkakon's first round carries no penalty for anyone.
   const isFreeBuy     = buy && !isFreeOffer && !!buy.free;
+  // What this buy costs in coins: only a buy that brings a penalty card.
+  const buyCost       = buy && !isFreeOffer && !isFreeBuy && wallet ? wallet.buyPrice : 0;
+  const cantAfford    = buyCost > 0 && wallet.coins < buyCost;
   // Someone took the discard out of turn: shown to everyone until the next discard.
   const bn = state.buyNote;
   const buyNoteText = bn && state.players[bn.seat]
@@ -1694,6 +1705,9 @@ function Game({ state, dispatch, onLeave }) {
               }}>
                 {active ? '▶ ' : ''}{p.name}
               </div>
+              {p.out && (
+                <div style={{ fontSize: 10.5, color: '#fca5a5', marginBottom: 2 }}>יצא מהמשחק</div>
+              )}
               <div className="opp-fan" style={{
                 display: 'flex', justifyContent: 'center', marginBottom: 3,
                 height: 'var(--card-h-sm)',
@@ -1834,7 +1848,7 @@ function Game({ state, dispatch, onLeave }) {
           <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8 }}>
             {(isFreeOffer || isFreeBuy)
               ? `קח את ${discard ? cTxt(discard) : '?'} מהאשפה — בחינם?`
-              : `לקנות ${discard ? cTxt(discard) : '?'}? (+קלף קנס מהחבילה)`
+              : `לקנות ${discard ? cTxt(discard) : '?'}? (+קלף קנס מהחבילה${buyCost ? ` · ${buyCost} מטבעות` : ''})`
             }
           </div>
           {discard && (
@@ -1846,15 +1860,17 @@ function Game({ state, dispatch, onLeave }) {
             <button
               onClick={() => isFreeOffer
                 ? dispatch({ type: 'TAKE_FREE' })
-                : dispatch({ type: 'BUY', idx: buy.checker })
+                : !cantAfford && dispatch({ type: 'BUY', idx: buy.checker })
               }
+              disabled={cantAfford}
               style={{
-                padding: '9px 24px', background: '#16a34a', color: 'white',
-                border: 'none', borderRadius: 9, cursor: 'pointer',
+                padding: '9px 24px', background: cantAfford ? '#64748b' : '#16a34a', color: 'white',
+                border: 'none', borderRadius: 9, cursor: cantAfford ? 'not-allowed' : 'pointer',
+                opacity: cantAfford ? 0.6 : 1,
                 fontSize: 14, fontWeight: 700, fontFamily: 'inherit',
               }}
             >
-              <IconText text={(isFreeOffer || isFreeBuy) ? '✓ קח' : '💰 קנה'} />
+              <IconText text={(isFreeOffer || isFreeBuy) ? '✓ קח' : buyCost ? `💰 קנה · ${buyCost}` : '💰 קנה'} />
             </button>
             <button
               onClick={() => dispatch({ type: 'SKIP' })}
@@ -1867,6 +1883,11 @@ function Game({ state, dispatch, onLeave }) {
               <Icon name="x" /> וותר
             </button>
           </div>
+          {cantAfford && (
+            <div style={{ fontSize: 12, color: '#fca5a5', marginTop: 7 }}>
+              אין מספיק מטבעות לקנייה ({buyCost}) — אפשר לוותר ולשלוף בתורך
+            </div>
+          )}
         </div>
       )}
 

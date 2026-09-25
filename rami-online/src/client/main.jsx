@@ -5,6 +5,11 @@ import { Game, RoundEnd, GameEnd, RulesModal, ReleaseNotes, LeaveConfirm } from 
 import { Icon, IconLabel } from "./icons.jsx";
 import { LATEST_RELEASE } from "../releases.js";
 import { createRoom, joinRoom } from "./net.js";
+import { settle, buyPrice } from "../economy.js";
+import * as P from "./profile.js";
+import { useProfile, LoginScreen, Hub, MenuCards, ProfileSheet, SettingsSheet, LeaderboardList, RewardStrip } from "./account.jsx";
+import { PracticeSetup, OnlineSetup, JoinDialog, RoomTerms } from "./rooms.jsx";
+import { StoreStall } from "./store.jsx";
 
 // ═══════════════════════════════════════════════════════
 // ONLINE APP
@@ -70,9 +75,10 @@ function leaveRoom() {
 }
 
 function App() {
+  const profile = useProfile();
   const [resumeCode] = useState(roomToResume);
-  const [screen, setScreen] = useState(() => resumeCode ? 'resume' : 'home'); // home | resume | lobby | game
-  const [name, setName] = useState(() => readStore(NAME_KEY));
+  // home | practice | online | leaderboard | store | resume | lobby | game
+  const [screen, setScreen] = useState(() => resumeCode ? 'resume' : 'home');
   const [code, setCode] = useState(() => urlCode() || lastRoom());
   const [lobby, setLobby] = useState(null);
   const [state, setState] = useState(null);
@@ -80,15 +86,23 @@ function App() {
   const [connecting, setConnecting] = useState(false);
   const [notes, setNotes] = useState(false);
   const [closed, setClosed] = useState(null); // why the server retired the room
+  const [showProfile, setShowProfile] = useState(false);
+  const [showRules, setShowRules] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showStore, setShowStore] = useState(false);
+  // An invite link opens the join box straight away.
+  const [showJoin, setShowJoin] = useState(() => !!urlCode() && !resumeCode);
   const connRef = useRef(null);
+  // A practice table is set up and started for the player: once the lobby
+  // answers, seat the bots at the chosen level and deal (see onLobby).
+  const practiceRef = useRef(null);
+  // The game on screen, for walking out of it (see handleLeave).
+  const gameIdRef = useRef(null);
 
-  // Persist the chosen name for next time. Stored trimmed — the same name the
-  // server is given — so padding can't come back looking like a different one.
-  // An emptied box keeps the last saved name rather than forgetting it.
-  useEffect(() => {
-    const trimmed = name.trim();
-    if (trimmed) writeStore(NAME_KEY, trimmed);
-  }, [name]);
+  // The name at the table is the profile's. Kept in rami_name too, where the
+  // older builds looked for it.
+  const name = profile ? profile.displayName : '';
+  useEffect(() => { if (name) writeStore(NAME_KEY, name); }, [name]);
 
   // "What's new": pop the release notes once per version, then remember it was
   // seen.
@@ -99,6 +113,29 @@ function App() {
   const closeNotes = useCallback(() => {
     setNotes(false);
     writeStore(SEEN_RELEASE_KEY, LATEST_RELEASE.version);
+  }, []);
+
+  // ── The wallet follows the game (demo — see profile.js) ──
+  // The entry fee goes when the cards are dealt; the prize, XP and trophies
+  // come when the game is over. Both are keyed on the game's id, so a reload
+  // that sends the same state again changes nothing.
+  const onGameState = useCallback((s) => {
+    const room = s && s.room;
+    if (!room || room.mode !== 'online' || !room.gameId) return;
+    gameIdRef.current = room.gameId;
+    const me = s.players.findIndex(p => p.you);
+    // Buys with a penalty card, paid as they happen (the server counts them).
+    // Charged before the game is settled, so the last buy still counts.
+    const chargeMyBuys = () => me !== -1 &&
+      P.chargeBuys(room.gameId, s.players[me].paidBuys || 0, buyPrice(room.fee));
+    if (s.phase !== 'game_end') {
+      P.chargeEntry(room.gameId, room.fee || 0);
+      chargeMyBuys();
+      return;
+    }
+    chargeMyBuys();
+    const res = settle(s);
+    if (res && me !== -1) P.applyGameResult(room.gameId, res.seats[me]);
   }, []);
 
   const connect = useCallback((roomCode, asHost, resume = false) => {
@@ -113,41 +150,53 @@ function App() {
         onLobby: (l) => {
           writeStore(ACTIVE_ROOM_KEY, roomCode);
           setLobby(l);
+          setShowJoin(false);
+          const pr = practiceRef.current;
+          if (pr && l.youHost && !l.started && l.mode === 'practice') {
+            practiceRef.current = null;
+            conn.setAILevel(pr.level);
+            conn.start({ fillAI: true, minPlayers: pr.seats });
+          }
           if (!l.started) setScreen('lobby');
         },
-        onState: (s) => { setState(s); setScreen('game'); },
-        onError: (m) => { setError(m); },
+        onState: (s) => { onGameState(s); setState(s); setScreen('game'); },
+        onError: (m) => { setError(m); setConnecting(false); },
         onClose: () => { /* auto-reconnect handled in net.js */ },
         onRoomClosed: (reason) => {
           writeStore(ACTIVE_ROOM_KEY, '');
           setConnecting(false);
           setClosed(reason || 'idle');
+          // A room that closed before its game ended hands the fee back.
+          P.refundPending();
         },
         // The room we were resuming no longer has a seat for us (it closed
         // while we were away). Nothing to go back to — show the home screen.
         onNoSeat: () => {
           writeStore(ACTIVE_ROOM_KEY, '');
           setConnecting(false);
+          P.refundPending();
           setScreen('home');
         },
       }
     );
     connRef.current = conn;
-  }, [name]);
+  }, [name, onGameState]);
 
-  // Back to the table after a reload. Runs once, on mount.
+  // Back to the table after a reload. Runs once, on mount — and only for a
+  // signed-in player; anyone else signs in first and starts from home.
   useEffect(() => {
-    if (resumeCode) connect(resumeCode, false, true);
+    if (resumeCode && P.current()) connect(resumeCode, false, true);
+    else if (resumeCode) setScreen('home');
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Clean up on unmount
   useEffect(() => () => { connRef.current && connRef.current.close(); }, []);
 
-  async function handleCreate() {
-    if (!name.trim()) { setError('הכניסו שם שחקן'); return; }
+  async function handleCreate(terms) {
     try {
       setConnecting(true);
-      const newCode = await createRoom();
+      setError('');
+      const newCode = await createRoom(terms);
       setCode(newCode);
       connect(newCode, true);
     } catch (e) {
@@ -156,16 +205,22 @@ function App() {
     }
   }
 
+  function handlePractice({ seats, level }) {
+    practiceRef.current = { seats, level };
+    handleCreate({ mode: 'practice', seats });
+  }
+
   function handleJoin() {
-    if (!name.trim()) { setError('הכניסו שם שחקן'); return; }
     if (!code.trim()) { setError('הכניסו קוד חדר'); return; }
     connect(code.trim().toUpperCase(), false);
   }
 
-  // Give up the seat for good and go back to a clean home screen.
+  // Give up the seat for good and go back to a clean home screen. Walking out
+  // of a paid game leaves the fee in the pot.
   const handleLeave = useCallback(async () => {
     const conn = connRef.current;
     connRef.current = null;
+    if (gameIdRef.current) P.forfeit(gameIdRef.current);
     if (conn) await conn.leave();
     leaveRoom();
   }, []);
@@ -175,8 +230,12 @@ function App() {
     connRef.current && connRef.current.action(action);
   }, []);
 
+  const go = (s) => { setError(''); setScreen(s); };
+
   // ── Screens ──
   const screenEl = (() => {
+    if (!profile) return <LoginScreen />;
+
     // The server retires a room once the game is over or it has gone quiet.
     // The final scoreboard needs no server, so it stays on screen; every other
     // screen has nothing left to talk to.
@@ -185,100 +244,100 @@ function App() {
 
     if (screen === 'resume') return <Splash text="חוזרים למשחק..." />;
 
-    if (screen === 'home')
-      return <Home {...{ name, setName, code, setCode, error, connecting, handleCreate, handleJoin }}
-                   onShowNotes={() => setNotes(true)} />;
+    const hub = (title, body, back = () => go('home')) => (
+      <Hub profile={profile} title={title} onBack={back} onSettings={() => setShowSettings(true)}
+           onProfile={() => setShowProfile(true)} onCoins={() => setShowStore(true)}>
+        {body}
+      </Hub>
+    );
 
-    if (screen === 'lobby')
+    if (screen === 'home') return (
+      <Hub profile={profile} onProfile={() => setShowProfile(true)} onCoins={() => setShowStore(true)}
+           onSettings={() => setShowSettings(true)}
+           footer={<>
+             <button onClick={() => setShowRules(true)} style={hubLink}><IconLabel name="book">חוקים</IconLabel></button>
+             <button onClick={() => setNotes(true)} style={hubLink}><IconLabel name="sparkles">מה חדש ב־{LATEST_RELEASE.version}</IconLabel></button>
+           </>}>
+        <div style={{ textAlign: 'center', margin: '4px 0 18px' }}>
+          <h1 style={{ margin: 0, fontSize: 30, color: FELTD, letterSpacing: 2 }}>מנטל</h1>
+          <div style={{ width: 50, height: 2, background: GOLD, margin: '6px auto' }} />
+          <div style={{ color: '#78716c', fontSize: 13 }}>אונליין · 2–6 שחקנים</div>
+        </div>
+        <MenuCards items={[
+          { key: 'practice', title: 'אימון', sub: 'מול המחשב · חינם', icon: 'bot', suit: '♣',
+            onClick: () => go('practice') },
+          { key: 'online', title: 'צור חדר', sub: 'דמי כניסה ופרס לזוכים', icon: 'coins', suit: '♦',
+            onClick: () => go('online') },
+          { key: 'join', title: 'הצטרף לחדר', sub: 'עם קוד מחבר', icon: 'users', suit: '♥',
+            onClick: () => { setError(''); setShowJoin(true); } },
+          { key: 'rank', title: 'דירוג', sub: 'טבלת הגביעים', icon: 'trophy', suit: '♠',
+            onClick: () => go('leaderboard') },
+          { key: 'store', title: 'חנות', sub: 'מטבעות וסרטונים', icon: 'cart', suit: '♦', badge: 'דמו',
+            onClick: () => setShowStore(true) },
+        ]} />
+        {showJoin && <JoinDialog code={code} setCode={setCode} busy={connecting} error={error}
+                                 onJoin={handleJoin} onClose={() => setShowJoin(false)} />}
+        {showRules && <RulesModal onClose={() => setShowRules(false)} />}
+      </Hub>
+    );
+
+    if (screen === 'practice')
+      return hub('אימון', <PracticeSetup busy={connecting} error={error} onPlay={handlePractice} />);
+    if (screen === 'online')
+      return hub('חדר אונליין', <OnlineSetup coins={profile.coins} busy={connecting} error={error}
+                                             onGetCoins={() => setShowStore(true)}
+                                             onPlay={({ seats, fee }) => handleCreate({ mode: 'online', seats, fee })} />);
+    if (screen === 'leaderboard') return hub('דירוג', <LeaderboardList />);
+
+    if (screen === 'lobby') {
+      // A practice table deals itself; there is no one to wait for.
+      if (lobby && lobby.mode === 'practice' && !lobby.started) return <Splash text="מכינים את שולחן האימון..." />;
       return <Lobby {...{ lobby, code, error }}
+                    coins={profile.coins}
                     onStart={() => connRef.current?.start()}
                     onAddAI={() => connRef.current?.addAI()}
                     onRemoveAI={(seat) => connRef.current?.removeAI(seat)}
                     onAILevel={(lv) => connRef.current?.setAILevel(lv)}
                     onLeave={handleLeave}
                     onShowNotes={() => setNotes(true)} />;
+    }
 
     // screen === 'game'
     if (!state) return <Splash text="טוען משחק..." />;
-    if (state.phase === 'game_end') return <GameEnd state={state} onRestart={leaveRoom} />;
+    if (state.phase === 'game_end') {
+      const res = settle(state);
+      const me = state.players.findIndex(p => p.you);
+      const extra = res && me !== -1
+        ? <RewardStrip r={res.seats[me]} fee={res.fee} />
+        : state.room
+          ? <div style={{ textAlign: 'center', color: '#78716c', fontSize: 12.5, marginBottom: 12 }}>
+              {state.room.mode === 'practice' ? 'משחק אימון' : 'משחק חינמי'} — בלי XP, גביעים או מטבעות
+            </div>
+          : null;
+      return <GameEnd state={state} onRestart={leaveRoom} extra={extra} />;
+    }
     if (state.phase === 'round_end') return <RoundEnd state={state} dispatch={dispatch} onLeave={handleLeave} />;
-    return <Game state={state} dispatch={dispatch} onLeave={handleLeave} />;
+    const wallet = state.room && state.room.mode === 'online' && state.room.fee > 0
+      ? { coins: profile.coins, buyPrice: buyPrice(state.room.fee) } : null;
+    return <Game state={state} dispatch={dispatch} onLeave={handleLeave} wallet={wallet} />;
   })();
 
   return (
     <>
       {screenEl}
+      {showProfile && profile && <ProfileSheet profile={profile} onClose={() => setShowProfile(false)} />}
+      {showStore && profile && <StoreStall onClose={() => setShowStore(false)} />}
+      {showSettings && <SettingsSheet version={APP_VERSION} onClose={() => setShowSettings(false)} />}
       {notes && <ReleaseNotes onClose={closeNotes} current={APP_VERSION} />}
     </>
   );
 }
 
-// ═══════════════════════════════════════════════════════
-// HOME — name + create/join
-// ═══════════════════════════════════════════════════════
+const hubLink = {
+  background: 'none', border: 'none', color: '#9fb3d1', fontSize: 13, fontWeight: 700,
+  cursor: 'pointer', padding: '6px 10px',
+};
 
-function Home({ name, setName, code, setCode, error, connecting, handleCreate, handleJoin, onShowNotes }) {
-  const [showRules, setShowRules] = useState(false);
-  // Was the box filled in from the last visit rather than typed just now?
-  // Captured once, on mount, so it doesn't flicker away as the name is edited.
-  const [remembered] = useState(() => !!readStore(NAME_KEY));
-  return (
-    <Shell>
-      <div style={{ textAlign: 'center', marginBottom: 22 }}>
-        <div style={{ fontSize: 54, marginBottom: 4, filter: 'drop-shadow(0 2px 4px rgba(0,0,0,.2))' }}>🃏</div>
-        <h1 style={{ margin: 0, fontSize: 30, color: FELTD, letterSpacing: 2, fontWeight: 700 }}>
-          מנטל
-        </h1>
-        <div style={{ width: 50, height: 2, background: GOLD, margin: '8px auto' }} />
-        <p style={{ color: '#78716c', margin: 0, fontSize: 13 }}>אונליין · 2–6 שחקנים</p>
-      </div>
-
-      <Label>השם שלך</Label>
-      <input
-        value={name}
-        onChange={e => setName(e.target.value)}
-        placeholder="איך קוראים לך?"
-        maxLength={16}
-        style={{ ...inputStyle, marginBottom: remembered ? 4 : 14 }}
-      />
-      {remembered && (
-        <div style={{ color: '#a8a29e', fontSize: 11.5, marginBottom: 14 }}>
-          ✓ השם נשמר מהפעם הקודמת — אפשר לשנות אותו
-        </div>
-      )}
-
-      <button onClick={handleCreate} disabled={connecting} style={primaryBtn}>
-        {connecting ? '...' : '➕ צור חדר חדש'}
-      </button>
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '18px 0 14px' }}>
-        <div style={{ flex: 1, height: 1, background: '#e7e5e4' }} />
-        <span style={{ color: '#a8a29e', fontSize: 12 }}>או הצטרף לחדר</span>
-        <div style={{ flex: 1, height: 1, background: '#e7e5e4' }} />
-      </div>
-
-      <Label>קוד חדר</Label>
-      <input
-        value={code}
-        onChange={e => setCode(e.target.value.toUpperCase())}
-        placeholder="ABCD"
-        maxLength={4}
-        style={{ ...inputStyle, letterSpacing: 6, textAlign: 'center', fontSize: 22, fontWeight: 700 }}
-      />
-      <button onClick={handleJoin} disabled={connecting} style={secondaryBtn}>
-        {connecting ? '...' : '🚪 הצטרף'}
-      </button>
-
-      {error && <div style={errorStyle}>{error}</div>}
-
-      <button onClick={() => setShowRules(true)} style={linkBtn}>📖 חוקים והסבר</button>
-      <button onClick={onShowNotes} style={{ ...linkBtn, marginTop: 0, fontSize: 13, color: '#78716c' }}>
-        🆕 מה חדש בגרסה {LATEST_RELEASE.version}
-      </button>
-      {showRules && <RulesModal onClose={() => setShowRules(false)} />}
-    </Shell>
-  );
-}
 
 // ═══════════════════════════════════════════════════════
 // LOBBY — waiting room; host starts the game
@@ -287,7 +346,7 @@ function Home({ name, setName, code, setCode, error, connecting, handleCreate, h
 // Height of one row in the lobby's player list (border included).
 const LOBBY_ROW_H = 44;
 
-function Lobby({ lobby, code, error, onStart, onAddAI, onRemoveAI, onAILevel, onLeave, onShowNotes }) {
+function Lobby({ lobby, code, error, coins, onStart, onAddAI, onRemoveAI, onAILevel, onLeave, onShowNotes }) {
   const [copied, setCopied] = useState(false);
   const [showLeave, setShowLeave] = useState(false);
   if (!lobby) return <Splash text="מתחבר לחדר..." />;
@@ -297,11 +356,14 @@ function Lobby({ lobby, code, error, onStart, onAddAI, onRemoveAI, onAILevel, on
   // The server owns these limits; the fallbacks only matter if an old server
   // answers a new client.
   const maxSeats = lobby.maxSeats || 6;
-  const maxAI = lobby.maxAI || 5;
+  const maxAI = lobby.maxAI ?? 5;
   const aiCount = lobby.aiCount ?? players.filter(p => p.isAI).length;
   const level = lobby.aiLevel || 'medium';
   const canAddAI = aiCount < maxAI && players.length < maxSeats;
-  const canStart = lobby.youHost && players.length >= 2;
+  // A paid room: the host's own wallet has to cover the fee. (Demo — each
+  // player's wallet is in their own browser, so the others check their own.)
+  const short = lobby.mode === 'online' && lobby.fee > 0 && coins < lobby.fee;
+  const canStart = lobby.youHost && players.length >= 2 && !short;
 
   const copy = async () => {
     try { await navigator.clipboard.writeText(shareLink); setCopied(true); setTimeout(() => setCopied(false), 1500); }
@@ -316,6 +378,8 @@ function Lobby({ lobby, code, error, onStart, onAddAI, onRemoveAI, onAILevel, on
           חדר המתנה
         </h2>
       </div>
+
+      <RoomTerms lobby={lobby} coins={coins} />
 
       {/* Room code — big, tappable to copy */}
       <div style={{ textAlign: 'center', marginBottom: 16 }}>
@@ -409,6 +473,17 @@ function Lobby({ lobby, code, error, onStart, onAddAI, onRemoveAI, onAILevel, on
 
       {lobby.youHost ? (
         <>
+          {maxAI === 0 ? (
+            // A paid room: coins are only ever won against people.
+            <div style={{
+              border: '2px dashed #e7e5e4', borderRadius: 13, padding: '10px 14px', marginBottom: 12,
+              color: '#78716c', fontSize: 12.5, textAlign: 'center', lineHeight: 1.5,
+            }}>
+              <Icon name="bot" /> בחדר עם דמי כניסה משחקים רק מול אנשים.<br />
+              רוצים לשחק מול המחשב? זה במצב אימון, בלי מטבעות.
+            </div>
+          ) : (
+          <>
           {/* Computer players — the host decides how many sit down, and how
               well they play. They join the room the moment they're added, so
               everyone waiting can see the table filling up. */}
@@ -452,6 +527,8 @@ function Lobby({ lobby, code, error, onStart, onAddAI, onRemoveAI, onAILevel, on
               {LEVEL_HINT[level]}
             </div>
           </div>
+          </>
+          )}
 
           <button
             onClick={onStart}
@@ -462,7 +539,7 @@ function Lobby({ lobby, code, error, onStart, onAddAI, onRemoveAI, onAILevel, on
           </button>
           {players.length < 2 && (
             <div style={{ textAlign: 'center', color: '#a8a29e', fontSize: 12, marginTop: 8 }}>
-              צריך לפחות 2 שחקנים — הזמינו חבר או הוסיפו מחשב
+              {maxAI === 0 ? 'צריך לפחות 2 שחקנים — הזמינו חברים עם הקוד' : 'צריך לפחות 2 שחקנים — הזמינו חבר או הוסיפו מחשב'}
             </div>
           )}
         </>
@@ -581,15 +658,6 @@ function Splash({ text }) {
   );
 }
 
-const Label = ({ children }) => (
-  <div style={{ fontWeight: 700, color: FELTD, marginBottom: 6, fontSize: 13 }}>{children}</div>
-);
-
-const inputStyle = {
-  width: '100%', padding: '11px 13px', borderRadius: 10,
-  border: '1.5px solid #d6d3d1', fontSize: 15, background: 'white',
-  outline: 'none', marginBottom: 14,
-};
 const primaryBtn = {
   width: '100%', padding: '13px 0', background: FELT, color: GOLD,
   border: `2px solid ${GOLD}88`, borderRadius: 13,

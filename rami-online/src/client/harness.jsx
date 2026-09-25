@@ -4,6 +4,8 @@ import { createRoot } from "react-dom/client";
 import { initGame, startHand, mkCard, G, MK } from "../game-core.js";
 import { viewFor } from "../worker/index.js";
 import { Game, RoundEnd, GameEnd, ScoreModal } from "./ui.jsx";
+import { RewardStrip } from "./account.jsx";
+import { settle } from "../economy.js";
 
 const params = new URLSearchParams(location.search);
 const seats = Number(params.get('seats') || 4);
@@ -75,8 +77,21 @@ const ended = {
 
 createRoot(document.getElementById('root')).render(
   screen === 'buying' ? <Game state={buying} dispatch={(a) => console.log('dispatch', a)} />
+  // ?screen=buypaid / buybroke — a buy with a penalty card in a 500-coin room,
+  // with enough coins for it, and without.
+  : screen === 'buypaid' || screen === 'buybroke' ? (
+      <Game state={viewFor({ ...st, phase: 'buying', cur: 1, buy: { checker: 0, origNext: 2 % n, prev: 1, free: false } }, 0)}
+            wallet={{ coins: screen === 'buybroke' ? 5 : 1500, buyPrice: 10 }}
+            dispatch={(a) => console.log('dispatch', a)} onLeave={() => {}} />
+    )
   : screen === 'round' ? <RoundEnd state={ended} dispatch={() => {}} onLeave={() => {}} />
   : screen === 'end' ? <GameEnd state={ended} onRestart={() => {}} />
+  // ?screen=paid — the game-over screen of a paid online room, with the rewards strip.
+  : screen === 'paid' ? (() => {
+      const paid = { ...ended, room: { mode: 'online', fee: 500, gameId: 'harness' } };
+      const res = settle(paid);
+      return <GameEnd state={paid} onRestart={() => {}} extra={<RewardStrip r={res.seats[0]} fee={res.fee} />} />;
+    })()
   : screen === 'score' ? <ScoreModal state={ended} onClose={() => {}} />
   : <Game state={{ ...withHistory, msg: params.get('msg') || '' }} dispatch={(a) => console.log('dispatch', a)} onLeave={() => {}} />
 );

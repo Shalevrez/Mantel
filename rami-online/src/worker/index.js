@@ -8,9 +8,10 @@
 // ═══════════════════════════════════════════════════════
 
 import {
-  G, initGame, cSc, MK, aiLevel as normLevel,
+  G, initGame, cSc, MK, aiLevel as normLevel, retireSeat,
   aiWantCard, findAIGroups, meetsReq, attachPos, aiDiscard,
 } from '../game-core.js';
+import { normFee, normMode } from '../economy.js';
 
 // ── Table size ───────────────────────────────────────
 // Six chairs, of which at most five may be computer players: the host decides
@@ -78,7 +79,7 @@ export function viewFor(state, seat) {
         id: p.id, name: p.name, isAI: p.isAI, seat: i,
         handCount: p.hand.length,
         hasLaid: p.hasLaid, totalScore: p.totalScore,
-        lastScore: p.lastScore, you: false,
+        lastScore: p.lastScore, paidBuys: p.paidBuys || 0, out: !!p.out, you: false,
       };
     }),
   };
@@ -120,6 +121,14 @@ export class Room {
     this.code = null;
     this.started = false;
     this.aiLevel = 'medium';       // difficulty the host picked, for every bot in the room
+    // What kind of room this is, set when it is created (see /create): a free
+    // practice table, or an online room with an entry fee (0 = a free friendly
+    // game). `cap` is the table size the creator picked. The wallet itself is
+    // the client's (demo — see client/profile.js); the server only stamps these
+    // on the game so every seat settles it the same way.
+    this.mode = 'online';
+    this.fee = 0;
+    this.cap = MAX_SEATS;
     this.sockets = new Map();      // connId -> ws
     this.aiPending = false;        // an AI move is already scheduled (see scheduleAI)
     this.closing = false;          // shutting down — see closeRoom
@@ -144,6 +153,9 @@ export class Room {
       this.code = saved.code;
       this.started = saved.started;
       this.aiLevel = normLevel(saved.aiLevel);
+      this.mode = normMode(saved.mode);
+      this.fee = saved.fee || 0;
+      this.cap = saved.cap || MAX_SEATS;
       this.lastSeen = saved.lastSeen || Date.now();
       this.emptySince = saved.emptySince || null;
       this.endedAt = saved.endedAt || null;
@@ -160,12 +172,15 @@ export class Room {
       state: this.state,
       seats: this.seats.map(s => ({
         name: s.name, uid: s.uid, connId: s.connId,
-        isAI: s.isAI, ai: s.ai, botNum: s.botNum, downAt: s.downAt || 0,
+        isAI: s.isAI, ai: s.ai, botNum: s.botNum, downAt: s.downAt || 0, left: !!s.left,
       })),
       hostUid: this.hostUid,
       code: this.code,
       started: this.started,
       aiLevel: this.aiLevel,
+      mode: this.mode,
+      fee: this.fee,
+      cap: this.cap,
       lastSeen: this.lastSeen,
       emptySince: this.emptySince,
       endedAt: this.endedAt,
@@ -246,6 +261,9 @@ export class Room {
     this.started = false;
     this.hostUid = null;
     this.code = null;
+    this.mode = 'online';
+    this.fee = 0;
+    this.cap = MAX_SEATS;
     this.endedAt = null;
     this.emptySince = null;
     this.lastSeen = Date.now();
@@ -276,7 +294,14 @@ export class Room {
 
     // HTTP: create room (host) — assigns a code
     if (url.pathname.endsWith('/create')) {
-      if (!this.code) this.code = url.searchParams.get('code') || makeCode();
+      if (!this.code) {
+        this.code = url.searchParams.get('code') || makeCode();
+        const q = url.searchParams;
+        this.mode = normMode(q.get('mode'));
+        this.fee = this.mode === 'online' && Number(q.get('fee')) > 0 ? normFee(q.get('fee')) : 0;
+        const seats = q.has('seats') ? Number(q.get('seats')) : NaN;
+        this.cap = Number.isInteger(seats) ? Math.min(Math.max(seats, 2), MAX_SEATS) : MAX_SEATS;
+      }
       this.touch();
       await this.persist();
       // A room nobody ever joins is cleaned up by the same alarm as any other.
@@ -303,7 +328,7 @@ export class Room {
     // was theirs, the host role) back.
     let seat = this.seats.findIndex(s => !s.isAI && s.uid === uid);
     // Older clients that reconnect without an id still match by name.
-    if (seat === -1) seat = this.seats.findIndex(s => !s.isAI && s.name === name && !s.connected);
+    if (seat === -1) seat = this.seats.findIndex(s => !s.isAI && !s.left && s.name === name && !s.connected);
 
     // A resume is a page that reloaded mid-game and is looking for the seat it
     // already had — never a request to sit down. With no seat to hand back (the
@@ -321,13 +346,13 @@ export class Room {
       // A full room still has room for a person as long as a bot is sitting in
       // one of the chairs: the newest one gets up. The host can always add it
       // back, and nobody is turned away from a game that hasn't started.
-      if (!this.started && this.seats.length >= MAX_SEATS) this.removeAISeat(-1);
-      if (this.seats.length >= MAX_SEATS || this.started) {
+      if (!this.started && this.seats.length >= this.cap) this.removeAISeat(-1);
+      if (this.seats.length >= this.cap || this.started) {
         // Room full or already started with no seat for this player. Drop it from
         // the socket map on the way out, or this dead connection would keep the
         // room looking occupied and it would never hit the empty-room deadline.
         this.sockets.delete(connId);
-        ws.send(JSON.stringify({ t: 'error', msg: this.started ? 'המשחק כבר התחיל' : `החדר מלא (${MAX_SEATS} שחקנים)` }));
+        ws.send(JSON.stringify({ t: 'error', msg: this.started ? 'המשחק כבר התחיל' : `החדר מלא (${this.cap} שחקנים)` }));
         ws.close(1008, 'no seat');
         return;
       }
@@ -380,12 +405,17 @@ export class Room {
 
   // ── Computer players ─────────────────────────────────
   aiCount() { return this.seats.filter(s => s.isAI).length; }
+  // A room with an entry fee is played for coins, and games against the
+  // computer never are: bots belong to practice (and free rooms).
+  paid() { return this.mode === 'online' && this.fee > 0; }
+  maxAI() { return this.paid() ? 0 : Math.min(MAX_AI, this.cap - 1); }
 
   // Seat one more bot. Returns why it couldn't, or null when it sat down.
   addAISeat() {
     if (this.started) return 'המשחק כבר התחיל';
+    if (this.paid()) return 'בחדר עם דמי כניסה משחקים רק מול אנשים — מול המחשב משחקים באימון';
     if (this.aiCount() >= MAX_AI) return `אפשר להוסיף עד ${MAX_AI} שחקני מחשב`;
-    if (this.seats.length >= MAX_SEATS) return `החדר מלא (${MAX_SEATS} שחקנים)`;
+    if (this.seats.length >= this.cap) return `החדר מלא (${this.cap} שחקנים)`;
     // Lowest free number, so removing "מחשב 2" and adding another gives back a
     // מחשב 2 rather than a מחשב 4 at a three-bot table.
     const taken = new Set(this.seats.filter(s => s.isAI).map(s => s.botNum));
@@ -427,6 +457,15 @@ export class Room {
 
     if (!this.started) {
       this.seats.splice(seat, 1);
+    } else if (this.paid()) {
+      // A game played for coins: nobody takes the chair over. The seat stays
+      // (every index after it would shift otherwise) but is empty for good, and
+      // the game carries on without it — see retireSeat.
+      Object.assign(s, {
+        left: true, uid: `left:${crypto.randomUUID()}`,
+        connId: null, ws: null, connected: false, downAt: 0,
+      });
+      if (this.state) this.state = retireSeat(this.state, seat);
     } else {
       Object.assign(s, {
         isAI: true, ai: this.aiLevel, uid: `ai:${crypto.randomUUID()}`,
@@ -448,7 +487,7 @@ export class Room {
     }
 
     if (wasHost) {
-      const next = this.seats.find(x => !x.isAI && x.connected) || this.seats.find(x => !x.isAI);
+      const next = this.seats.find(x => !x.isAI && !x.left && x.connected) || this.seats.find(x => !x.isAI && !x.left);
       this.hostUid = next ? next.uid : null;
     }
 
@@ -457,7 +496,7 @@ export class Room {
     if (connId) this.dropSocket(connId);
 
     // Nobody left but computer players: there is no game for anyone to watch.
-    if (!this.seats.some(x => !x.isAI)) return this.closeRoom('empty');
+    if (!this.seats.some(x => !x.isAI && !x.left)) return this.closeRoom('empty');
 
     this.touch();
     this.noteConnections();
@@ -517,12 +556,14 @@ export class Room {
       started: this.started,
       // Room rules the lobby screen needs: how many chairs there are, how many
       // of them may hold a bot, and the difficulty they all play at.
-      maxSeats: MAX_SEATS,
-      maxAI: MAX_AI,
+      maxSeats: this.cap,
+      mode: this.mode,
+      fee: this.fee,
+      maxAI: this.maxAI(),
       aiLevel: this.aiLevel,
       aiCount: this.aiCount(),
       players: this.seats.map((s, i) => ({
-        seat: i, name: s.name, connected: s.connected, isAI: s.isAI,
+        seat: i, name: s.name, connected: s.connected, isAI: s.isAI, left: !!s.left,
         ai: s.isAI ? normLevel(s.ai) : null,
         host: i === hostSeat,
       })),
@@ -595,7 +636,7 @@ export class Room {
       // already set. `fillAI` is the old client's way of asking for one on the
       // way in — still honoured, so a cached tab can start a game.
       if (msg.fillAI) {
-        const want = Math.min(Math.max(msg.minPlayers || 2, 2), MAX_SEATS);
+        const want = Math.min(Math.max(msg.minPlayers || 2, 2), this.cap);
         while (this.seats.length < want && !this.addAISeat()) { /* addAISeat stops at the caps */ }
       }
       if (this.seats.length < 2) {
@@ -605,7 +646,13 @@ export class Room {
       const configs = this.seats.map(s => ({
         name: s.name, isAI: s.isAI, ai: s.isAI ? normLevel(s.ai || this.aiLevel) : 'medium',
       }));
-      this.state = initGame(configs);
+      // The room's terms ride along with the game, so the game-over screen of
+      // every seat settles it the same way (economy.settle). `gameId` is what
+      // keeps a wallet from being charged or paid twice for one game.
+      this.state = {
+        ...initGame(configs),
+        room: { mode: this.mode, fee: this.fee, gameId: crypto.randomUUID() },
+      };
       this.started = true;
       await this.persist();
       this.broadcastLobby();
@@ -837,7 +884,13 @@ export default {
         const code = makeCode();
         const id = env.ROOMS.idFromName(code);
         const stub = env.ROOMS.get(id);
-        const r = await stub.fetch(new Request(`https://do/create?code=${code}`));
+        // The room's terms: ?mode=practice|online&fee=…&seats=…
+        const q = new URLSearchParams({ code });
+        for (const k of ['mode', 'fee', 'seats']) {
+          const v = url.searchParams.get(k);
+          if (v != null) q.set(k, v);
+        }
+        const r = await stub.fetch(new Request(`https://do/create?${q}`));
         return withCors(r);
       }
       // WebSocket join: /api/room?code=XXXX&name=...&host=0|1

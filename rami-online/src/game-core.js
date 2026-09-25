@@ -306,6 +306,9 @@ function layGroup(state) {
 
 function startHand(base) {
   const n = base.players.length;
+  // A seat that walked out of a paid game (see retireSeat) sits the rest out:
+  // no cards, and the round opens with the first seat still playing.
+  const first = Math.max(0, base.players.findIndex(p => !p.out));
   const deck = shuffle(makeDeck(decksFor(n)));
   const hands = Array.from({ length: n }, () => []);
   for (let i = 0; i < 14; i++)
@@ -322,13 +325,15 @@ function startHand(base) {
     discard: [firstDiscard], beit, board: [],
     canLay: sivuv > 1,        // sivuv 2+: lay immediately; sivuv 1: opens after first go-around
     turnsPlayed: 0,
-    players: base.players.map((p, i) => ({ ...p, hand: p.isAI ? hands[i] : sortHand(hands[i]), hasLaid: false, newIds: [] })),
+    players: base.players.map((p, i) => ({
+      ...p, hand: p.out ? [] : p.isAI ? hands[i] : sortHand(hands[i]), hasLaid: false, newIds: [],
+    })),
     phase: 'buying',
-    cur: 0,
+    cur: first,
     // In the first round of a mishkakon the opening discard is free for everyone:
     // if the first player passes on it, whoever takes it after them gets it
     // without a penalty card. From round 2 on it's bought as usual.
-    buy: { checker: 0, origNext: 0, prev: -1, free: sivuv === 1 },
+    buy: { checker: first, origNext: first, prev: -1, free: sivuv === 1 },
     sel: [], staging: [], msg: '', undoBefore: null, mustUseJoker: null, buyNote: null,
     laidAtTurnStart: false, attachedThisTurn: false, tookBeit: false,
     log: [...(base.log || []), `— ${MK[base.mk].name} • סיבוב ${sivuv} —`],
@@ -339,6 +344,9 @@ function initGame(configs) {
   const players = configs.map((c, i) => ({
     id: i, name: c.name, isAI: c.isAI, ai: c.ai || 'medium',
     hand: [], hasLaid: false, totalScore: 0,
+    // Buys that came with a penalty card, over the whole game — in a paid
+    // room each one costs coins that go into the pot (economy.buyPrice).
+    paidBuys: 0,
   }));
   return startHand({ players, mk: 0, sivuv: 0, history: [], log: ['🃏 המשחק התחיל!'] });
 }
@@ -407,18 +415,68 @@ function nextCk(buy, n) {
 // on their own turn.
 const onLastCard = p => !!p && p.hand.length === 1;
 
+// The next seat after `i` that is still playing (see retireSeat), and the one
+// before it.
+function nextActive(state, i) {
+  const n = state.players.length;
+  for (let k = 1; k <= n; k++) { const j = (i + k) % n; if (!state.players[j].out) return j; }
+  return i;
+}
+function prevActive(state, i) {
+  const n = state.players.length;
+  for (let k = 1; k <= n; k++) { const j = (i - k + n) % n; if (!state.players[j].out) return j; }
+  return i;
+}
+const activeCount = state => state.players.filter(p => !p.out).length;
+
 // Settle the buying round on the next seat that may actually decide: seats on their
 // last card are passed over without being asked. Once the offer comes back around
 // to the next player the round is over and they draw.
 function settleBuy(state, buy) {
   const n = state.players.length;
   let b = buy;
-  while (onLastCard(state.players[b.checker])) {
+  while (onLastCard(state.players[b.checker]) || state.players[b.checker].out) {
     const nc = nextCk(b, n);
     if (nc === b.origNext) return { ...state, phase: 'draw', buy: null };
     b = { ...b, checker: nc };
   }
   return { ...state, phase: 'buying', buy: b };
+}
+
+// ── Walking out of a paid game ───────────────────────
+// In a room played for coins nobody takes over the chair: the seat is marked
+// `out`, its hand leaves the table, and the game goes on without it. What the
+// player paid stays in the pot, and they finish below everyone still playing
+// (economy.settle). If fewer than two are left the game is over.
+function retireSeat(state, seat) {
+  const p = state.players[seat];
+  if (!p || p.out) return state;
+  let st = state;
+  // Mid-turn work is rolled back first, as the player's own "undo" would.
+  if (st.cur === seat && st.phase === 'action' && st.undoBefore) st = G(st, { type: 'UNDO' });
+  st = {
+    ...st,
+    players: st.players.map((pl, i) => i === seat ? { ...pl, out: true, hand: [], newIds: [], hasLaid: false } : pl),
+    log: [...(st.log || []), `🚪 ${p.name} יצא מהמשחק — מה ששילם נשאר בקופה`],
+  };
+  if (activeCount(st) < 2)
+    return { ...st, phase: 'game_end', buy: null, sel: [], staging: [], undoBefore: null,
+             log: [...st.log, '🏁 נשאר שחקן אחד — המשחק הסתיים'] };
+  if (st.phase === 'round_end' || st.phase === 'game_end') return st;
+  if (st.cur === seat) {
+    // Their turn passes on, with the pile's top card offered as after a discard.
+    const next = nextActive(st, seat);
+    return settleBuy({
+      ...st, cur: next, sel: [], staging: [], undoBefore: null, mustUseJoker: null,
+      tookBeit: false, buyNote: null,
+    }, { checker: next, origNext: next, prev: prevActive(st, seat), free: !!(st.buy && st.buy.free) });
+  }
+  if (st.phase === 'buying' && st.buy && st.buy.checker === seat) {
+    const nc = nextCk(st.buy, st.players.length);
+    if (nc === st.buy.origNext) return { ...st, phase: 'draw', buy: null };
+    return settleBuy(st, { ...st.buy, checker: nc });
+  }
+  return st;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -482,7 +540,8 @@ function G(state, action) {
       i === action.idx
         ? free
           ? { ...p, hand: [...p.hand, top], newIds: [...(p.newIds || []), top.id] }
-          : { ...p, hand: [...p.hand, top, pen], newIds: [...(p.newIds || []), top.id, pen.id] }
+          : { ...p, hand: [...p.hand, top, pen], newIds: [...(p.newIds || []), top.id, pen.id],
+              paidBuys: (p.paidBuys || 0) + 1 }
         : p
     );
     return {
@@ -822,10 +881,10 @@ function G(state, action) {
     // or return the beit.
     if (state.tookBeit)
       return { ...state, msg: '🏠 לקחת בית — חובה להשלים אנט בתור הזה, או ללחוץ "↩️ החזר בית".' };
-    const nextIdx = (state.cur + 1) % state.players.length;
+    const nextIdx = nextActive(state, state.cur);
     // Track turns; open laying once everyone has had one turn (end of first go-around)
     const turnsPlayed = (state.turnsPlayed || 0) + 1;
-    const canLay = state.canLay || turnsPlayed >= state.players.length;
+    const canLay = state.canLay || turnsPlayed >= activeCount(state);
     // Safety net: if a round runs far beyond normal length (stale take-free cycle
     // where nobody can go out and the deck isn't depleting), end it by deck rules.
     if (turnsPlayed > 50 * state.players.length) {
@@ -1039,6 +1098,6 @@ export {
   uid, sortHand, moveCard, mkCard, makeDeck, shuffle, handScore,
   isSeq, isSet, isGroup, orderSeq, orderGroup, jokerValues, attachPos, meetsReq,
   layoutStart, seqLayouts, extendSeq, layGroup,
-  startHand, initGame, endWin, endDeck, nextCk, roundRecord,
+  startHand, initGame, endWin, endDeck, nextCk, roundRecord, retireSeat,
   G, aiWantCard, findAIGroups, aiDiscard,
 };
