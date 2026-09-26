@@ -17,7 +17,7 @@ function check(label, cond) {
 
 for (const n of [2, 3]) {
   const names = ['א', 'ב', 'ג'].slice(0, n);
-  let st = initGame(names.map(name => ({ name, isAI: false })));
+  let st = initGame(names.map(name => ({ name, isAI: false })), 0);
   const top = st.discard[st.discard.length - 1];
   const deckLen = st.deck.length;
   check(`${n} players: the round opens on a free offer`, st.phase === 'buying' && st.buy.free);
@@ -45,7 +45,7 @@ for (const n of [2, 3]) {
 
 // Round 2 of the same mishkakon: the opening discard is a paid buy again.
 {
-  let st = initGame(['א', 'ב'].map(name => ({ name, isAI: false })));
+  let st = initGame(['א', 'ב'].map(name => ({ name, isAI: false })), 0);
   st = G({ ...st, phase: 'round_end' }, { type: 'NEW_HAND' });
   check('round 2 opens on a paid offer', st.sivuv === 2 && st.phase === 'buying' && !st.buy.free);
   st = G(st, { type: 'SKIP' });

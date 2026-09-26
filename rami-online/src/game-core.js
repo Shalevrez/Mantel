@@ -306,9 +306,13 @@ function layGroup(state) {
 
 function startHand(base) {
   const n = base.players.length;
-  // A seat that walked out of a paid game (see retireSeat) sits the rest out:
-  // no cards, and the round opens with the first seat still playing.
-  const first = Math.max(0, base.players.findIndex(p => !p.out));
+  // Who opens: the seat drawn at random for the first mishkakon, then one seat on
+  // (clockwise — the turn order) for every mishkakon after it. A seat that walked
+  // out of a paid game (see retireSeat) sits the rest out: no cards, and the
+  // round opens with the next seat still playing.
+  const opener = ((base.starter || 0) + base.mk) % n;
+  let first = opener;
+  for (let k = 0; k < n; k++) { const j = (opener + k) % n; if (!base.players[j].out) { first = j; break; } }
   const deck = shuffle(makeDeck(decksFor(n)));
   const hands = Array.from({ length: n }, () => []);
   for (let i = 0; i < 14; i++)
@@ -340,7 +344,8 @@ function startHand(base) {
   };
 }
 
-function initGame(configs) {
+// `starter` is the seat that opens the first mishkakon; drawn at random unless given.
+function initGame(configs, starter = Math.floor(Math.random() * configs.length)) {
   const players = configs.map((c, i) => ({
     id: i, name: c.name, isAI: c.isAI, ai: c.ai || 'medium',
     hand: [], hasLaid: false, totalScore: 0,
@@ -348,7 +353,10 @@ function initGame(configs) {
     // room each one costs coins that go into the pot (economy.buyPrice).
     paidBuys: 0,
   }));
-  return startHand({ players, mk: 0, sivuv: 0, history: [], log: ['🃏 המשחק התחיל!'] });
+  return startHand({
+    players, mk: 0, sivuv: 0, starter, history: [],
+    log: ['🃏 המשחק התחיל!', `🎲 ${players[starter].name} פותח`],
+  });
 }
 
 // ═══════════════════════════════════════════════════════

@@ -147,8 +147,8 @@ function check(label, cond) {
   check('two decks up to four players', decksFor(2) === 2 && decksFor(4) === 2);
   check('three decks from five players', decksFor(5) === 3 && decksFor(6) === 3);
   check('a deck is 54 cards per copy', makeDeck(3).length === 162);
-  const four = initGame(Array.from({ length: 4 }, (_, i) => ({ name: 'p' + i, isAI: true })));
-  const six  = initGame(Array.from({ length: 6 }, (_, i) => ({ name: 'p' + i, isAI: true })));
+  const four = initGame(Array.from({ length: 4 }, (_, i) => ({ name: 'p' + i, isAI: true })), 0);
+  const six  = initGame(Array.from({ length: 6 }, (_, i) => ({ name: 'p' + i, isAI: true })), 0);
   const left = st => st.deck.length + st.players.reduce((n, p) => n + p.hand.length, 0) +
                      st.discard.length + (st.beit ? 1 : 0);
   check('four players still play with 108 cards', left(four) === 108);
@@ -239,7 +239,7 @@ for (const level of ['easy', 'medium', 'hard']) {
     connected: false, isAI: true, ai: level, downAt: 0,
   }));
   room.started = true;
-  room.state = startHand(initGame(room.seats.map(s => ({ name: s.name, isAI: true, ai: level }))));
+  room.state = startHand(initGame(room.seats.map(s => ({ name: s.name, isAI: true, ai: level })), 0));
   let steps = 0;
   while (!['round_end', 'game_end'].includes(room.state.phase) && steps++ < 5000) {
     const before = room.state;
@@ -268,7 +268,7 @@ for (const level of ['easy', 'medium', 'hard']) {
   // Builds a fresh 2-player state with seat 0's hand set directly, ready to
   // act in the 'action' phase on mishkakon 0 (needs just one 3+ sequence).
   function craftAction(hand) {
-    const st = initGame([{ name: 'a', isAI: true }, { name: 'b', isAI: true }]);
+    const st = initGame([{ name: 'a', isAI: true }, { name: 'b', isAI: true }], 0);
     return {
       ...st, phase: 'action', cur: 0, canLay: true, mk: 0, board: [],
       laidAtTurnStart: false, attachedThisTurn: false, tookBeit: false,

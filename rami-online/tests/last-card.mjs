@@ -17,7 +17,7 @@ function check(label, cond) {
 // Three players; seat 0 is on turn and about to discard. `sizes` sets each
 // seat's hand size after that discard (seat 0 keeps one extra to throw).
 function table(sizes) {
-  let st = initGame(['א', 'ב', 'ג'].map(name => ({ name, isAI: false })));
+  let st = initGame(['א', 'ב', 'ג'].map(name => ({ name, isAI: false })), 0);
   const hand = (k) => Array.from({ length: k }, (_, i) => mkCard('h', (i % 13) + 1));
   st = {
     ...st, phase: 'action', cur: 0, buy: null, tookBeit: false, mustUseJoker: null,

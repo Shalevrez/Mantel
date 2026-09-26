@@ -31,7 +31,7 @@ check('unknown card is a no-op', moveCard(H, 'x', 'a') === H);
 check('input is left untouched', ids(H) === 'abcde');
 
 // The reducer moves the named seat's hand, and only that one.
-let st = initGame([{ name: 'שלו', isAI: false }, { name: 'דנה', isAI: false }]);
+let st = initGame([{ name: 'שלו', isAI: false }, { name: 'דנה', isAI: false }], 0);
 st = { ...st, players: st.players.map(p => ({ ...p, hand: H })) };
 const next = G(st, { type: 'REORDER', seat: 1, cid: 'a', targetId: 'e', after: true });
 check('reducer honours `after`', ids(next.players[1].hand) === 'bcdea');

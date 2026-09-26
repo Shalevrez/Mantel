@@ -20,7 +20,7 @@ const card = (id, suit, v) => ({ id, suit, v, j: false });
 const set7 = { id: 'g1', type: 'set', cards: [card('7h', 'h', 7), card('7d', 'd', 7), card('7c', 'c', 7)] };
 const seq = { id: 'g2', type: 'seq', cards: [card('3s', 's', 3), card('4s', 's', 4), card('5s', 's', 5)] };
 
-let st = initGame(['א', 'ב', 'ג'].map(name => ({ name, isAI: false })));
+let st = initGame(['א', 'ב', 'ג'].map(name => ({ name, isAI: false })), 0);
 st = {
   ...st, phase: 'action', cur: 0, canLay: true, board: [set7, seq],
   players: st.players.map((p, i) => ({
