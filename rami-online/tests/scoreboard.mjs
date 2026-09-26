@@ -20,7 +20,7 @@ function check(label, cond) {
 const game = () => initGame([
   { name: 'שלו', isAI: false },
   { name: 'דנה', isAI: false },
-]);
+], 0);
 
 // Give each seat a hand we know the value of, so the arithmetic is checkable.
 function withHands(st, hands) {

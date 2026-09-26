@@ -35,20 +35,22 @@ room.handleSocket(b, 'ב', 'ABCD', false, 'p-b', false);
 a.msg({ t: 'start', fillAI: false, minPlayers: 2 });
 await settle();
 
-// Seat 0 passes the opening card, seat 1 skips too → seat 0 draws.
-a.msg({ t: 'action', action: { type: 'SKIP' } }); await settle();
-b.msg({ t: 'action', action: { type: 'SKIP' } }); await settle();
-a.msg({ t: 'action', action: { type: 'DRAW' } }); await settle();
+// The opener (drawn at random) passes the opening card, the other skips too →
+// the opener draws.
+const f = room.state.cur, ws = [a, b], me = ws[f], them = ws[1 - f];
+me.msg({ t: 'action', action: { type: 'SKIP' } }); await settle();
+them.msg({ t: 'action', action: { type: 'SKIP' } }); await settle();
+me.msg({ t: 'action', action: { type: 'DRAW' } }); await settle();
 
-// Seat 0 tries to lay an invalid group: the refusal is theirs alone.
-const hand = a.last('state').state.players[0].hand;
-for (const c of hand.slice(0, 2)) a.msg({ t: 'action', action: { type: 'SEL', id: c.id } });
+// The opener tries to lay an invalid group: the refusal is theirs alone.
+const hand = me.last('state').state.players[f].hand;
+for (const c of hand.slice(0, 2)) me.msg({ t: 'action', action: { type: 'SEL', id: c.id } });
 await settle();
-a.msg({ t: 'action', action: { type: 'LAY' } }); await settle();
-const own = a.last('state').state.msg, other = b.last('state').state.msg;
+me.msg({ t: 'action', action: { type: 'LAY' } }); await settle();
+const own = me.last('state').state.msg, other = them.last('state').state.msg;
 check('the acting player sees their message', !!room.state.msg && own === room.state.msg);
 check('the opponent does not see it', other === '');
-check('the message owner is never sent out', a.last('state').state.msgSeat === undefined);
+check('the message owner is never sent out', me.last('state').state.msgSeat === undefined);
 
 // A paid buy is announced publicly and cleared on the next discard.
 let st = { ...room.state, sivuv: 2, phase: 'buying', cur: 1, buy: { checker: 0, origNext: 1, prev: 0 }, msg: '' };

@@ -26,7 +26,7 @@ check('Q-K+JK: the joker is J or A', seqLayouts([card('qh', 'h', 12), card('kh',
 check('A+JK+JK: 2,3 or Q,K', seqLayouts([card('ah', 'h', 1), joker('j1'), joker('j2')]).map(o => jv(o.cards)).join('|') === '2,3|12,13');
 
 // Lay with a chosen spot
-let st = initGame(['א', 'ב'].map(name => ({ name, isAI: false })));
+let st = initGame(['א', 'ב'].map(name => ({ name, isAI: false })), 0);
 const hand0 = [...run, card('9c', 'c', 9), card('7h', 'h', 7), card('3h', 'h', 3), card('8h', 'h', 8)];
 st = {
   ...st, phase: 'action', cur: 0, canLay: true, board: [], mk: 0,

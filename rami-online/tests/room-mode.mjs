@@ -102,7 +102,7 @@ function check(label, cond) {
 
 // ── 5. Buys with a penalty card are counted, free takes are not ──
 {
-  const base = initGame([{ name: 'א', isAI: false }, { name: 'ב', isAI: false }, { name: 'ג', isAI: false }]);
+  const base = initGame([{ name: 'א', isAI: false }, { name: 'ב', isAI: false }, { name: 'ג', isAI: false }], 0);
   check('a new game counts no buys', base.players.every(p => p.paidBuys === 0));
   const buying = { ...base, phase: 'buying', cur: 0, buy: { checker: 2, origNext: 1, prev: 0, free: false } };
   const paid = G(buying, { type: 'BUY', idx: 2 });
@@ -118,7 +118,7 @@ function check(label, cond) {
 // Only a buy with a penalty card is counted (and so charged). Drawing from the
 // deck, taking the discard on your turn, or taking the beit are all free.
 {
-  const base = initGame([{ name: 'א', isAI: false }, { name: 'ב', isAI: false }, { name: 'ג', isAI: false }]);
+  const base = initGame([{ name: 'א', isAI: false }, { name: 'ב', isAI: false }, { name: 'ג', isAI: false }], 0);
   const room = { mode: 'online', fee: 500, gameId: 'g' };
   const potOf = st => settle({ ...st, room }).pot;
   const fresh = { ...base, room, sivuv: 2, cur: 1 };
