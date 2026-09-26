@@ -412,6 +412,22 @@ function endDeck(state) {
   };
 }
 
+// When the deck runs out, the discard pile becomes the deck: every card in it is
+// shuffled back in, except the last one thrown, which stays face up as the new
+// pile's top. Drawing, taking and buying then go on exactly as before. Only when
+// there is nothing to reshuffle (the pile is down to that one card) is the deck
+// truly gone.
+function refillDeck(state) {
+  if (state.deck.length || state.discard.length < 2) return state;
+  const top = state.discard[state.discard.length - 1];
+  return {
+    ...state,
+    deck: shuffle(state.discard.slice(0, -1)),
+    discard: [top],
+    log: [...state.log, '🔄 החבילה נגמרה — האשפה עורבבה והפכה לחבילה'],
+  };
+}
+
 function nextCk(buy, n) {
   let nc = (buy.checker + 1) % n;
   if (nc === buy.prev) nc = (nc + 1) % n;
@@ -537,6 +553,8 @@ function G(state, action) {
     if (state.phase !== 'buying' || !state.buy || !state.players[action.idx]) return state;
     if (onLastCard(state.players[action.idx]))
       return { ...state, msg: '🚫 עם קלף אחרון ביד אי אפשר לקנות' };
+    // The penalty card comes from the deck, so an empty deck is refilled first.
+    if (!state.buy.free) state = refillDeck(state);
     const top = state.discard[state.discard.length - 1];
     const free = !!state.buy.free;
     const pen = free ? null : state.deck[0];
@@ -555,7 +573,7 @@ function G(state, action) {
               paidBuys: (p.paidBuys || 0) + 1 }
         : p
     );
-    return {
+    return refillDeck({
       ...state, phase: 'draw', buy: null,
       deck: free ? state.deck : state.deck.slice(1),
       discard: state.discard.slice(0, -1),
@@ -566,7 +584,7 @@ function G(state, action) {
       log: [...state.log, free
         ? `↑ ${state.players[action.idx].name} לקח מהאשפה (ללא קנס)`
         : `💰 ${state.players[action.idx].name} קנה`],
-    };
+    });
   }
 
   if (type === 'SKIP') {
@@ -585,20 +603,23 @@ function G(state, action) {
   // an extra card. Every other turn action already refuses a repeat this way.
   if (type === 'DRAW') {
     if (state.phase !== 'draw') return state;
+    state = refillDeck(state);
     if (!state.deck.length) return endDeck(state);
     const card = state.deck[0];
     const p = state.players[state.cur];
     const players = state.players.map((pl, i) =>
       i === state.cur ? { ...pl, hand: [...pl.hand, card], newIds: [card.id] } : pl
     );
-    return {
+    // Drawing the deck's last card turns the discard pile into the new deck at once,
+    // so the table never shows an empty deck while there are cards to reshuffle.
+    return refillDeck({
       ...state, phase: 'action',
       deck: state.deck.slice(1),
       // Discard pile is cumulative: the untaken card stays and the pile grows
       players, sel: [], staging: [],
       laidAtTurnStart: p.hasLaid, attachedThisTurn: false, tookBeit: false,
       undoBefore: { hand: [...p.hand, card], board: state.board, hasLaid: p.hasLaid, beit: state.beit },
-    };
+    });
   }
 
   // ── Take beit card (for ANT) ───────────────────────

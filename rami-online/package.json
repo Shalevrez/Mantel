@@ -1,11 +1,11 @@
 {
   "name": "rami-online",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "test": "node tests/host-reconnect.mjs && node tests/room-lifetime.mjs && node tests/ai-seats.mjs && node tests/scoreboard.mjs && node tests/reorder.mjs && node tests/attach-mark.mjs && node tests/resume.mjs && node tests/leave.mjs && node tests/last-card.mjs && node tests/joker-position.mjs && node tests/opening-discard.mjs && node tests/private-msg.mjs && node tests/economy.mjs && node tests/profile.mjs && node tests/room-mode.mjs && node tests/paid-game.mjs && node tests/turn-order.mjs",
+    "test": "node tests/host-reconnect.mjs && node tests/room-lifetime.mjs && node tests/ai-seats.mjs && node tests/scoreboard.mjs && node tests/reorder.mjs && node tests/attach-mark.mjs && node tests/resume.mjs && node tests/leave.mjs && node tests/last-card.mjs && node tests/joker-position.mjs && node tests/opening-discard.mjs && node tests/private-msg.mjs && node tests/economy.mjs && node tests/profile.mjs && node tests/room-mode.mjs && node tests/paid-game.mjs && node tests/turn-order.mjs && node tests/deck-refill.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "deploy": "npm run build && wrangler deploy",
