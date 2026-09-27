@@ -34,6 +34,10 @@ const CARD_W    = 'var(--card-w, 44px)';
 const CARD_H    = 'var(--card-h, 62px)';
 const CARD_W_SM = 'var(--card-w-sm, 26px)';
 const CARD_H_SM = 'var(--card-h-sm, 38px)';
+// The hand row: the gap between cards, and how much of a card must stay in
+// view when a long hand overlaps (see handOv in Game).
+const HAND_GAP = 2;
+const HAND_MIN_SHOW = .55;
 
 // ── When a press on a card turns into a drag ──────────────────────────────
 // Only movement lifts a card: past DRAG_SLOP pixels it follows the pointer, and
@@ -1366,6 +1370,34 @@ function Game({ state, dispatch, onLeave, wallet }) {
   const hand = sameCards(pendingOrder, human.hand)
     ? pendingOrder.map(id => human.hand.find(c => c.id === id))
     : human.hand;
+
+  // How far each hand card tucks under its neighbour, in px. A hand that would
+  // wrap onto a third row overlaps instead, so it fits in two — a phone held
+  // upright would otherwise give a third of its height to the hand. Each card
+  // keeps at least HAND_MIN_SHOW of its width in view, so it stays easy to
+  // tap; past that (a huge hand) a third row is allowed after all.
+  const [handOv, setHandOv] = useState(0);
+  useLayoutEffect(() => {
+    const row = handRowRef.current;
+    if (!row) return;
+    const measure = () => {
+      const slot = row.querySelector('.hand-slot');
+      const n = row.querySelectorAll('.hand-slot').length;
+      if (!slot || n < 2) { setHandOv(0); return; }
+      const cs = getComputedStyle(row);
+      const width = row.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      const step = slot.offsetWidth + HAND_GAP;
+      const fit = Math.max(1, Math.floor((width + HAND_GAP) / step));
+      if (Math.ceil(n / fit) <= 2) { setHandOv(0); return; }
+      const perRow = Math.ceil(n / 2);
+      const need = Math.ceil((perRow * step - width - HAND_GAP) / (perRow - 1));
+      setHandOv(Math.max(0, Math.min(need, Math.floor(slot.offsetWidth * (1 - HAND_MIN_SHOW)))));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(row);
+    return () => ro.disconnect();
+  }, [hand.length]);
   useEffect(() => {
     if (!pendingOrder) return;
     // Confirmed (the server's order caught up) or superseded (the cards changed).
@@ -1845,6 +1877,19 @@ function Game({ state, dispatch, onLeave, wallet }) {
         @media (orientation: portrait) {
           .ga-piles.wood { background: none; border-top: 0; box-shadow: none; }
         }
+        /* A phone held upright: the actions and the toolbar share one row, so
+           the hand is not stacked under two rows of buttons. On your turn the
+           buttons say what to do, so the phase line steps aside for them. */
+        @media (orientation: portrait) and (max-width: 699px) {
+          .hand-bar { display: flex; align-items: center; gap: 6px; margin: 0 auto 2px; max-width: 900px; }
+          .hand-tools { display: contents !important; }
+          .hand-phase { order: 1; flex: 1 1 auto; }
+          .hand-actions { order: 2; flex: 1 1 auto; margin: 0 !important; flex-wrap: nowrap !important; }
+          .hand-meta { order: 3; flex: none; }
+          .hand-meta button { margin-inline-end: 4px !important; padding-inline: 8px !important; }
+          .hand-bar.has-actions .hand-phase { display: none; }
+          .hand-bar .meta-word { display: none; }
+        }
 
         /* ── A landscape screen — laptop, desktop, a tablet or a phone on its
            side: the top bar is one thin row (title · opponents · tools), the
@@ -2320,7 +2365,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
 
         {/* One bar above the hand. A phone stacks it (actions, then the
             toolbar); wider screens run it in a single row — see .hand-bar. */}
-        <div className="hand-bar">
+        <div className={'hand-bar' + (isMyTurn && state.phase === 'action' ? ' has-actions' : '')}>
         {/* Action buttons — only when it's the human's action phase */}
         {isMyTurn && state.phase === 'action' && (
             <div className="hand-actions" style={{
@@ -2394,7 +2439,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
                 marginInlineEnd: 6,
                 fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
               }}
-            ><Icon name="hand" /> {myPts} נק׳ ביד</button>
+            ><Icon name="hand" /> {myPts}<span className="meta-word"> נק׳ ביד</span></button>
             <button
               onClick={() => { setPendingOrder(null); dispatch({ type: 'SORT' }); }}
               className="tap-40"
@@ -2403,7 +2448,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
                 borderRadius: 8, fontSize: 12, fontWeight: 700, padding: '5px 12px',
                 cursor: 'pointer', fontFamily: 'inherit',
               }}
-            ><Icon name="sort" /> מיין{keys.sort && <Kbd code={keys.sort} />}</button>
+            ><Icon name="sort" /><span className="meta-word"> מיין</span>{keys.sort && <Kbd code={keys.sort} />}</button>
             </span>
           </div>
         </div>{/* /hand-bar */}
@@ -2413,7 +2458,9 @@ function Game({ state, dispatch, onLeave, wallet }) {
             ref={handRowRef}
             style={{
               display: 'flex', flexWrap: 'wrap', justifyContent: 'center',
-              alignContent: 'flex-start', gap: 2, paddingBottom: 2,
+              alignContent: 'flex-start', gap: HAND_GAP, paddingBottom: 2,
+              // Balances the overlap the last card of each row pulls in.
+              paddingInlineEnd: handOv,
               // Room above the row for a selected card, which rises by a fifth
               // of its height.
               paddingTop: 'max(14px, calc(var(--card-h) * .2))',
@@ -2442,7 +2489,10 @@ function Game({ state, dispatch, onLeave, wallet }) {
                     // Nothing scrolls here — the hand is a fixed row — so the
                     // touch is ours to keep.
                     touchAction: 'none',
-                    zIndex: sel ? 100 : 1,
+                    // Overlapping (RTL): each card sits over the one to its
+                    // left, so every card's top-left index stays in view.
+                    zIndex: sel ? 100 : hand.length - handIdx,
+                    marginInlineEnd: handOv ? -handOv : undefined,
                     flexShrink: 0,
                     // A new round's hand is dealt one card after another.
                     animationDelay: dealIds && dealIds.has(c.id) ? `${handIdx * 55}ms` : undefined,

@@ -20,10 +20,11 @@ let st = startHand(initGame(
 
 // Put it in the state the player actually spends the turn in: my action phase,
 // a few groups already on the board, a couple of cards selected.
+// ?cur=N puts seat N on turn instead, to see the hand while waiting.
 st = {
   ...st,
   phase: 'action',
-  cur: 0,
+  cur: Number(params.get('cur') || 0) % seats,
   buy: null,
   canLay: true,
   board: [
