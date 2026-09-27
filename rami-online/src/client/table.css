@@ -295,13 +295,11 @@
 /* A card still in the air: its place is kept, but it isn't drawn yet. */
 .landing { visibility: hidden; }
 
-/* ── Reduce motion: the system setting turns decoration off ─── */
-@media (prefers-reduced-motion: reduce) {
-  .deal-card, .group-pop, .discard-card, .turn-banner, .opp-chip.on, .pc {
-    animation: none !important;
-  }
-  .hand-lift, .deck-stack, .drop-discard { transition: none !important; }
+/* ── Animations off: the game's own setting (anim.jsx) turns decoration off ─── */
+.no-anim :is(.deal-card, .group-pop, .discard-card, .turn-banner, .opp-chip.on, .pc) {
+  animation: none !important;
 }
+.no-anim :is(.hand-lift, .deck-stack, .drop-discard) { transition: none !important; }
 
 /* ── The tablecloth (the menus, the lobby) ─────────── */
 /* The game's namesake: a gingham mantel. Woven — a fine thread texture over

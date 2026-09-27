@@ -1,16 +1,33 @@
 // ═══════════════════════════════════════════════════════
 // ANIMATION — cards in flight, the "your turn" banner, confetti
 // Everything here is decoration on top of a state that has already changed:
-// the game never waits for an animation, and with the system's "reduce
-// motion" setting on, none of it runs.
+// the game never waits for an animation, and with animations turned off in
+// the game's settings none of it runs — except the "your turn" banner, which
+// is a notice and is shown still.
 // ═══════════════════════════════════════════════════════
 
 import { useEffect, useLayoutEffect, useRef } from "react";
 
-export function reducedMotion() {
-  try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; }
-  catch { return false; }
+// Animations are on unless the player turns them off in the settings. The
+// system's "reduce motion" is not consulted: phones set it for battery or
+// accessibility reasons that aren't about this game, and it hid the table's
+// animations from players who wanted them. The choice lives in this browser;
+// the `no-anim` class on <html> carries it to the CSS (table.css).
+const ANIM_KEY = 'mantel_anim';
+let animOn = (() => {
+  try { return localStorage.getItem(ANIM_KEY) !== 'off'; } catch { return true; }
+})();
+const applyAnim = () => { try { document.documentElement.classList.toggle('no-anim', !animOn); } catch {} };
+applyAnim();
+
+export const animationsOn = () => animOn;
+export function setAnimationsOn(on) {
+  animOn = !!on;
+  try { localStorage.setItem(ANIM_KEY, animOn ? 'on' : 'off'); } catch { /* storage blocked */ }
+  applyAnim();
 }
+
+export const reducedMotion = () => !animOn;
 
 const centre = (r) => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
 
@@ -65,8 +82,12 @@ export function Flyer({ f, onDone }) {
 }
 
 // "Your turn!" — a gold ribbon across the table for a moment. Click-through.
+// The timer starts once, on mount: the parent passes a fresh `onDone` on every
+// render, and restarting on each one kept the ribbon up while the table was busy.
 export function TurnBanner({ onDone, text = 'תורך!' }) {
-  useEffect(() => { const t = setTimeout(onDone, 1250); return () => clearTimeout(t); }, [onDone]);
+  const done = useRef(onDone);
+  done.current = onDone;
+  useEffect(() => { const t = setTimeout(() => done.current(), 1250); return () => clearTimeout(t); }, []);
   return (
     <div className="turn-banner" aria-live="polite">
       <span>{text}</span>

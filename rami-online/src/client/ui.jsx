@@ -26,6 +26,9 @@ import "./table.css";
 import { useKeys, hasMouse, keyLabel, Kbd, KeysEditor } from "./keys.jsx";
 import { Flyer, TurnBanner, Confetti, Fireworks, reducedMotion } from "./anim.jsx";
 
+// Phases during which the seat in `cur` is playing its turn.
+const TURN_PHASES = new Set(['buying', 'draw', 'action']);
+
 
 // Card geometry comes from --card-w/--card-h (declared in Game's stylesheet), so
 // one media query resizes every card, pip and corner at once. The fallbacks keep
@@ -1573,8 +1576,17 @@ function Game({ state, dispatch, onLeave, wallet }) {
     const prev = snap.current;
     const drop = dropFrom.current;
     dropFrom.current = null;
-    if (!prev || prev.state === state || reducedMotion()) return;
+    if (!prev || prev.state === state) return;
     const ps = prev.state;
+
+    // My turn has just begun. A turn opens in 'buying' (I'm offered the discard
+    // first), so waiting for 'draw' would miss it: it comes only after everyone
+    // else has passed on the card, and never when I take it. Shown with
+    // animations off too — it's a notice, not decoration (the CSS stills it).
+    const onTurn = (s) => s.cur === mySeat && TURN_PHASES.has(s.phase);
+    if (onTurn(state) && !onTurn(ps)) setBanner(b => b + 1);
+
+    if (reducedMotion()) return;
     const box = (sel) => document.querySelector(sel)?.getBoundingClientRect();
     const flights = [];
 
@@ -1629,11 +1641,6 @@ function Game({ state, dispatch, onLeave, wallet }) {
         });
       }
     });
-
-    // My turn has just begun.
-    const mineNow = isMyTurn && state.phase === 'draw';
-    const mineBefore = ps.cur === mySeat && ps.phase === 'draw';
-    if (mineNow && !mineBefore) setBanner(b => b + 1);
 
     if (flights.length) {
       const withKeys = flights.map(f => ({ ...f, key: ++flyId.current }));
