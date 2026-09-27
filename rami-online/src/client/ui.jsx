@@ -23,6 +23,7 @@ function tilt(id) {
 }
 import { RELEASES } from "../releases.js";
 import "./table.css";
+import { CourtArt, JokerArt, CornerOrnament } from "./cardart.jsx";
 import { useKeys, hasMouse, keyLabel, Kbd, KeysEditor } from "./keys.jsx";
 import { Flyer, TurnBanner, Confetti, Fireworks, reducedMotion } from "./anim.jsx";
 
@@ -123,13 +124,18 @@ function CardView({ card, sel, onClick, sm, back, glow, faded, newCard, attached
   );
 
   let middle;
-  if (card.j) middle = <div className="pc-jk">★</div>;
+  // The art (CourtArt, JokerArt) is hidden in the game's own deck; the
+  // alternative decks in the design gallery show it instead (decks.css).
+  if (card.j) middle = <><div className="pc-jk">★</div><JokerArt /></>;
   else if (face) middle = (
-    <div className={`pc-face ${face}`}>
-      <span className="crown">{CROWN[card.v]}</span>
-      <b>{vs}</b>
-      <i>{sym}</i>
-    </div>
+    <>
+      <div className={`pc-face ${face}`}>
+        <span className="crown">{CROWN[card.v]}</span>
+        <b>{vs}</b>
+        <i>{sym}</i>
+      </div>
+      <CourtArt v={card.v} sym={sym} />
+    </>
   );
   else if (card.v === 1) middle = <div className={'pc-ace' + (card.suit === 's' ? ' spade' : '')}>{sym}</div>;
   else middle = (
@@ -152,7 +158,7 @@ function CardView({ card, sel, onClick, sm, back, glow, faded, newCard, attached
     : glow ? `0 0 0 2px ${GOLD}, 0 0 12px ${GOLD}aa` : undefined;
 
   return (
-    <div onClick={onClick} className={`pc ${suitCls}`} style={{
+    <div onClick={onClick} className={`pc ${suitCls} s-${card.j ? 'j' : card.suit}`} style={{
       width: w, height: h, borderRadius: radius,
       margin: sm ? '0 1px' : '0 2px',
       cursor: onClick ? 'pointer' : 'default',
@@ -162,6 +168,8 @@ function CardView({ card, sel, onClick, sm, back, glow, faded, newCard, attached
       opacity: faded ? 0.38 : 1,
       animation: newCard ? 'newCardPulse 1.6s ease-in-out infinite' : 'none',
     }}>
+      <CornerOrnament pos="tl" />
+      <CornerOrnament pos="br" />
       {index('tl')}
       {middle}
       {!sm && index('br')}

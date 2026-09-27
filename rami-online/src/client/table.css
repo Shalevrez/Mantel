@@ -374,3 +374,7 @@
   .hub-mobile-title { display: none; }
   .menu-card { min-height: 210px !important; }
 }
+
+/* Optional card art (cardart.jsx) — off in the game's own deck. The design
+   gallery's alternative decks (decks.css) turn it on. */
+.pc-art, .pc-jart, .pc-orn { display: none; }
