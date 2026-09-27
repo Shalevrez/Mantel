@@ -1961,6 +1961,20 @@ function Game({ state, dispatch, onLeave, wallet }) {
         @media (max-width: 380px) {
           .phase-sub { display: none; }
         }
+        /* A narrow phone: the round's title and the four header buttons only
+           just share a row, so both tighten up — the lay badge keeps its sign,
+           and a long mishkakon name is cut short rather than running under
+           the buttons. */
+        @media (max-width: 420px) {
+          .ga-title { gap: 6px !important; padding-inline: 8px !important; }
+          .ga-tools { gap: 3px !important; padding-inline: 8px !important; }
+          .title-mk { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+          .title-lay { padding: 2px 6px !important; }
+          .title-lay-word { display: none; }
+          .title-round-long { display: none; }
+        }
+        .title-round-short { display: none; }
+        @media (max-width: 420px) { .title-round-short { display: inline; } }
         /* In the one-row hand bar the extras only fit on a wide screen. */
         @media (orientation: landscape) and (max-width: 1499px) {
           .phase-sub { display: none; }
@@ -2011,15 +2025,19 @@ function Game({ state, dispatch, onLeave, wallet }) {
       <div className="ga-title" style={{
         padding: '7px 12px', color: CREAM, fontSize: 13, zIndex: 1,
         display: 'flex', alignItems: 'center', gap: 10, whiteSpace: 'nowrap',
+        minWidth: 0, overflow: 'hidden',
       }}>
-        <span style={{ fontWeight: 700, color: GOLD }}>{mk.name}</span>
-        <span style={{ color: 'rgba(255,255,255,.7)' }}>סיבוב {state.sivuv}</span>
-        <span style={{
+        <span className="title-mk" style={{ fontWeight: 700, color: GOLD }}>{mk.name}</span>
+        <span style={{ color: 'rgba(255,255,255,.7)', flex: 'none' }} title={`סיבוב ${state.sivuv}`}>
+          <span className="title-round-long">סיבוב</span><span className="title-round-short">ס׳</span> {state.sivuv}
+        </span>
+        <span className="title-lay" title={state.canLay ? 'אפשר להוריד' : 'סבב ראשון — עוד אי אפשר להוריד'} style={{
+          flex: 'none',
           fontSize: 11, padding: '2px 9px', borderRadius: 20,
           background: state.canLay ? 'rgba(34,197,94,.25)' : 'rgba(251,191,36,.25)',
           color: state.canLay ? '#86efac' : GOLD,
         }}>
-          <IconText text={state.canLay ? '✓ הורדה' : '⚠ סבב ראשון'} />
+          <IconText text={state.canLay ? '✓' : '⚠'} /><span className="title-lay-word">{state.canLay ? ' הורדה' : ' סבב ראשון'}</span>
         </span>
       </div>
       <div className="ga-tools" style={{
