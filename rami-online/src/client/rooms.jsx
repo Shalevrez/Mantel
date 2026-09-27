@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════
 // ROOM SETUP — the practice table and the online room
 // Pick the table size and either the bots' level (practice) or
-// the entry fee (online), then PLAY. The prize maths comes from
+// the entry fee (online), then start. The prize maths comes from
 // economy.js, the same code that settles the game at the end.
 // ═══════════════════════════════════════════════════════
 
@@ -57,6 +57,41 @@ const Row = ({ children }) => (
     {children}
   </div>
 );
+
+// ═══════════════════════════════════════════════════════
+// MODE — the first choice when creating a room: a table online
+// with friends, or practice against the computer
+// ═══════════════════════════════════════════════════════
+
+const MODES = [
+  { key: 'online',   icon: 'users', title: 'אונליין', sub: 'עם חברים · חינם או על מטבעות' },
+  { key: 'practice', icon: 'bot',   title: 'אימון',   sub: 'מול המחשב · חינם' },
+];
+
+export function ModeSwitch({ mode, onMode }) {
+  return (
+    <div role="tablist" style={{
+      display: 'flex', gap: 6, maxWidth: 440, margin: '0 auto 10px', padding: 5,
+      borderRadius: 16, background: FELTD, border: `2px solid ${GOLD}`,
+      boxShadow: '0 6px 18px rgba(19, 40, 79, .25)',
+    }}>
+      {MODES.map(m => {
+        const on = m.key === mode;
+        return (
+          <button key={m.key} role="tab" aria-selected={on} onClick={() => onMode(m.key)} style={{
+            flex: 1, minWidth: 0, padding: '9px 6px', borderRadius: 11, cursor: 'pointer',
+            border: 'none', textAlign: 'center',
+            background: on ? `linear-gradient(${GOLD}, #a37624)` : 'transparent',
+            color: on ? FELTD : SOFT,
+          }}>
+            <div style={{ fontSize: 17, fontWeight: 800 }}><IconLabel name={m.icon}>{m.title}</IconLabel></div>
+            <div style={{ fontSize: 11.5, fontWeight: 600, marginTop: 2, opacity: on ? 0.85 : 1 }}>{m.sub}</div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 // ═══════════════════════════════════════════════════════
 // PRACTICE — you against bots, free, no rewards
@@ -161,7 +196,7 @@ export function OnlineSetup({ coins, busy, error, onPlay, onGetCoins }) {
   );
 }
 
-function PlayBar({ busy, error, disabled, onPlay, label = 'PLAY' }) {
+function PlayBar({ busy, error, disabled, onPlay, label = 'התחל' }) {
   return (
     <div style={{ maxWidth: 440, margin: '26px auto 0' }}>
       <button onClick={onPlay} disabled={busy || disabled}

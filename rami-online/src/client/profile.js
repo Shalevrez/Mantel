@@ -59,6 +59,9 @@ function blank(fields) {
     pending: {},   // gameId → coins paid (fee + buys) for a game still under way
     buys: {},      // gameId → how many paid buys have been charged so far
     ads: { day: '', count: 0 },
+    // Trophies won today and this week, for the daily and weekly tables.
+    // Each counter starts over when its day or week does.
+    period: { day: '', dayTrophies: 0, week: '', weekTrophies: 0 },
     ...fields,
   };
 }
@@ -212,6 +215,7 @@ export function applyGameResult(gameId, r) {
     x.coins += r.prize;
     x.xp += r.xp;
     x.trophies = Math.max(0, x.trophies + r.trophies);
+    x.period = countPeriod(x.period, r.trophies);
     x.games += 1;
     if (r.place === 1) x.wins += 1;
     delete x.pending[gameId];
@@ -270,18 +274,64 @@ export function claimAd(startedAt, now = Date.now()) {
 }
 
 // ── Leaderboard (demo) ───────────────────────────────
-// Every profile in this browser, plus a handful of made-up rivals so the
-// table has something to rank against. The rivals are marked as such.
+// Four tables: this browser's profiles on their own (local), those plus a
+// handful of made-up rivals by all-time trophies (global), and the trophies
+// won this week and today (weekly, daily). The rivals are marked as such.
 const RIVALS = [
   ['נועה', 480], ['איתי', 355], ['מאיה', 260], ['יונתן', 190],
   ['שירה', 120], ['עומר', 75], ['תמר', 30],
 ];
-export function leaderboard() {
+export const LEADERBOARD_SCOPES = ['local', 'global', 'weekly', 'daily'];
+
+// Periods run on the player's own clock. A week starts on Sunday.
+const pad = n => String(n).padStart(2, '0');
+const dateKey = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+export function dayKey(now = Date.now()) { return dateKey(new Date(now)); }
+export function weekKey(now = Date.now()) {
+  const d = new Date(now);
+  d.setDate(d.getDate() - d.getDay());
+  return dateKey(d);
+}
+
+// Add a game's trophies to the day's and the week's count, starting either
+// over when its period has turned.
+function countPeriod(p, trophies, now = Date.now()) {
+  const day = dayKey(now), week = weekKey(now);
+  const cur = p || {};
+  return {
+    day, dayTrophies: (cur.day === day ? cur.dayTrophies : 0) + trophies,
+    week, weekTrophies: (cur.week === week ? cur.weekTrophies : 0) + trophies,
+  };
+}
+
+// A profile's trophies in a period — zero once that period is over.
+function periodTrophies(u, scope, now) {
+  const p = u.period;
+  if (!p) return 0;
+  if (scope === 'daily') return p.day === dayKey(now) ? p.dayTrophies : 0;
+  return p.week === weekKey(now) ? p.weekTrophies : 0;
+}
+
+// A rival's made-up haul for the period: the same all day (or week), and a
+// new one the next, scaled to how strong the rival is overall.
+function rivalHaul(name, total, key, scale) {
+  let h = 0;
+  for (const ch of `${name}|${key}`) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return Math.round((h % 1000) / 1000 * scale * (0.4 + total / 480));
+}
+
+export function leaderboard(scope = 'global', now = Date.now()) {
   const me = current();
+  const periodic = scope === 'daily' || scope === 'weekly';
   const rows = Object.values(load().users).map(u => ({
-    id: u.id, name: u.displayName, trophies: u.trophies, xp: u.xp, you: !!me && u.id === me.id,
+    id: u.id, name: u.displayName, xp: u.xp, you: !!me && u.id === me.id,
+    trophies: periodic ? periodTrophies(u, scope, now) : u.trophies,
   }));
-  for (const [name, trophies] of RIVALS)
-    rows.push({ id: `rival:${name}`, name, trophies, xp: trophies * 60, rival: true });
+  if (scope !== 'local') for (const [name, total] of RIVALS) rows.push({
+    id: `rival:${name}`, name, xp: total * 60, rival: true,
+    trophies: scope === 'daily' ? rivalHaul(name, total, dayKey(now), 30)
+            : scope === 'weekly' ? rivalHaul(name, total, weekKey(now), 110)
+            : total,
+  });
   return rows.sort((a, b) => b.trophies - a.trophies || b.xp - a.xp);
 }

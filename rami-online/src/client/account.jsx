@@ -6,7 +6,7 @@
 // ═══════════════════════════════════════════════════════
 
 import { useState, useEffect } from "react";
-import { FELT, FELTD, GOLD, GOLDD, CREAM, CLOTH } from "../game-core.js";
+import { FELT, FELTD, GOLD, CREAM, CLOTH } from "../game-core.js";
 import { levelInfo, shortNum } from "../economy.js";
 import { Icon, IconLabel } from "./icons.jsx";
 import * as P from "./profile.js";
@@ -76,7 +76,7 @@ export function Avatar({ profile, size = 46, level }) {
 // ── Top bar ──────────────────────────────────────────
 // Who's playing, their level and progress to the next, trophies, and
 // the wallet with its "get coins" button — on every hub screen.
-export function TopBar({ profile, onProfile, onCoins, onSettings }) {
+export function TopBar({ profile, onProfile, onCoins, onTrophies, onSettings }) {
   const lv = levelInfo(profile.xp);
   return (
     <div style={{
@@ -107,7 +107,8 @@ export function TopBar({ profile, onProfile, onCoins, onSettings }) {
 
       <div style={{ flex: 1 }} />
 
-      <Pill icon="trophy" color={GOLD} value={profile.trophies.toLocaleString('en-US')} title="גביעים — הדירוג שלך" />
+      <Pill icon="trophy" color={GOLD} value={profile.trophies.toLocaleString('en-US')} title="גביעים — הדירוג שלך"
+            onClick={onTrophies} />
       <Pill icon="coins" color="#facc15" value={profile.coins.toLocaleString('en-US')} title="מטבעות"
             action={onCoins && (
               <button onClick={onCoins} style={{
@@ -127,9 +128,11 @@ export function TopBar({ profile, onProfile, onCoins, onSettings }) {
   );
 }
 
-function Pill({ icon, color, value, title, action }) {
+// With `onClick` the pill is a button (the trophies open the leaderboard).
+function Pill({ icon, color, value, title, action, onClick }) {
   return (
-    <div title={title} style={{
+    <div title={title} onClick={onClick} role={onClick ? 'button' : undefined} style={{
+      cursor: onClick ? 'pointer' : 'default',
       display: 'flex', alignItems: 'center', gap: 6, padding: '5px 6px 5px 12px',
       paddingInlineStart: 10, borderRadius: 99, background: PANEL,
       border: `1px solid ${LINE}`, color: CREAM, fontWeight: 700, fontSize: 15,
@@ -144,13 +147,13 @@ function Pill({ icon, color, value, title, action }) {
 // ── Hub frame ────────────────────────────────────────
 // Top bar, the screen itself, and a bottom strip with the way back and
 // the screen's name (the layout of the reference game's menus).
-export function Hub({ profile, title, onBack, onProfile, onCoins, onSettings, children, footer }) {
+export function Hub({ profile, title, onBack, onProfile, onCoins, onTrophies, onSettings, children, footer }) {
   return (
     <div style={{
       minHeight: '100dvh', background: HUB_BG, color: FELTD, direction: 'rtl',
       display: 'flex', flexDirection: 'column',
     }}>
-      <TopBar profile={profile} onProfile={onProfile} onCoins={onCoins} onSettings={onSettings} />
+      <TopBar profile={profile} onProfile={onProfile} onCoins={onCoins} onTrophies={onTrophies} onSettings={onSettings} />
       <div style={{ flex: 1, padding: '18px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <div style={{ width: '100%', maxWidth: 820 }}>{children}</div>
       </div>
@@ -501,47 +504,6 @@ export function Modal({ children, onClose, width = 400 }) {
         }}><Icon name="x" size={14} strokeWidth={3} /></button>
         {children}
       </div>
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════
-// LEADERBOARD
-// ═══════════════════════════════════════════════════════
-
-export function LeaderboardList() {
-  const rows = P.leaderboard();
-  return (
-    <div style={{ maxWidth: 520, margin: '0 auto' }}>
-      <div style={{ textAlign: 'center', marginBottom: 12 }}>
-        <Icon name="trophy" size={44} color={GOLD} strokeWidth={1.6} />
-        <h2 style={{ margin: '4px 0', fontSize: 24 }}>טבלת הדירוג</h2>
-        <div style={{ color: MUTED, fontSize: 12.5 }}>
-          לפי גביעים. הפרופילים מהדפדפן הזה, ולצידם יריבים לדוגמה.
-        </div>
-        <DemoTag style={{ marginTop: 6 }} />
-      </div>
-      {rows.map((r, i) => (
-        <div key={r.id} style={{
-          display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', marginBottom: 6,
-          borderRadius: 12, background: r.you ? '#fefce8' : CARD,
-          border: `2px solid ${r.you ? GOLD : '#e7e5e4'}`,
-        }}>
-          <span style={{
-            width: 28, textAlign: 'center', fontWeight: 800,
-            color: i === 0 ? '#ca8a04' : i === 1 ? '#9ca3af' : i === 2 ? '#c2410c' : MUTED,
-          }}>{i + 1}</span>
-          <span style={{ flex: 1, fontWeight: 700 }}>
-            {r.name}
-            {r.you && <span style={{ color: GOLDD, fontWeight: 400 }}> (את/ה)</span>}
-            {r.rival && <span style={{ color: MUTED, fontWeight: 400, fontSize: 11 }}> · לדוגמה</span>}
-          </span>
-          <span style={{ color: MUTED, fontSize: 12 }}>רמה {levelInfo(r.xp).level}</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontWeight: 800, minWidth: 56, justifyContent: 'flex-end' }}>
-            <Icon name="trophy" color={GOLD} size={15} />{r.trophies}
-          </span>
-        </div>
-      ))}
     </div>
   );
 }

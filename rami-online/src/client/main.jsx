@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useCallback, Component } from "react";
 import { createRoot } from "react-dom/client";
+// The app's one typeface, bundled and served with the app (see index.html).
+import "@fontsource-variable/rubik";
 import { FELT, FELTD, GOLD, CREAM, CLOTH, AI_LEVELS, AI_LEVEL_NAMES } from "../game-core.js";
 import { Game, RoundEnd, GameEnd, RulesModal, ReleaseNotes, LeaveConfirm } from "./ui.jsx";
 import { Icon, IconLabel } from "./icons.jsx";
@@ -7,9 +9,10 @@ import { LATEST_RELEASE } from "../releases.js";
 import { createRoom, joinRoom } from "./net.js";
 import { settle, buyPrice } from "../economy.js";
 import * as P from "./profile.js";
-import { useProfile, LoginScreen, Hub, MenuCards, ProfileSheet, SettingsSheet, LeaderboardList, RewardStrip } from "./account.jsx";
-import { PracticeSetup, OnlineSetup, JoinDialog, RoomTerms } from "./rooms.jsx";
+import { useProfile, LoginScreen, Hub, MenuCards, ProfileSheet, SettingsSheet, RewardStrip } from "./account.jsx";
+import { PracticeSetup, OnlineSetup, ModeSwitch, JoinDialog, RoomTerms } from "./rooms.jsx";
 import { StoreStall } from "./store.jsx";
+import { LeaderboardStall } from "./leaderboard.jsx";
 
 // ═══════════════════════════════════════════════════════
 // ONLINE APP
@@ -75,6 +78,12 @@ function leaveRoom(next) {
   // A clean home screen: drop the ?code= so the old room isn't pre-filled.
   location.href = location.pathname + (typeof next === 'string' ? `?go=${next}` : '');
 }
+// "צור חדר" opens on the kind of room the player made last: online or practice.
+const CREATE_MODE_KEY = 'rami_create_mode';
+function createMode() {
+  return readStore(CREATE_MODE_KEY) === 'practice' ? 'practice' : 'online';
+}
+
 function startScreen() {
   const go = new URLSearchParams(location.search).get('go');
   // Once read, gone: a reload later on shouldn't jump back to that screen.
@@ -85,7 +94,8 @@ function startScreen() {
 function App() {
   const profile = useProfile();
   const [resumeCode] = useState(roomToResume);
-  // home | practice | online | leaderboard | store | resume | lobby | game
+  // home | practice | online | resume | lobby | game
+  // (practice and online are the two sides of the create-room screen)
   const [screen, setScreen] = useState(() => resumeCode ? 'resume' : startScreen());
   const [code, setCode] = useState(() => urlCode() || lastRoom());
   const [lobby, setLobby] = useState(null);
@@ -98,6 +108,7 @@ function App() {
   const [showRules, setShowRules] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showStore, setShowStore] = useState(false);
+  const [showBoard, setShowBoard] = useState(false);
   // An invite link opens the join box straight away.
   const [showJoin, setShowJoin] = useState(() => !!urlCode() && !resumeCode);
   const connRef = useRef(null);
@@ -265,14 +276,15 @@ function App() {
 
     const hub = (title, body, back = () => go('home')) => (
       <Hub profile={profile} title={title} onBack={back} onSettings={() => setShowSettings(true)}
-           onProfile={() => setShowProfile(true)} onCoins={() => setShowStore(true)}>
+           onProfile={() => setShowProfile(true)} onCoins={() => setShowStore(true)}
+           onTrophies={() => setShowBoard(true)}>
         {body}
       </Hub>
     );
 
     if (screen === 'home') return (
       <Hub profile={profile} onProfile={() => setShowProfile(true)} onCoins={() => setShowStore(true)}
-           onSettings={() => setShowSettings(true)}
+           onTrophies={() => setShowBoard(true)} onSettings={() => setShowSettings(true)}
            footer={<>
              <button onClick={() => setShowRules(true)} style={hubLink}><IconLabel name="book">חוקים</IconLabel></button>
              <button onClick={() => setNotes(true)} style={hubLink}><IconLabel name="sparkles">מה חדש ב־{LATEST_RELEASE.version}</IconLabel></button>
@@ -283,14 +295,12 @@ function App() {
           <div style={{ color: '#78716c', fontSize: 13 }}>אונליין · 2–6 שחקנים</div>
         </div>
         <MenuCards items={[
-          { key: 'practice', title: 'אימון', sub: 'מול המחשב · חינם', icon: 'bot', suit: '♣',
-            onClick: () => go('practice') },
-          { key: 'online', title: 'צור חדר', sub: 'חינמי או על מטבעות', icon: 'coins', suit: '♦',
-            onClick: () => go('online') },
+          { key: 'create', title: 'צור חדר', sub: 'אונליין או אימון', icon: 'plus', suit: '♣',
+            onClick: () => go(createMode()) },
           { key: 'join', title: 'הצטרף לחדר', sub: 'עם קוד מחבר', icon: 'users', suit: '♥',
             onClick: () => { setError(''); setShowJoin(true); } },
-          { key: 'rank', title: 'דירוג', sub: 'טבלת הגביעים', icon: 'trophy', suit: '♠',
-            onClick: () => go('leaderboard') },
+          { key: 'rank', title: 'דירוג', sub: 'מקומי, עולמי, שבועי ויומי', icon: 'trophy', suit: '♠',
+            onClick: () => setShowBoard(true) },
           { key: 'store', title: 'חנות', sub: 'מטבעות וסרטונים', icon: 'cart', suit: '♦', badge: 'דמו',
             onClick: () => setShowStore(true) },
         ]} />
@@ -300,13 +310,17 @@ function App() {
       </Hub>
     );
 
-    if (screen === 'practice')
-      return hub('אימון', <PracticeSetup busy={connecting} error={error} onPlay={handlePractice} />);
-    if (screen === 'online')
-      return hub('חדר אונליין', <OnlineSetup coins={profile.coins} busy={connecting} error={error}
-                                             onGetCoins={() => setShowStore(true)}
-                                             onPlay={({ seats, fee }) => handleCreate({ mode: 'online', seats, fee })} />);
-    if (screen === 'leaderboard') return hub('דירוג', <LeaderboardList />);
+    if (screen === 'practice' || screen === 'online') {
+      const pickMode = (m) => { writeStore(CREATE_MODE_KEY, m); go(m); };
+      return hub('צור חדר', <>
+        <ModeSwitch mode={screen} onMode={pickMode} />
+        {screen === 'practice'
+          ? <PracticeSetup busy={connecting} error={error} onPlay={handlePractice} />
+          : <OnlineSetup coins={profile.coins} busy={connecting} error={error}
+                         onGetCoins={() => setShowStore(true)}
+                         onPlay={({ seats, fee }) => handleCreate({ mode: 'online', seats, fee })} />}
+      </>);
+    }
 
     if (screen === 'lobby') {
       // A practice table deals itself; there is no one to wait for.
@@ -347,6 +361,7 @@ function App() {
       {screenEl}
       {showProfile && profile && <ProfileSheet profile={profile} onClose={() => setShowProfile(false)} />}
       {showStore && profile && <StoreStall onClose={() => setShowStore(false)} />}
+      {showBoard && profile && <LeaderboardStall onClose={() => setShowBoard(false)} />}
       {showSettings && <SettingsSheet version={APP_VERSION} onClose={() => setShowSettings(false)} />}
       {notes && <ReleaseNotes onClose={closeNotes} current={APP_VERSION} />}
     </>

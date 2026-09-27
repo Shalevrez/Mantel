@@ -25,6 +25,21 @@ const STALL_CSS = `
 
 export function StoreStall({ onClose }) {
   const [tab, setTab] = useState('coins'); // coins | free
+  return (
+    <Stall title="חנות" icon="cart" label="חנות" onClose={onClose} tab={tab} setTab={setTab}
+           tabs={[
+             { key: 'coins', icon: 'coins', label: 'מטבעות' },
+             { key: 'free', icon: 'gift', label: 'מטבעות חינם' },
+           ]}>
+      {tab === 'coins' ? <PacksTab /> : <FreeTab />}
+    </Stall>
+  );
+}
+
+// The stall itself, for any sheet that opens over the screen the same way
+// (the store, the leaderboard): the awning with its sign, the tablecloth
+// counter that scrolls, and a row of tabs at the bottom.
+export function Stall({ title, icon, label, onClose, tabs, tab, setTab, children }) {
   // Escape closes the stall, as a tap outside it does.
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -39,12 +54,12 @@ export function StoreStall({ onClose }) {
       animation: 'stallFade .2s ease-out',
     }}>
       <style>{STALL_CSS}</style>
-      <div onClick={e => e.stopPropagation()} role="dialog" aria-label="חנות" style={{
+      <div onClick={e => e.stopPropagation()} role="dialog" aria-label={label || title} style={{
         position: 'relative', width: '100%', maxWidth: 620,
         height: 'min(86dvh, 820px)', display: 'flex', flexDirection: 'column',
         animation: 'stallUp .28s cubic-bezier(.2, .8, .3, 1)',
       }}>
-        <Awning />
+        <Awning title={title} icon={icon} />
         <button onClick={onClose} title="סגור" style={{
           position: 'absolute', top: 30, left: 14, zIndex: 3, width: 44, height: 44, borderRadius: '50%',
           background: `radial-gradient(circle at 35% 30%, #e7c27a, ${GOLD} 60%, #8a6418)`,
@@ -58,7 +73,7 @@ export function StoreStall({ onClose }) {
           flex: 1, minHeight: 0, overflowY: 'auto', background: CLOTH,
           borderInline: `3px solid ${GOLD}`, padding: '18px 14px 20px',
         }}>
-          {tab === 'coins' ? <PacksTab /> : <FreeTab />}
+          {children}
         </div>
 
         {/* Tabs */}
@@ -67,12 +82,9 @@ export function StoreStall({ onClose }) {
           borderInline: `3px solid ${GOLD}`,
           paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         }}>
-          {[
-            { key: 'coins', icon: 'coins', label: 'מטבעות' },
-            { key: 'free', icon: 'gift', label: 'מטבעות חינם' },
-          ].map((t, i) => (
+          {tabs.map((t, i) => (
             <button key={t.key} onClick={() => setTab(t.key)} style={{
-              flex: 1, padding: '12px 0 10px', cursor: 'pointer', border: 'none',
+              flex: 1, minWidth: 0, padding: '12px 0 10px', cursor: 'pointer', border: 'none',
               borderInlineStart: i ? `1px solid ${LINE}` : 'none',
               background: tab === t.key ? `linear-gradient(${FELT}, ${FELTD})` : 'transparent',
               color: tab === t.key ? GOLD : SOFT, fontWeight: 800, fontSize: 13.5,
@@ -91,7 +103,7 @@ export function StoreStall({ onClose }) {
 
 // The stall's striped awning: a navy valance with the sign, and scalloped
 // stripes of navy and cream under it, edged in gold.
-function Awning() {
+function Awning({ title, icon }) {
   const n = 7;
   return (
     <div style={{ position: 'relative', flexShrink: 0, pointerEvents: 'none' }}>
@@ -101,7 +113,7 @@ function Awning() {
         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
         color: GOLD, fontWeight: 800, fontSize: 14, letterSpacing: 1,
       }}>
-        <Icon name="cart" size={16} /> חנות <DemoTag style={{ fontSize: 9.5, padding: '1px 6px' }} />
+        <Icon name={icon} size={16} /> {title} <DemoTag style={{ fontSize: 9.5, padding: '1px 6px' }} />
       </div>
       <div style={{ display: 'flex', height: 46, borderInline: `3px solid ${GOLD}`, background: GOLD }}>
         {Array.from({ length: n }, (_, i) => (
