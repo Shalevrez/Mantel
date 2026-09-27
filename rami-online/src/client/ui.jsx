@@ -8,21 +8,21 @@
 import { useState, useReducer, useEffect, useLayoutEffect, useRef } from "react";
 import {
   SUITS, SYM, COL, VD, cSc, cTxt, MK, FELT, FELTD, GOLD, CREAM,
-  INK, GOLDD, CLOTH, CLOTH_BASE, TABLE, TABLE_BASE,
+  INK, GOLDD, CLOTH, CLOTH_BASE,
   isSeq, isSet, isGroup, orderSeq, orderGroup, jokerValues, attachPos, meetsReq,
   seqLayouts, layGroup, sortHand, moveCard, handScore,
 } from "../game-core.js";
 import { Icon, IconLabel, IconText, RankBadge } from "./icons.jsx";
 
-// Card backs (hands, fans, the draw pile): a classic white back with a navy
-// lattice inside a thin navy frame, so they stand out on the navy table.
-// One background shorthand for all layers, so no later property can override it.
-const BACK_BG = `repeating-linear-gradient(45deg, transparent 0 4px, rgba(30,58,95,.35) 4px 5px),
-                 repeating-linear-gradient(-45deg, transparent 0 4px, rgba(30,58,95,.35) 4px 5px),
-                 #fdf8f0`;
-// A white margin, then the navy frame line, drawn inside the card edge.
-const BACK_FRAME = `inset 0 0 0 3px #fdf8f0, inset 0 0 0 4px ${FELT}`;
+// How far a card on the discard pile is turned: a few degrees either way,
+// derived from its id so it never twitches between renders.
+function tilt(id) {
+  let hsh = 0;
+  for (const ch of String(id)) hsh = (hsh * 31 + ch.charCodeAt(0)) | 0;
+  return ((Math.abs(hsh) % 11) - 5) * 1.1;
+}
 import { RELEASES } from "../releases.js";
+import "./table.css";
 
 
 // Card geometry comes from --card-w/--card-h (declared in Game's stylesheet), so
@@ -67,90 +67,104 @@ const hdrBtn = {
 // Colour of the "just attached" mark, on both the group and the card itself.
 const ATT = '#f472b6';
 
+// Where the pips go on a number card, as on a real deck: [column, row] with
+// columns l/c/r and rows from 0 (top) to 1 (bottom). Pips below the middle are
+// printed upside down, the way a card reads from either end.
+const PIP_X = { l: 34, c: 50, r: 66 };
+const PIPS = {
+  2:  [['c', 0], ['c', 1]],
+  3:  [['c', 0], ['c', .5], ['c', 1]],
+  4:  [['l', 0], ['r', 0], ['l', 1], ['r', 1]],
+  5:  [['l', 0], ['r', 0], ['c', .5], ['l', 1], ['r', 1]],
+  6:  [['l', 0], ['r', 0], ['l', .5], ['r', .5], ['l', 1], ['r', 1]],
+  7:  [['l', 0], ['r', 0], ['c', .25], ['l', .5], ['r', .5], ['l', 1], ['r', 1]],
+  8:  [['l', 0], ['r', 0], ['c', .25], ['l', .5], ['r', .5], ['c', .75], ['l', 1], ['r', 1]],
+  9:  [['l', 0], ['r', 0], ['l', 1/3], ['r', 1/3], ['c', .5], ['l', 2/3], ['r', 2/3], ['l', 1], ['r', 1]],
+  10: [['l', 0], ['r', 0], ['c', 1/6], ['l', 1/3], ['r', 1/3], ['l', 2/3], ['r', 2/3], ['c', 5/6], ['l', 1], ['r', 1]],
+};
+// The pip field runs from 19% to 81% of the card's height.
+const pipY = (row) => 19 + row * 62;
+const FACE = { 11: 'j', 12: 'q', 13: 'k' };
+const CROWN = { 11: '⚜', 12: '♛', 13: '♚' };
+
 // `attached`: this card was just attached to a board group — pink ring and a pin.
+// The card itself is drawn by table.css (.pc); this only picks the parts.
 function CardView({ card, sel, onClick, sm, back, glow, faded, newCard, attached }) {
   const w = sm ? CARD_W_SM : CARD_W;
   const h = sm ? CARD_H_SM : CARD_H;
-  // Everything inside a card is a ratio of its height, so it scales with it.
-  const fs = (ratio) => `calc(${h} * ${ratio})`;
-  const radius = `calc(${h} * .1)`;
+  const radius = `calc(${w} * .085)`;
 
   if (back) return (
-    <div style={{
-      width: w, height: h,
-      borderRadius: radius, flexShrink: 0, margin: sm ? '0 1px' : '0 2px',
-      background: BACK_BG,
-      border: '1.5px solid #fdf8f0',
-      boxShadow: `${BACK_FRAME}, 0 2px 6px rgba(0,0,0,.45)`,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    <div className="pc back" style={{
+      width: w, height: h, borderRadius: radius, margin: sm ? '0 1px' : '0 2px',
+      boxShadow: glow ? `0 0 0 2px ${GOLD}, 0 0 14px ${GOLD}aa` : undefined,
     }}>
-      <span style={{ color: FELT, fontSize: fs(.29) }}>♦</span>
+      <div className="pc-back" />
     </div>
   );
 
-  const color = card.j ? '#fff' : COL[card.suit];
+  const suitCls = card.j ? 'joker' : (card.suit === 'h' || card.suit === 'd') ? 'red' : 'black';
   const vs = card.j ? 'JK' : VD(card.v);
   const sym = card.j ? '★' : SYM[card.suit];
-  const isFace = !card.j && (card.v === 1 || card.v >= 11);
+  const face = !card.j && FACE[card.v];
 
-  const inY = `calc(${h} * .045)`, inX = `calc(${w} * .09)`;
-  const corner = (rotate) => (
-    <div style={{
-      position: 'absolute', lineHeight: 0.82, textAlign: 'center', color,
-      ...(rotate
-        ? { bottom: inY, left: inX, transform: 'rotate(180deg)' }
-        : { top: inY, right: inX }),
-    }}>
-      <div style={{ fontSize: fs(.18), fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{vs}</div>
-      <div style={{ fontSize: fs(.145) }}>{sym}</div>
+  const index = (pos) => (
+    <div className={`pc-idx ${pos}`}>
+      {card.j
+        ? <b>{'JOKER'.split('').map((ch, i) => <span key={i}>{ch}</span>)}</b>
+        : <><b className={vs === '10' ? 'ten' : undefined}>{vs}</b><i>{sym}</i></>}
     </div>
   );
 
+  let middle;
+  if (card.j) middle = <div className="pc-jk">★</div>;
+  else if (face) middle = (
+    <div className={`pc-face ${face}`}>
+      <span className="crown">{CROWN[card.v]}</span>
+      <b>{vs}</b>
+      <i>{sym}</i>
+    </div>
+  );
+  else if (card.v === 1) middle = <div className={'pc-ace' + (card.suit === 's' ? ' spade' : '')}>{sym}</div>;
+  else middle = (
+    <>
+      <div className="pc-pips">
+        {(PIPS[card.v] || []).map(([col, row], i) => (
+          <span key={i} className={row > .5 ? 'f' : undefined}
+                style={{ left: `${PIP_X[col]}%`, top: `${pipY(row)}%` }}>{sym}</span>
+        ))}
+      </div>
+      <div className="pc-big">{sym}</div>
+    </>
+  );
+
+  // Selection, a fresh card, an attach mark: rings drawn over the card's own
+  // shadow (inline, so they win over table.css).
+  const ring = sel ? '0 0 0 2px #60a5fa, 0 12px 22px rgba(96,165,250,.55)'
+    : attached ? `0 0 0 2px ${ATT}, 0 0 14px ${ATT}cc`
+    : newCard ? `0 0 0 3px ${GOLD}, 0 0 18px ${GOLD}88`
+    : glow ? `0 0 0 2px ${GOLD}, 0 0 12px ${GOLD}aa` : undefined;
+
   return (
-    <div onClick={onClick} style={{
-      position: 'relative',
-      width: w, height: h,
-      borderRadius: radius, flexShrink: 0, margin: sm ? '0 1px' : '0 2px',
-      background: card.j
-        ? 'linear-gradient(150deg,#7c3aed 0%,#9f67f5 50%,#5b21b6 100%)'
-        : 'linear-gradient(157deg,#ffffff 0%,#fbf6ec 55%,#f1e7d6 100%)',
-      border: sel ? '2px solid #60a5fa'
-        : attached ? `2px solid ${ATT}`
-        : (newCard || glow) ? `2px solid ${GOLD}`
-        : '1px solid rgba(0,0,0,.22)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      cursor: onClick ? 'pointer' : 'default', userSelect: 'none', overflow: 'hidden',
+    <div onClick={onClick} className={`pc ${suitCls}`} style={{
+      width: w, height: h, borderRadius: radius,
+      margin: sm ? '0 1px' : '0 2px',
+      cursor: onClick ? 'pointer' : 'default',
       transform: sel ? `translateY(calc(${h} * -.19)) scale(1.07)` : 'none',
-      boxShadow: sel ? '0 11px 22px rgba(96,165,250,.55)'
-        : attached ? `0 0 0 2px ${ATT}, 0 0 14px ${ATT}cc`
-        : newCard ? `0 0 0 3px ${GOLD}, 0 0 18px ${GOLD}88`
-        : glow ? `0 0 12px ${GOLD}aa` : '0 2px 5px rgba(0,0,0,.32)',
+      boxShadow: ring,
       transition: 'transform .11s cubic-bezier(.34,1.56,.64,1), box-shadow .11s',
       opacity: faded ? 0.38 : 1,
       animation: newCard ? 'newCardPulse 1.6s ease-in-out infinite' : 'none',
     }}>
+      {index('tl')}
+      {middle}
+      {!sm && index('br')}
       {attached && (
         <div style={{
           position: 'absolute', bottom: 1, left: '50%', transform: 'translateX(-50%)',
           lineHeight: 1, zIndex: 2, pointerEvents: 'none', color: '#be185d',
-        }}><Icon name="pin" size={fs(.2)} strokeWidth={2.6} /></div>
+        }}><Icon name="pin" size={`calc(${h} * .2)`} strokeWidth={2.6} /></div>
       )}
-      {/* gloss highlight */}
-      <div style={{
-        position: 'absolute', top: 0, left: 0, right: 0, height: '42%',
-        background: 'linear-gradient(180deg, rgba(255,255,255,.45), transparent)',
-        pointerEvents: 'none',
-      }} />
-      {corner(false)}
-      <div style={{
-        fontSize: card.j ? fs(.32) : fs(.37),
-        color, lineHeight: 1, fontWeight: card.j ? 800 : 400,
-        textShadow: card.j ? '0 1px 2px rgba(0,0,0,.3)' : (isFace ? `0 0 1px ${color}55` : 'none'),
-        zIndex: 1,
-      }}>
-        {card.j ? '★' : sym}
-      </div>
-      {!sm && corner(true)}
     </div>
   );
 }
@@ -170,13 +184,16 @@ function GroupView({ group, onAttach, canAttach, hot, attBy }) {
     <div onClick={onAttach} data-gid={group.id} className="group-pop" style={{
       position: 'relative',
       display: 'inline-flex', alignItems: 'center',
-      background: hot ? 'rgba(96,165,250,.28)' : seq ? 'rgba(220,252,231,.9)' : 'rgba(254,243,199,.9)',
-      border: `2px solid ${hot || canAttach ? '#60a5fa' : att ? ATT : seq ? 'rgba(34,197,94,.55)' : 'rgba(217,119,6,.5)'}`,
-      borderRadius: 10, padding: '5px 7px', margin: att ? '11px 3px 3px' : '3px 3px',
+      // A shallow mat pressed into the felt; the outline says run (green) or
+      // set (gold) without shouting over the cards.
+      background: hot ? 'rgba(96,165,250,.22)' : 'rgba(3,10,24,.30)',
+      border: `${hot || canAttach || att ? 2 : 1}px solid ${hot || canAttach ? '#60a5fa' : att ? ATT : seq ? 'rgba(134,239,172,.40)' : 'rgba(240,200,110,.45)'}`,
+      borderRadius: 12, padding: '6px 8px', margin: att ? '12px 5px 5px' : '5px 5px',
       cursor: canAttach ? 'pointer' : 'default',
       boxShadow: hot ? '0 0 0 4px rgba(96,165,250,.6), 0 0 18px rgba(96,165,250,.5)'
         : canAttach ? '0 0 0 3px rgba(96,165,250,.35)'
-        : att ? `0 0 12px ${ATT}66` : 'none',
+        : att ? `0 0 12px ${ATT}66, inset 0 2px 8px rgba(0,0,0,.35)`
+        : 'inset 0 2px 8px rgba(0,0,0,.40), 0 1px 0 rgba(255,255,255,.06)',
       transform: hot ? 'scale(1.04)' : 'none',
       transition: 'box-shadow .1s, transform .1s, background .1s',
     }}>
@@ -1500,9 +1517,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
   };
 
   return (
-    <div className="game-shell" style={{
-      background: TABLE,
-      backgroundColor: TABLE_BASE,
+    <div className="game-shell felt" style={{
       direction: 'rtl',
       userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none',
     }}>
@@ -1557,7 +1572,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
         }
         /* The top bar's background: one box behind the title, opponent and
            tools cells, however many rows they take. */
-        .ga-topbg  { grid-area: 1 / 1 / 3 / -1; background: rgba(6,14,30,.6); border-bottom: 1px solid ${GOLD}44; }
+        .ga-topbg  { grid-area: 1 / 1 / 3 / -1; }
         .ga-title  { grid-area: title; }
         .ga-tools  { grid-area: tools; }
         .ga-opp    { grid-area: opp; }
@@ -1585,20 +1600,20 @@ function Game({ state, dispatch, onLeave, wallet }) {
         .opp-meta { font-size: 11px; color: rgba(255,255,255,.75); white-space: nowrap; }
         .opp-chip.on .opp-name, .opp-chip.on .opp-meta { color: #fffbeb; }
 
-        /* The hand's panel lights up on your turn. */
-        .dock { background: #0f172a; border-top: 3px solid transparent;
-                transition: background .15s, border-color .15s, box-shadow .15s; }
-        .dock.turn { background: linear-gradient(180deg, #7c4a09, #1a1206);
-                     border-top-color: #f59e0b; box-shadow: inset 0 8px 24px -8px rgba(245,158,11,.5); }
-        /* In portrait the piles row sits on the felt, not in the panel. */
-        .ga-piles.dock, .ga-piles.dock.turn { background: none; border-top: 0; box-shadow: none; }
+        /* The hand rests on the wooden rail (.wood, table.css), whose brass
+           trim lights up on your turn. */
+        .wood { transition: border-color .15s, box-shadow .15s; }
+        /* Upright, the piles sit on the felt between the board and the hand. */
+        @media (orientation: portrait) {
+          .ga-piles.wood { background: none; border-top: 0; box-shadow: none; }
+        }
 
         /* ── A landscape screen — laptop, desktop, a tablet or a phone on its
            side: the top bar is one thin row (title · opponents · tools), the
            board takes the full width, and the piles move into the corner beside
            the hand — the shortest trip for the mouse or the thumb. A tablet held
            upright keeps the phone's column, with bigger cards (below). ── */
-        @media (min-width: 700px) and (orientation: landscape), (orientation: landscape) and (max-height: 560px) {
+        @media (orientation: landscape) {
           .game-grid {
             grid-template-columns: auto minmax(0, 1fr) auto;
             grid-template-rows: auto minmax(0, 1fr) auto auto auto;
@@ -1619,12 +1634,11 @@ function Game({ state, dispatch, onLeave, wallet }) {
           .hand-actions { order: 2; flex: 0 1 560px; margin: 0 !important; }
           .hand-meta { order: 3; flex: 1 1 auto; justify-content: flex-end; }
           .ga-board .board-groups { justify-content: center; }
-          .ga-piles.dock { padding: 8px 14px 10px; align-items: center !important;
-                           border-inline-start: 1px solid rgba(255,255,255,.08); }
-          .ga-piles.dock.turn { background: linear-gradient(180deg, #7c4a09, #1a1206);
-                                border-top: 3px solid #f59e0b;
-                                box-shadow: inset 0 8px 24px -8px rgba(245,158,11,.5); }
-          .ga-piles.dock:not(.turn) { background: #0f172a; border-top: 3px solid transparent; }
+          /* Extra room on the outer edge for the discard pile's tilt. */
+          .ga-piles.wood { padding: 8px 10px 12px; padding-inline-end: 16px;
+                           align-items: center !important;
+                           border-inline-start: 1px solid rgba(0,0,0,.45);
+                           gap: 12px !important; }
         }
 
         /* Tablet: cards sized by whichever axis runs out first. */
@@ -1648,7 +1662,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
           :root { --card-w: clamp(32px, 9.5vh, 44px); }
           .ga-title, .ga-tools { padding-top: 3px !important; padding-bottom: 3px !important; }
           .hand-hint, .phase-sub { display: none; }
-          .ga-piles.dock { padding: 4px 8px 6px; gap: 8px !important; }
+          .ga-piles.wood { padding: 4px 10px 6px; gap: 10px !important; }
         }
 
         /* The header's buttons keep their words only where there's room. */
@@ -1703,7 +1717,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
       {/* Three cells over one shared background: the round (title), the
           opponents and the buttons (tools). A phone stacks the opponents under
           the other two; anything wider lays all three out in one thin row. */}
-      <div className="ga-topbg" />
+      <div className="ga-topbg leather" />
       <div className="ga-title" style={{
         padding: '7px 12px', color: CREAM, fontSize: 13, zIndex: 1,
         display: 'flex', alignItems: 'center', gap: 10, whiteSpace: 'nowrap',
@@ -1775,7 +1789,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
       </div>
 
       {/* ── Piles row ─────────────────────────────── */}
-      <div className={'ga-piles dock' + (dockTurn ? ' turn' : '')} style={{
+      <div className={'ga-piles wood' + (dockTurn ? ' turn' : '')} style={{
         display: 'flex', justifyContent: 'center', alignItems: 'flex-end',
         gap: 18, padding: '8px 0', flexShrink: 0,
       }}>
@@ -1804,21 +1818,21 @@ function Game({ state, dispatch, onLeave, wallet }) {
           <div style={{ color: 'rgba(255,255,255,.7)', fontSize: 10, marginBottom: 3 }}>
             חבילה ({state.deckCount ?? state.deck?.length ?? 0})
           </div>
-          <div
-            onClick={() => state.phase === 'draw' && isMyTurn && drawOnce({ type: 'DRAW' })}
-            style={{
-              width: 'var(--card-w)', height: 'var(--card-h)',
-              borderRadius: 'calc(var(--card-h) * .1)',
-              border: `2px solid ${state.phase === 'draw' && isMyTurn ? GOLD : '#fdf8f0'}`,
-              cursor: state.phase === 'draw' && isMyTurn ? 'pointer' : 'default',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: `${BACK_FRAME}, ` + (state.phase === 'draw' && isMyTurn ? `0 0 14px ${GOLD}88` : '0 2px 8px rgba(0,0,0,.45)'),
-              transition: 'box-shadow .12s',
-              background: BACK_BG,
-            }}
-          >
-            <Icon name="cards" size="calc(var(--card-h) * .39)" color={FELT} strokeWidth={2} />
-          </div>
+          {/* A real stack: its edges show, and it thins out as it runs down.
+              It glows when it's yours to draw from. */}
+          {(() => {
+            const live = state.phase === 'draw' && isMyTurn;
+            const left = state.deckCount ?? state.deck?.length ?? 0;
+            return (
+              <div
+                onClick={() => live && drawOnce({ type: 'DRAW' })}
+                className={'deck-stack' + (live ? ' live' : left < 12 ? ' thin' : '')}
+                style={{ cursor: live ? 'pointer' : 'default', margin: '0 4px 6px 0' }}
+              >
+                <CardView card={{ id: 'deck' }} back />
+              </div>
+            );
+          })()}
         </div>
 
         {/* Discard pile — cumulative; take the top only via the buying offer */}
@@ -1844,10 +1858,14 @@ function Game({ state, dispatch, onLeave, wallet }) {
                       className="discard-card"
                       style={{
                         position: 'absolute', left: idx * 6, bottom: idx * 3, zIndex: idx,
-                        filter: isTop ? 'none' : 'brightness(.82)',
+                        filter: isTop ? 'none' : 'brightness(.85)',
                       }}
                     >
-                      <CardView card={c} />
+                      {/* Thrown, not placed: each card lands a little askew,
+                          always the same way for the same card. */}
+                      <div style={{ transform: `rotate(${tilt(c.id)}deg)` }}>
+                        <CardView card={c} />
+                      </div>
                     </div>
                   );
                 })}
@@ -1947,15 +1965,15 @@ function Game({ state, dispatch, onLeave, wallet }) {
           const reqMet = human.hasLaid || meetsReq(state.staging, state.mk);
           return (
           <div style={{
-            background: 'rgba(254,243,199,.9)',
-            border: '2px dashed rgba(217,119,6,.55)',
+            background: 'rgba(3,10,24,.35)',
+            border: '2px dashed rgba(224,178,82,.7)',
             borderRadius: 12, padding: '7px 9px', marginBottom: 8,
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
-              <span style={{ color: GOLDD, fontSize: 12, fontWeight: 700 }}>
+              <span style={{ color: GOLD, fontSize: 12, fontWeight: 700 }}>
                 <Icon name="hourglass" /> בתהליך הורדה — {state.staging.length} קבוצ{state.staging.length > 1 ? 'ות' : 'ה'}
               </span>
-              <span style={{ color: '#57534e', fontSize: 11 }}>
+              <span style={{ color: 'rgba(255,255,255,.75)', fontSize: 11 }}>
                 {!reqMet ? `דרוש: ${MK[state.mk].name}` : <><Icon name="check" /> מוכן</>}
               </span>
             </div>
@@ -1963,8 +1981,8 @@ function Game({ state, dispatch, onLeave, wallet }) {
               {state.staging.map(g => (
                 <div key={g.id} style={{
                   display: 'inline-flex', alignItems: 'center',
-                  background: 'rgba(255,255,255,.88)', borderRadius: 8,
-                  padding: '3px 5px',
+                  background: 'rgba(3,10,24,.30)', borderRadius: 10,
+                  padding: '5px 6px', boxShadow: 'inset 0 2px 6px rgba(0,0,0,.35)',
                 }}>
                   {g.cards.map(c => <CardView key={c.id} card={c} sm />)}
                 </div>
@@ -2030,7 +2048,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
 
 
       {/* ── Human hand area — always visible ─────── */}
-      <div className={'ga-hand dock' + (dockTurn ? ' turn' : '')} ref={handAreaRef} style={{
+      <div className={'ga-hand wood' + (dockTurn ? ' turn' : '')} ref={handAreaRef} style={{
         padding: '8px 10px 10px', flexShrink: 0, minWidth: 0,
       }}>
 
