@@ -333,28 +333,40 @@
   border: .9cqw solid #b0101f;
   background: linear-gradient(135deg, #f0a6ad, #d23f4c);
 }
-/* The king: the reference art itself, cropped to its panel and crown
-   (x 255–1250, y 190–1800 of the 1500×2000 source). */
-[data-v="art"] .pc:has(.pc-face.k) .pc-photo {
+/* The court art: one Higgsfield card per figure and colour — the red card's
+   panel is red, the black card's black (public/cards/<figure>-<red|black>.webp,
+   joker.webp). Each image is cropped to its panel and headwear; the crop is
+   per image (--crop-size / --crop-pos), measured from the source. */
+[data-v="art"] .pc.has-art .pc-photo {
   top: 9.5cqh; border: none;
-  background: url(/cards/king.webp) 50.5% 48.7% / 150.75% 124.22% no-repeat;
+  background: var(--art) var(--crop-pos, 50.5% 48.7%) / var(--crop-size, 150.75% 124.22%) no-repeat;
 }
+[data-v="art"] .pc.red:has(.pc-face.k)   { --art: url(/cards/king-red.webp); }
+[data-v="art"] .pc.black:has(.pc-face.k) { --art: url(/cards/king-black.webp); }
+[data-v="art"] .pc.red:has(.pc-face.q)   { --art: url(/cards/queen-red.webp); }
+[data-v="art"] .pc.black:has(.pc-face.q) { --art: url(/cards/queen-black.webp); }
+[data-v="art"] .pc.red:has(.pc-face.j)   { --art: url(/cards/jack-red.webp); }
+[data-v="art"] .pc.black:has(.pc-face.j) { --art: url(/cards/jack-black.webp); }
+[data-v="art"] .pc.joker                 { --art: url(/cards/joker.webp); }
 /* The source king wears a diamond on his chest; each card shows its own suit. */
-[data-v="art"] .pc:has(.pc-face.k) .pc-photo::after {
+[data-v="art"] .pc.has-art:has(.pc-face.k) .pc-photo::after {
   position: absolute; left: 50%; top: 66.6%; transform: translate(-50%, -50%);
   width: 17%; height: 12.5%; background: #7d1120;
   display: flex; align-items: center; justify-content: center;
   color: #e7b95c; font-size: 7.5cqh; line-height: 1;
   font-family: "DejaVu Sans", "Segoe UI Symbol", sans-serif;
 }
-[data-v="art"] .pc.s-h:has(.pc-face.k) .pc-photo::after { content: "♥"; }
-[data-v="art"] .pc.s-d:has(.pc-face.k) .pc-photo::after { content: "♦"; }
-[data-v="art"] .pc.s-c:has(.pc-face.k) .pc-photo::after { content: "♣"; }
-[data-v="art"] .pc.s-s:has(.pc-face.k) .pc-photo::after { content: "♠"; }
+[data-v="art"] .pc.s-h.has-art:has(.pc-face.k) .pc-photo::after { content: "♥"; }
+[data-v="art"] .pc.s-d.has-art:has(.pc-face.k) .pc-photo::after { content: "♦"; }
+[data-v="art"] .pc.s-c.has-art:has(.pc-face.k) .pc-photo::after { content: "♣"; }
+[data-v="art"] .pc.s-s.has-art:has(.pc-face.k) .pc-photo::after { content: "♠"; }
+/* Black cards without art yet: a black panel. */
+[data-v="art"] .pc.black:not(.has-art) .pc-photo { border-color: #16181d; background: linear-gradient(135deg, #3a3d44, #111317); }
+
 /* Queen, prince and joker: placeholders until their Higgsfield art arrives —
    the drawn figures, standing in the same panel. */
-[data-v="art"] .pc:not(:has(.pc-face.k)) .pc-port.pc-single,
-[data-v="art"] .pc.joker .pc-clown {
+[data-v="art"] .pc:not(.has-art) .pc-port.pc-single,
+[data-v="art"] .pc.joker:not(.has-art) .pc-clown {
   display: block; position: absolute; top: 13cqh; bottom: 10cqh; left: 17cqw; right: 16.7cqw;
   width: auto; height: auto; z-index: 1;
 }

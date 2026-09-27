@@ -155,7 +155,21 @@ const JUMBO_CARDS = [
 ];
 
 // ?deck=modern — one deck only; ?cat=2 — one category; ?mini=0 — no small sizes.
+// The Higgsfield images already in public/cards/ (the art row uses them; the
+// rest show the drawn figure in a panel of their colour until they arrive).
+const ART = ['king-red'];
+function markArt() {
+  document.querySelectorAll('[data-v="art"] .pc').forEach(el => {
+    const fig = el.classList.contains('joker') ? 'joker'
+      : el.querySelector('.pc-face.k') ? 'king' : el.querySelector('.pc-face.q') ? 'queen'
+      : el.querySelector('.pc-face.j') ? 'jack' : null;
+    if (!fig) return;
+    const key = fig === 'joker' ? 'joker' : `${fig}-${el.classList.contains('red') ? 'red' : 'black'}`;
+    el.classList.toggle('has-art', ART.includes(key));
+  });
+}
 function Decks() {
+  useEffect(markArt);
   const jumbo = params.get('set') === 'jumbo';
   const only = params.get('deck');
   const base = jumbo ? JUMBO_ROWS : DECKS;
