@@ -113,5 +113,29 @@ function check(label, cond) {
         lb.every((r, i) => i === 0 || lb[i - 1].trophies >= r.trophies));
 }
 
+// ── Leaderboard scopes ──
+{
+  P.loginGuest();
+  const me = P.current();
+  P.applyGameResult('lb-1', { place: 1, prize: 0, xp: 10, trophies: 25 });
+  P.applyGameResult('lb-2', { place: 3, prize: 0, xp: 10, trophies: -5 });
+  const mine = (scope, now) => P.leaderboard(scope, now).find(r => r.id === me.id);
+  check('local shows only this browser\'s profiles', P.leaderboard('local').every(r => !r.rival));
+  check('global adds the rivals', P.leaderboard('global').some(r => r.rival));
+  check('daily counts today\'s trophies, losses included', mine('daily').trophies === 20);
+  check('weekly counts this week\'s trophies', mine('weekly').trophies === 20);
+  const nextWeek = Date.now() + 8 * 24 * 3600 * 1000;
+  check('a new day and week start from zero', mine('daily', nextWeek).trophies === 0 && mine('weekly', nextWeek).trophies === 0);
+  check('the all-time count keeps them', mine('global', nextWeek).trophies === me.trophies);
+  const d1 = P.leaderboard('daily').filter(r => r.rival).map(r => r.trophies).join();
+  check('a rival\'s daily haul holds for the day', d1 === P.leaderboard('daily').filter(r => r.rival).map(r => r.trophies).join());
+  for (const s of P.LEADERBOARD_SCOPES) {
+    const lb = P.leaderboard(s);
+    check(`${s} is sorted by trophies`, lb.every((r, i) => i === 0 || lb[i - 1].trophies >= r.trophies));
+  }
+  // 27 Sep 2026 is a Sunday; the Wednesday after is in its week.
+  check('the week starts on Sunday', P.weekKey(new Date(2026, 8, 30, 12).getTime()) === '2026-09-27');
+}
+
 if (failures) { console.log(`\n${failures} failed`); process.exit(1); }
 console.log('\nall profile checks passed');

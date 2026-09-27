@@ -1,6 +1,7 @@
 // Dev-only harness: renders <Game> against a real, server-shaped state so the
 // layout can be inspected at any viewport without a Worker or a second player.
 import { createRoot } from "react-dom/client";
+import "@fontsource-variable/rubik";
 import { initGame, startHand, mkCard, G, MK } from "../game-core.js";
 import { viewFor } from "../worker/index.js";
 import { Game, RoundEnd, GameEnd, ScoreModal } from "./ui.jsx";

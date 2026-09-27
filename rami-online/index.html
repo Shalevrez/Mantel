@@ -7,18 +7,18 @@
     <title>מנטל · אונליין</title>
     <style>
       /*
-        One font stack for the whole app. `system-ui` resolves to whatever the
-        platform already uses for its own UI — San Francisco on iOS/macOS,
-        Roboto on Android, Segoe UI on Windows, the desktop font on Linux — so
-        every browser gets a font that is installed by definition, with real
-        Hebrew glyphs and no webfont download to wait for (or to be blocked).
-        The names after it are fallbacks for older engines that don't know
-        `system-ui`; Noto Sans Hebrew is last-resort for Linux boxes whose
-        default sans has no Hebrew.
+        One typeface for the whole app: Rubik, which draws Hebrew, Latin and
+        digits alike. The platform UI fonts don't — San Francisco and Roboto
+        have no Hebrew, so a line like "רמה 3 · 1,200" came out in two fonts
+        (Hebrew from a fallback, the numbers from the system font). The font
+        files are bundled by Vite (imported in main.jsx) and served with the
+        app, not from a font CDN; the browser only fetches the Hebrew and
+        Latin files a page actually uses. Until they arrive, and anywhere
+        Rubik has no glyph (card suits, emoji), the system stack takes over.
       */
       :root {
-        --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
-                   "Noto Sans Hebrew", Arial, sans-serif;
+        --font-ui: "Rubik Variable", system-ui, -apple-system, "Segoe UI", Roboto,
+                   "Helvetica Neue", "Noto Sans Hebrew", Arial, sans-serif;
       }
 
       html, body, #root { height: 100%; margin: 0; padding: 0; background: #faf6ee; }
