@@ -57,6 +57,13 @@ function clearSelection() {
   } catch { /* nothing selectable — fine */ }
 }
 
+// The top bar's small buttons (rules, scores, what's new, leave).
+const hdrBtn = {
+  background: 'rgba(255,255,255,.12)', color: CREAM, border: 'none',
+  borderRadius: 8, fontSize: 12, fontWeight: 700, padding: '4px 9px',
+  cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+};
+
 // Colour of the "just attached" mark, on both the group and the card itself.
 const ATT = '#f472b6';
 
@@ -1190,6 +1197,8 @@ function Game({ state, dispatch, onLeave, wallet }) {
   const me      = mySeat >= 0 ? state.players[mySeat] : state.players[0];
   const cur     = state.players[state.cur];
   const isMyTurn = mySeat === state.cur;
+  // The hand's panel (and, beside it, the piles) light up on my turn.
+  const dockTurn = isMyTurn && state.phase !== 'round_end' && state.phase !== 'game_end';
   // `human`/`cur.isAI` in the original meant "the local human". Online, that maps
   // to "is it my turn": UI controls light up only on my own turn.
   const human   = me;
@@ -1511,8 +1520,8 @@ function Game({ state, dispatch, onLeave, wallet }) {
         }
 
         :root {
-          /* One knob for every card on the table. Portrait: grow with the phone's
-             width, within sane bounds. */
+          /* One knob for every card on the table. A phone: grow with its width,
+             within sane bounds. Tablets and desktops get their own sizes below. */
           --card-w: clamp(40px, 12vw, 56px);
           --card-h: calc(var(--card-w) * 1.41);
           --card-w-sm: calc(var(--card-w) * .6);
@@ -1526,82 +1535,139 @@ function Game({ state, dispatch, onLeave, wallet }) {
           display: flex; justify-content: center;
           overflow: hidden;
         }
-        /* The play field is capped on wide screens so a desktop browser doesn't
-           strand the piles in the middle of an ocean of felt. */
+
+        /* ── Phone, portrait: one column. The top bar is two rows (title and
+           tools, then the opponents as chips); the piles sit between the board
+           and the hand, where the thumb already is. ── */
         .game-grid {
-          width: 100%; max-width: 1040px; height: 100%;
+          width: 100%; height: 100%;
           display: grid;
-          grid-template-columns: minmax(0, 1fr);
-          grid-template-rows: auto auto minmax(0, 1fr) auto auto auto auto auto;
-          grid-template-areas: "header" "opp" "board" "piles" "prompt" "msg" "status" "hand";
+          grid-template-columns: minmax(0, 1fr) auto;
+          grid-template-rows: auto auto minmax(0, 1fr) auto auto auto auto;
+          grid-template-areas:
+            "title  tools"
+            "opp    opp"
+            "board  board"
+            "piles  piles"
+            "prompt prompt"
+            "msg    msg"
+            "hand   hand";
           padding-left: env(safe-area-inset-left, 0px);
           padding-right: env(safe-area-inset-right, 0px);
         }
-        .ga-header { grid-area: header; }
+        /* The top bar's background: one box behind the title, opponent and
+           tools cells, however many rows they take. */
+        .ga-topbg  { grid-area: 1 / 1 / 3 / -1; background: rgba(6,14,30,.6); border-bottom: 1px solid ${GOLD}44; }
+        .ga-title  { grid-area: title; }
+        .ga-tools  { grid-area: tools; }
         .ga-opp    { grid-area: opp; }
         .ga-board  { grid-area: board; min-height: 0; overflow-y: auto; }
         .ga-piles  { grid-area: piles; }
         .ga-prompt { grid-area: prompt; }
         .ga-msg    { grid-area: msg; }
-        .ga-status { grid-area: status; }
         .ga-hand   { grid-area: hand; }
-        /* Portrait: the rail is transparent and its children sit in their own
-           grid areas. Landscape turns it into a real side column (below). */
-        .rail { display: contents; }
 
-        /* ── Landscape on a phone: height is the scarce axis, width is free.
-           Move the opponents, the piles and the status line into a side rail so
-           the whole vertical budget goes to the board and the hand. ── */
-        @media (orientation: landscape) and (max-height: 560px) {
-          :root {
-            /* Now bounded by height, so the hand still fits in one row. */
-            --card-w: clamp(32px, 9.5vh, 44px);
-          }
+        /* Opponent chip: two short lines (name, then cards and score). */
+        .opp-chip {
+          flex: 1 1 0; min-width: 0; max-width: 200px;
+          display: flex; flex-direction: column; align-items: center; gap: 2px;
+          padding: 5px 6px; border-radius: 11px; color: ${CREAM};
+          background: rgba(6,14,30,.45); border: 2px solid rgba(255,255,255,.12);
+          transition: background .15s, border-color .15s, box-shadow .15s;
+        }
+        .opp-chip.on {
+          background: linear-gradient(145deg, #b45309, #f59e0b);
+          border-color: #fde68a; box-shadow: 0 0 16px rgba(245,158,11,.6);
+          animation: turnGlow 1.8s ease-in-out infinite;
+        }
+        .opp-name { font-weight: 700; font-size: 12px; max-width: 100%;
+                    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .opp-meta { font-size: 11px; color: rgba(255,255,255,.75); white-space: nowrap; }
+        .opp-chip.on .opp-name, .opp-chip.on .opp-meta { color: #fffbeb; }
+
+        /* The hand's panel lights up on your turn. */
+        .dock { background: #0f172a; border-top: 3px solid transparent;
+                transition: background .15s, border-color .15s, box-shadow .15s; }
+        .dock.turn { background: linear-gradient(180deg, #7c4a09, #1a1206);
+                     border-top-color: #f59e0b; box-shadow: inset 0 8px 24px -8px rgba(245,158,11,.5); }
+        /* In portrait the piles row sits on the felt, not in the panel. */
+        .ga-piles.dock, .ga-piles.dock.turn { background: none; border-top: 0; box-shadow: none; }
+
+        /* ── A landscape screen — laptop, desktop, a tablet or a phone on its
+           side: the top bar is one thin row (title · opponents · tools), the
+           board takes the full width, and the piles move into the corner beside
+           the hand — the shortest trip for the mouse or the thumb. A tablet held
+           upright keeps the phone's column, with bigger cards (below). ── */
+        @media (min-width: 700px) and (orientation: landscape), (orientation: landscape) and (max-height: 560px) {
           .game-grid {
-            max-width: none;
-            grid-template-columns: minmax(0, 1fr) clamp(108px, 18vw, 156px);
+            grid-template-columns: auto minmax(0, 1fr) auto;
             grid-template-rows: auto minmax(0, 1fr) auto auto auto;
             grid-template-areas:
-              "header header"
-              "board  rail"
-              "prompt rail"
-              "msg    rail"
-              "hand   rail";
+              "title  opp    tools"
+              "board  board  board"
+              "prompt prompt prompt"
+              "msg    msg    msg"
+              "hand   hand   piles";
           }
-          .rail {
-            grid-area: rail; display: flex; flex-direction: column;
-            min-height: 0;
-          }
-          /* Only the opponent list scrolls. The piles and the status line — which
-             is where "whose turn is it" lives — stay pinned and always visible. */
-          .ga-opp {
-            /* !important: the portrait layout pins this row with an inline
-               flex-shrink: 0, which would otherwise win over this rule. */
-            flex: 1 1 auto !important; min-height: 0; overflow-y: auto;
-            flex-direction: column; gap: 4px !important; padding: 4px 6px;
-          }
-          .ga-piles, .ga-status { flex-shrink: 0; }
-          /* The status text has a narrow column to live in; let it stack. */
-          .ga-status { font-size: 11px; line-height: 1.5; padding: 5px 6px; }
-          .ga-status > span { display: block; margin: 0 !important; }
-          .ga-piles { flex-wrap: wrap; gap: 6px !important; padding: 2px 0; }
-          /* The decorative fan of card backs costs ~38px per opponent, which is
-             the difference between the status line fitting in the rail or not. */
-          .opp-fan  { display: none !important; }
-          .ga-header { padding-top: 3px; padding-bottom: 3px; }
-          .hand-hint { display: none; }
+          .ga-topbg { grid-area: 1 / 1 / 2 / -1; }
+          .ga-opp { justify-content: center !important; padding: 5px 8px !important; }
+          .ga-board { padding: 10px 16px !important; }
+          /* Phase · actions · points and sort, in one row. */
+          .hand-bar { display: flex; align-items: center; gap: 14px; margin: 0 auto 2px; max-width: 1500px; }
+          .hand-tools { display: contents !important; }
+          .hand-phase { order: 1; flex: 1 0 auto; }
+          .hand-actions { order: 2; flex: 0 1 560px; margin: 0 !important; }
+          .hand-meta { order: 3; flex: 1 1 auto; justify-content: flex-end; }
+          .ga-board .board-groups { justify-content: center; }
+          .ga-piles.dock { padding: 8px 14px 10px; align-items: center !important;
+                           border-inline-start: 1px solid rgba(255,255,255,.08); }
+          .ga-piles.dock.turn { background: linear-gradient(180deg, #7c4a09, #1a1206);
+                                border-top: 3px solid #f59e0b;
+                                box-shadow: inset 0 8px 24px -8px rgba(245,158,11,.5); }
+          .ga-piles.dock:not(.turn) { background: #0f172a; border-top: 3px solid transparent; }
         }
 
-        /* ── A phone (or a narrow split view). The header carries five
-           controls now, the leave button included, so on anything narrower
-           than a small tablet the buttons drop their words and keep their
-           icons; on a small phone the hand's drag hint gives up its room to
-           the points chip too. ── */
-        @media (max-width: 480px) {
+        /* Tablet: cards sized by whichever axis runs out first. */
+        @media (min-width: 700px) and (min-height: 600px) {
+          :root {
+            --card-w: clamp(52px, min(7.5vw, 8.5vh), 84px);
+            --card-w-sm: calc(var(--card-w) * .7);
+            --card-h-sm: calc(var(--card-h) * .7);
+          }
+        }
+        /* Laptop and desktop: big, readable cards — a 1080p screen gets ~100px. */
+        @media (min-width: 1100px) and (min-height: 650px) {
+          :root { --card-w: clamp(60px, min(5.2vw, 10vh), 108px); }
+          /* Room enough for a chip to be one line: ▶ name · cards · score. */
+          .opp-chip { flex-direction: row; gap: 8px; padding: 3px 12px; max-width: 260px; flex: 0 1 auto; }
+          .ga-title, .ga-tools, .opp-name { font-size: 14px !important; }
+          .opp-meta { font-size: 13px; }
+        }
+        /* A phone on its side: height is the scarce axis. */
+        @media (orientation: landscape) and (max-height: 560px) {
+          :root { --card-w: clamp(32px, 9.5vh, 44px); }
+          .ga-title, .ga-tools { padding-top: 3px !important; padding-bottom: 3px !important; }
+          .hand-hint, .phase-sub { display: none; }
+          .ga-piles.dock { padding: 4px 8px 6px; gap: 8px !important; }
+        }
+
+        /* The header's buttons keep their words only where there's room. */
+        @media (max-width: 1279px) {
           .hdr-label { display: none; }
         }
         @media (max-width: 380px) {
-          .hand-hint { display: none; }
+          .phase-sub { display: none; }
+        }
+        /* In the one-row hand bar the extras only fit on a wide screen. */
+        @media (orientation: landscape) and (max-width: 1499px) {
+          .phase-sub { display: none; }
+        }
+
+        /* A mouse gets a hover: the card under it rises a little, so you can
+           see what you're about to pick up. Touch screens never see this. */
+        @media (hover: hover) and (pointer: fine) {
+          .hand-lift { transition: transform .12s cubic-bezier(.34,1.56,.64,1); }
+          .hand-slot:hover .hand-lift { transform: translateY(-10px); }
         }
 
         @keyframes newCardPulse {
@@ -1633,18 +1699,17 @@ function Game({ state, dispatch, onLeave, wallet }) {
 
       <div className="game-grid">
 
-      {/* ── Header ────────────────────────────────── */}
-      <div className="ga-header" style={{
-        background: 'rgba(6,14,30,.6)', padding: '7px 12px',
-        color: CREAM, flexShrink: 0,
-        borderBottom: `1px solid ${GOLD}44`,
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        fontSize: 13,
+      {/* ── Top bar ───────────────────────────────── */}
+      {/* Three cells over one shared background: the round (title), the
+          opponents and the buttons (tools). A phone stacks the opponents under
+          the other two; anything wider lays all three out in one thin row. */}
+      <div className="ga-topbg" />
+      <div className="ga-title" style={{
+        padding: '7px 12px', color: CREAM, fontSize: 13, zIndex: 1,
+        display: 'flex', alignItems: 'center', gap: 10, whiteSpace: 'nowrap',
       }}>
-        <span style={{ fontWeight: 700, color: GOLD }}>
-          {mk.name}
-        </span>
-        <span style={{ color: 'rgba(255,255,255,.7)', whiteSpace: 'nowrap' }}>סיבוב {state.sivuv}</span>
+        <span style={{ fontWeight: 700, color: GOLD }}>{mk.name}</span>
+        <span style={{ color: 'rgba(255,255,255,.7)' }}>סיבוב {state.sivuv}</span>
         <span style={{
           fontSize: 11, padding: '2px 9px', borderRadius: 20,
           background: state.canLay ? 'rgba(34,197,94,.25)' : 'rgba(251,191,36,.25)',
@@ -1652,30 +1717,26 @@ function Game({ state, dispatch, onLeave, wallet }) {
         }}>
           <IconText text={state.canLay ? '✓ הורדה' : '⚠ סבב ראשון'} />
         </span>
-        <span style={{ display: 'flex', gap: 5 }}>
-          <button onClick={() => setShowRules(true)} title="חוקים" style={{
-            background: 'rgba(255,255,255,.12)', color: CREAM, border: 'none',
-            borderRadius: 8, fontSize: 12, fontWeight: 700, padding: '3px 9px',
-            cursor: 'pointer', fontFamily: 'inherit',
-          }}><Icon name="book" /><span className="hdr-label"> חוקים</span></button>
-          <button onClick={() => setShowScores(true)} title="טבלת ניקוד" style={{
-            background: 'rgba(255,255,255,.12)', color: CREAM, border: 'none',
-            borderRadius: 8, fontSize: 12, fontWeight: 700, padding: '3px 9px',
-            cursor: 'pointer', fontFamily: 'inherit',
-          }}><Icon name="trophy" /><span className="hdr-label"> ניקוד</span></button>
-          <button onClick={() => setShowNotes(true)} title="מה חדש בגרסה" style={{
-            background: 'rgba(255,255,255,.12)', color: CREAM, border: 'none',
-            borderRadius: 8, fontSize: 12, fontWeight: 700, padding: '3px 8px',
-            cursor: 'pointer', fontFamily: 'inherit',
-          }}><Icon name="sparkles" /></button>
-          {onLeave && (
-            <button onClick={() => setShowLeave(true)} title="יציאה מהחדר" style={{
-              background: 'rgba(185,28,28,.35)', color: CREAM, border: 'none',
-              borderRadius: 8, fontSize: 12, fontWeight: 700, padding: '3px 9px',
-              cursor: 'pointer', fontFamily: 'inherit',
-            }}><Icon name="logOut" /><span className="hdr-label"> יציאה</span></button>
-          )}
-        </span>
+      </div>
+      <div className="ga-tools" style={{
+        padding: '7px 12px', fontSize: 13, zIndex: 1,
+        display: 'flex', alignItems: 'center', gap: 5,
+      }}>
+        <button onClick={() => setShowRules(true)} title="חוקים" style={hdrBtn}>
+          <Icon name="book" /><span className="hdr-label"> חוקים</span>
+        </button>
+        <button onClick={() => setShowScores(true)} title="טבלת ניקוד" style={hdrBtn}>
+          <Icon name="trophy" /><span className="hdr-label"> ניקוד</span>
+        </button>
+        <button onClick={() => setShowNotes(true)} title="מה חדש בגרסה" style={hdrBtn}>
+          <Icon name="sparkles" />
+        </button>
+        {onLeave && (
+          <button onClick={() => setShowLeave(true)} title="יציאה מהחדר"
+            style={{ ...hdrBtn, background: 'rgba(185,28,28,.35)' }}>
+            <Icon name="logOut" /><span className="hdr-label"> יציאה</span>
+          </button>
+        )}
       </div>
 
       {showLeave && <LeaveConfirm started onConfirm={onLeave} onClose={() => setShowLeave(false)} />}
@@ -1690,69 +1751,31 @@ function Game({ state, dispatch, onLeave, wallet }) {
         />
       )}
 
-      {/* Opponents, piles and the status line. In portrait each one falls into
-          its own grid area; in landscape they stack into the side rail. */}
-      <div className="rail">
-
-      {/* ── Opponents — share the width equally, no horizontal scroll ── */}
+      {/* ── Opponents — compact chips in the top bar ── */}
       <div className="ga-opp" style={{
-        display: 'flex', gap: 6, padding: '6px 10px',
-        flexShrink: 0, justifyContent: 'center',
+        display: 'flex', gap: 6, padding: '0 10px 6px', zIndex: 1,
+        minWidth: 0, justifyContent: 'center', alignItems: 'center',
       }}>
         {state.players.map((p, i) => {
           if (i === mySeat) return null; // don't render myself as an opponent
           const active = i === state.cur;
           const handN = p.handCount ?? p.hand?.length ?? 0;
-          // Five opponents share the width four used to; a shorter fan keeps
-          // each tile readable instead of squeezing the name out.
-          const miniN = Math.min(handN, state.players.length > 4 ? 3 : 6);
           return (
-            <div key={i} style={{
-              flex: 1, minWidth: 0,
-              background: active
-                ? 'linear-gradient(145deg, #b45309, #f59e0b)'
-                : 'rgba(6,14,30,.45)',
-              border: `2px solid ${active ? '#fde68a' : 'rgba(255,255,255,.12)'}`,
-              borderRadius: 11, padding: '6px 6px', color: CREAM,
-              textAlign: 'center',
-              boxShadow: active ? '0 0 16px rgba(245,158,11,.6)' : 'none',
-              animation: active ? 'turnGlow 1.8s ease-in-out infinite' : 'none',
-              transition: 'background .15s, border-color .15s, box-shadow .15s',
-            }}>
-              <div style={{
-                fontWeight: 700, fontSize: 12, color: active ? '#fffbeb' : CREAM, marginBottom: 3,
-                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-              }}>
-                {active ? '▶ ' : ''}{p.name}
+            <div key={i} className={'opp-chip' + (active ? ' on' : '')}
+                 title={active ? `${p.name} — ${state.phase === 'draw' ? 'שולף' : state.phase === 'action' ? 'פועל' : 'בתור'}` : p.name}>
+              <div className="opp-name">{active ? '▶ ' : ''}{p.name}</div>
+              <div className="opp-meta">
+                {p.out
+                  ? <span style={{ color: '#fca5a5' }}>יצא מהמשחק</span>
+                  : <><Icon name="cards" /> {handN} · <Icon name="star" /> {p.totalScore}</>}
               </div>
-              {p.out && (
-                <div style={{ fontSize: 10.5, color: '#fca5a5', marginBottom: 2 }}>יצא מהמשחק</div>
-              )}
-              <div className="opp-fan" style={{
-                display: 'flex', justifyContent: 'center', marginBottom: 3,
-                height: 'var(--card-h-sm)',
-              }}>
-                {Array.from({ length: miniN }).map((_, k) => (
-                  <div key={k} style={{ marginInlineStart: k === 0 ? 0 : 'calc(var(--card-w-sm) * -.7)' }}>
-                    <CardView card={{ id: 'b' + k }} back sm />
-                  </div>
-                ))}
-              </div>
-              <div style={{ fontSize: 11, color: 'rgba(255,255,255,.75)', whiteSpace: 'nowrap' }}>
-                <Icon name="cards" /> {handN} · <Icon name="star" /> {p.totalScore}
-              </div>
-              {active && (
-                <div style={{ fontSize: 10, color: '#fffbeb', marginTop: 2, whiteSpace: 'nowrap' }}>
-                  <IconText text={state.phase === 'action' ? '🎯 פועל' : state.phase === 'draw' ? '📤 שולף' : '⏳'} />
-                </div>
-              )}
             </div>
           );
         })}
       </div>
 
       {/* ── Piles row ─────────────────────────────── */}
-      <div className="ga-piles" style={{
+      <div className={'ga-piles dock' + (dockTurn ? ' turn' : '')} style={{
         display: 'flex', justifyContent: 'center', alignItems: 'flex-end',
         gap: 18, padding: '8px 0', flexShrink: 0,
       }}>
@@ -1843,20 +1866,6 @@ function Game({ state, dispatch, onLeave, wallet }) {
         </div>
       </div>
 
-      {/* ── Status bar ────────────────────────────── */}
-      <div className="ga-status" style={{
-        background: 'rgba(6,14,30,.6)', padding: '5px 12px',
-        color: 'rgba(255,255,255,.85)', fontSize: 12,
-        textAlign: 'center', flexShrink: 0,
-      }}>
-        <span style={{ fontWeight: 600 }}><IconText text={phaseLabel()} /></span>
-        <span style={{ color: 'rgba(255,255,255,.6)', marginRight: 10 }}>
-          יד: {human.hand.length} קלפים · <b style={{ color: GOLD, whiteSpace: 'nowrap' }}>{myPts} נק׳</b>
-          {' '}• סה״כ: {human.totalScore}
-        </span>
-      </div>
-
-      </div>{/* /rail */}
 
       {/* ── Buying prompt ─────────────────────────── */}
       {state.phase === 'buying' && humanDecides && (
@@ -1990,7 +1999,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
 
         {/* Board groups */}
         {state.board.length > 0 ? (
-          <div style={{ display: 'flex', flexWrap: 'wrap' }}>
+          <div className="board-groups" style={{ display: 'flex', flexWrap: 'wrap' }}>
             {state.board.map(g => {
               const normalAttach = attachMode && selCards.length >= 1 && human.hasLaid;
               return (
@@ -2021,22 +2030,16 @@ function Game({ state, dispatch, onLeave, wallet }) {
 
 
       {/* ── Human hand area — always visible ─────── */}
-      {(() => {
-        const myTurn = isMyTurn && state.phase !== 'round_end' && state.phase !== 'game_end';
-        return (
-      <div className="ga-hand" ref={handAreaRef} style={{
-        background: myTurn
-          ? 'linear-gradient(180deg, #7c4a09, #1a1206)'
-          : '#0f172a',
-        padding: '8px 10px 10px', flexShrink: 0,
-        borderTop: myTurn ? '3px solid #f59e0b' : '3px solid transparent',
-        boxShadow: myTurn ? 'inset 0 8px 24px -8px rgba(245,158,11,.5)' : 'none',
-        transition: 'background .15s, border-color .15s, box-shadow .15s',
+      <div className={'ga-hand dock' + (dockTurn ? ' turn' : '')} ref={handAreaRef} style={{
+        padding: '8px 10px 10px', flexShrink: 0, minWidth: 0,
       }}>
 
+        {/* One bar above the hand. A phone stacks it (actions, then the
+            toolbar); wider screens run it in a single row — see .hand-bar. */}
+        <div className="hand-bar">
         {/* Action buttons — only when it's the human's action phase */}
         {isMyTurn && state.phase === 'action' && (
-            <div style={{
+            <div className="hand-actions" style={{
               display: 'flex', gap: 4, marginBottom: 8, flexWrap: 'wrap',
               maxWidth: 560, margin: '0 auto 8px',
             }}>
@@ -2073,13 +2076,20 @@ function Game({ state, dispatch, onLeave, wallet }) {
 
           {/* Hand toolbar: manual sort + reorder hint.
               Always available — you may tidy your hand while waiting for others. */}
-          <div style={{
+          <div className="hand-tools" style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            margin: '0 auto 6px', maxWidth: 560,
+            margin: '0 auto 6px', maxWidth: 900,
           }}>
-            <span className="hand-hint" style={{ color: 'rgba(255,255,255,.4)', fontSize: 11 }}>
-              גררו קלף כדי לסדר את היד
+            {/* Whose move it is, and what it is — the line the old status bar
+                carried, now where the eye already is. */}
+            <span className="hand-phase" style={{ color: CREAM, fontSize: 12, fontWeight: 700, minWidth: 0,
+                           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <IconText text={phaseLabel()} />
+              <span className="phase-sub" style={{ color: 'rgba(255,255,255,.5)', fontWeight: 400, marginInlineStart: 8 }}>
+                יד: {human.hand.length} · סה״כ {human.totalScore}
+              </span>
             </span>
+            <span className="hand-meta" style={{ display: 'flex', alignItems: 'center', marginInlineStart: 'auto' }}>
             {/* The live cost of whatever is still in the hand. Tapping it opens
                 the full table, so the number is never a dead end. */}
             <button
@@ -2090,7 +2100,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
                 border: `1px solid ${GOLD}55`, borderRadius: 8,
                 fontSize: 12, fontWeight: 700, padding: '5px 10px',
                 cursor: 'pointer', fontFamily: 'inherit',
-                marginInlineStart: 'auto', marginInlineEnd: 6,
+                marginInlineEnd: 6,
                 fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
               }}
             ><Icon name="hand" /> {myPts} נק׳ ביד</button>
@@ -2102,14 +2112,19 @@ function Game({ state, dispatch, onLeave, wallet }) {
                 cursor: 'pointer', fontFamily: 'inherit',
               }}
             ><Icon name="sort" /> מיין</button>
+            </span>
           </div>
+        </div>{/* /hand-bar */}
 
           {/* Hand cards — wrap to multiple rows to fit screen width (no scroll) */}
           <div
             ref={handRowRef}
             style={{
               display: 'flex', flexWrap: 'wrap', justifyContent: 'center',
-              alignContent: 'flex-start', gap: 2, paddingBottom: 2, paddingTop: 14,
+              alignContent: 'flex-start', gap: 2, paddingBottom: 2,
+              // Room above the row for a selected card, which rises by a fifth
+              // of its height.
+              paddingTop: 'max(14px, calc(var(--card-h) * .2))',
             }}
           >
             {hand.map((c) => {
@@ -2120,7 +2135,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
                 <div
                   key={c.id}
                   data-cardid={c.id}
-                  className="deal-card"
+                  className="deal-card hand-slot"
                   onPointerDown={(e) => startPress(c, e)}
                   // A long press on mobile otherwise pops the copy/lookup menu,
                   // and on desktop a slow press starts a native HTML5 drag.
@@ -2139,6 +2154,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
                     flexShrink: 0,
                   }}
                 >
+<div className="hand-lift">
                   <CardView
                     card={c}
                     sel={sel}
@@ -2152,13 +2168,12 @@ function Game({ state, dispatch, onLeave, wallet }) {
                         : undefined
                     }
                   />
+                  </div>
                 </div>
               );
             })}
           </div>
         </div>
-        );
-      })()}
 
       </div>{/* /game-grid */}
 
