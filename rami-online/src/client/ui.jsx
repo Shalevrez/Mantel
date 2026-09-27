@@ -24,6 +24,7 @@ function tilt(id) {
 import { RELEASES } from "../releases.js";
 import "./table.css";
 import { useKeys, hasMouse, keyLabel, Kbd, KeysEditor } from "./keys.jsx";
+import { Flyer, TurnBanner, Confetti, reducedMotion } from "./anim.jsx";
 
 
 // Card geometry comes from --card-w/--card-h (declared in Game's stylesheet), so
@@ -901,6 +902,8 @@ function RoundEnd({ state, dispatch, onLeave }) {
   // were laid down are one tap away, and stay there until somebody deals again.
   const [tab, setTab] = useState('round');
   const [showLeave, setShowLeave] = useState(false);
+  // I won this round (an ant counts double — and gets more confetti).
+  const iWon = !!(winner && winner.you);
 
   return (
     <div style={{
@@ -909,6 +912,7 @@ function RoundEnd({ state, dispatch, onLeave }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       direction: 'rtl', padding: 16,
     }}>
+      {iWon && <Confetti pieces={result.isAnt ? 220 : 110} duration={result.isAnt ? 4200 : 3000} />}
       <div className="rules-card" style={{
         background: CREAM, borderRadius: 22, padding: 24,
         maxWidth: 420, width: '100%',
@@ -1037,6 +1041,7 @@ function GameEnd({ state, onRestart, onExit, extra }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       direction: 'rtl', padding: 16,
     }}>
+      {sorted[0].you && <Confetti pieces={240} duration={5000} />}
       <div className="rules-card" style={{
         background: CREAM, borderRadius: 22, padding: 28,
         maxWidth: 420, width: '100%',
@@ -1223,6 +1228,18 @@ function Game({ state, dispatch, onLeave, wallet }) {
   const [showLeave, setShowLeave] = useState(false);
   const [showKeys, setShowKeys] = useState(false);
   const keys = useKeys();
+  // ── Animation ──
+  // Cards in flight, the cards they'll turn into (kept invisible until the
+  // flight lands), the round's deal (staggered), and the "your turn" ribbon.
+  const [flyers, setFlyers] = useState([]);
+  const [landing, setLanding] = useState(() => new Set());
+  const [dealIds, setDealIds] = useState(null);
+  const [banner, setBanner] = useState(0);
+  // Where everything was on screen after the previous render — the start
+  // point of whatever moves in the next state.
+  const snap = useRef(null);
+  const flyId = useRef(0);
+  const dropFrom = useRef(null);
   // Card drag. `drag` is { card, touch } while a card is lifted and only changes
   // when a drag starts or ends; the pointer position, the insertion slot and the
   // ghost's placement live in dragRef and go straight to the DOM, so following
@@ -1467,6 +1484,8 @@ function Game({ state, dispatch, onLeave, wallet }) {
       swallowClick.current = true;
       setTimeout(() => { swallowClick.current = false; }, 80);
       if (drop && d.discard) {
+        // The throw animation starts from where the card was let go.
+        dropFrom.current = { id: d.card.id, rect: ghostRef.current?.getBoundingClientRect() };
         dispatch({ type: 'DISCARD', cid: d.card.id });
       } else if (drop && d.gid) {
         // If the dragged card is part of a current multi-card selection, attach the
@@ -1542,6 +1561,103 @@ function Game({ state, dispatch, onLeave, wallet }) {
   // AI now runs authoritatively on the server (the Room Durable Object),
   // so there is no local AI effect here. The client only renders state and
   // sends the local player's actions.
+
+  // Compare the new state with the last one and launch whatever moved: a
+  // throw to the discard pile, a draw into my hand, an opponent's draw into
+  // their chip, the deal of a new round, and the start of my turn.
+  useLayoutEffect(() => {
+    const prev = snap.current;
+    const drop = dropFrom.current;
+    dropFrom.current = null;
+    if (!prev || prev.state === state || reducedMotion()) return;
+    const ps = prev.state;
+    const box = (sel) => document.querySelector(sel)?.getBoundingClientRect();
+    const flights = [];
+
+    // A card thrown onto the discard pile, by me or anyone.
+    const top = state.discard[state.discard.length - 1];
+    const ptop = ps.discard[ps.discard.length - 1];
+    if (top && state.discard.length > ps.discard.length && top.id !== ptop?.id) {
+      const mine = drop && drop.id === top.id && drop.rect;
+      const from = mine || prev.hand.get(top.id) || prev.chips[ps.cur] || prev.deck;
+      const to = box('[data-discard-top]');
+      if (from && to) flights.push({
+        from, to, land: top.id, front: <CardView card={top} />,
+        endRotate: tilt(top.id), duration: mine ? 200 : 380,
+      });
+    }
+
+    // Cards that arrived in my hand: from the deck (turned over on the way)
+    // or from the discard pile. A whole new hand is a deal, not a flight.
+    const pme = ps.players.find(p => p.you) || ps.players[0];
+    const had = new Set((pme.hand || []).map(c => c.id));
+    const arrived = human.hand.filter(c => !had.has(c.id));
+    if (arrived.length >= 5) {
+      setDealIds(new Set(arrived.map(c => c.id)));
+      setTimeout(() => setDealIds(null), 1600);
+    } else {
+      for (const c of arrived) {
+        const fromDiscard = ps.discard.some(d => d.id === c.id);
+        const from = fromDiscard ? prev.discard : prev.deck;
+        const to = handRowRef.current?.querySelector(`[data-cardid="${c.id}"]`)?.getBoundingClientRect();
+        if (from && to) flights.push({
+          from, to, land: c.id, flip: !fromDiscard,
+          front: <CardView card={c} />, back: <CardView card={{ id: 'b' }} back />,
+          duration: 420,
+        });
+      }
+    }
+
+    // Opponents drawing: a card back flies into their chip (the discard's
+    // top card, face up, when that's what they took).
+    state.players.forEach((p, i) => {
+      if (i === mySeat) return;
+      const was = ps.players[i]?.handCount ?? 0, now = p.handCount ?? 0;
+      const to = prev.chips[i];
+      if (!to || now <= was || now - was > 3) return;
+      const took = ps.discard.length > state.discard.length;
+      for (let k = 0; k < now - was; k++) {
+        const fromDiscard = took && k === 0;
+        const from = fromDiscard ? prev.discard : prev.deck;
+        if (from) flights.push({
+          from, to, endScale: .35, duration: 420,
+          front: fromDiscard && ptop ? <CardView card={ptop} /> : <CardView card={{ id: 'b' }} back />,
+        });
+      }
+    });
+
+    // My turn has just begun.
+    const mineNow = isMyTurn && state.phase === 'draw';
+    const mineBefore = ps.cur === mySeat && ps.phase === 'draw';
+    if (mineNow && !mineBefore) setBanner(b => b + 1);
+
+    if (flights.length) {
+      const withKeys = flights.map(f => ({ ...f, key: ++flyId.current }));
+      setFlyers(fs => [...fs, ...withKeys]);
+      const lands = flights.map(f => f.land).filter(Boolean);
+      if (lands.length) setLanding(l => new Set([...l, ...lands]));
+    }
+  }, [state]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // After every render, remember where things are (see above).
+  useLayoutEffect(() => {
+    const rect = (el) => el?.getBoundingClientRect();
+    const hand = new Map();
+    handRowRef.current?.querySelectorAll('[data-cardid]').forEach(el =>
+      hand.set(el.getAttribute('data-cardid'), el.getBoundingClientRect()));
+    const chips = {};
+    document.querySelectorAll('[data-seat]').forEach(el => { chips[el.getAttribute('data-seat')] = el.getBoundingClientRect(); });
+    snap.current = {
+      state, hand, chips,
+      deck: rect(document.querySelector('.deck-stack')),
+      discard: rect(document.querySelector('[data-drop="discard"]')),
+    };
+  });
+
+  const flyDone = (f) => {
+    setFlyers(fs => fs.filter(x => x.key !== f.key));
+    if (f.land) setLanding(l => { const n = new Set(l); n.delete(f.land); return n; });
+  };
 
   // ── What can be done right now: one answer for the buttons, the keyboard
   // and the drop targets alike. ──
@@ -1894,7 +2010,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
           const active = i === state.cur;
           const handN = p.handCount ?? p.hand?.length ?? 0;
           return (
-            <div key={i} className={'opp-chip' + (active ? ' on' : '')}
+            <div key={i} data-seat={i} className={'opp-chip' + (active ? ' on' : '')}
                  title={active ? `${p.name} — ${state.phase === 'draw' ? 'שולף' : state.phase === 'action' ? 'פועל' : 'בתור'}` : p.name}>
               <div className="opp-name">{active ? '▶ ' : ''}{p.name}</div>
               <div className="opp-meta">
@@ -1979,7 +2095,8 @@ function Game({ state, dispatch, onLeave, wallet }) {
                   return (
                     <div
                       key={c.id}
-                      className="discard-card"
+                      className={'discard-card' + (isTop && landing.has(c.id) ? ' landing' : '')}
+                      data-discard-top={isTop ? '' : undefined}
                       style={{
                         position: 'absolute', left: idx * 6, bottom: idx * 3, zIndex: idx,
                         filter: isTop ? 'none' : 'brightness(.85)',
@@ -2279,7 +2396,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
               paddingTop: 'max(14px, calc(var(--card-h) * .2))',
             }}
           >
-            {hand.map((c) => {
+            {hand.map((c, handIdx) => {
               const inStage = stagedIds.has(c.id);
               const dragging = drag && drag.card.id === c.id;
               const sel = state.sel.includes(c.id);
@@ -2287,7 +2404,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
                 <div
                   key={c.id}
                   data-cardid={c.id}
-                  className="deal-card hand-slot"
+                  className={'deal-card hand-slot' + (landing.has(c.id) ? ' landing' : '')}
                   onPointerDown={(e) => startPress(c, e)}
                   // A long press on mobile otherwise pops the copy/lookup menu,
                   // and on desktop a slow press starts a native HTML5 drag.
@@ -2304,9 +2421,11 @@ function Game({ state, dispatch, onLeave, wallet }) {
                     touchAction: 'none',
                     zIndex: sel ? 100 : 1,
                     flexShrink: 0,
+                    // A new round's hand is dealt one card after another.
+                    animationDelay: dealIds && dealIds.has(c.id) ? `${handIdx * 55}ms` : undefined,
                   }}
                 >
-<div className="hand-lift">
+                  <div className="hand-lift">
                   <CardView
                     card={c}
                     sel={sel}
@@ -2328,6 +2447,10 @@ function Game({ state, dispatch, onLeave, wallet }) {
         </div>
 
       </div>{/* /game-grid */}
+
+      {/* Cards in flight, and the "your turn" ribbon (anim.jsx). */}
+      {flyers.map(f => <Flyer key={f.key} f={f} onDone={() => flyDone(f)} />)}
+      {banner > 0 && <TurnBanner key={banner} onDone={() => setBanner(0)} />}
 
       {/* Drag ghost — under the cursor, or lifted above the finger on touch so
           it stays visible. Positioned by paintDrag(), never by a re-render. */}

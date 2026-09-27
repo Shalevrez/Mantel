@@ -285,3 +285,41 @@
   transform: scale(1.08);
   box-shadow: 0 0 0 3px #e0b252, 0 0 26px 6px rgba(224,178,82,.7);
 }
+
+/* ── "Your turn!" ribbon ──────────────────────────── */
+.turn-banner {
+  position: fixed; left: 0; right: 0; top: 38%;
+  z-index: 8000; pointer-events: none;
+  display: flex; justify-content: center;
+  animation: bannerLife 1.25s cubic-bezier(.2,.8,.2,1) both;
+}
+.turn-banner span {
+  padding: 10px 56px;
+  font: 800 clamp(26px, 4.2vw, 46px)/1.2 "Rubik Variable", system-ui, sans-serif;
+  letter-spacing: .02em;
+  color: #2a1606;
+  background: linear-gradient(180deg, #f6dc98, #e0b252 55%, #b8862e);
+  border-top: 1px solid #fff3cf; border-bottom: 1px solid #7a5518;
+  box-shadow: 0 14px 40px rgba(0,0,0,.5), 0 0 40px rgba(224,178,82,.55);
+  text-shadow: 0 1px 0 rgba(255,255,255,.45);
+  /* Ribbon ends cut in a swallowtail. */
+  clip-path: polygon(0 0, 100% 0, calc(100% - 18px) 50%, 100% 100%, 0 100%, 18px 50%);
+}
+@keyframes bannerLife {
+  0%   { opacity: 0; transform: scaleX(.3); }
+  18%  { opacity: 1; transform: scaleX(1.04); }
+  28%  { transform: scaleX(1); }
+  78%  { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: translateY(-14px); }
+}
+
+/* A card still in the air: its place is kept, but it isn't drawn yet. */
+.landing { visibility: hidden; }
+
+/* ── Reduce motion: the system setting turns decoration off ─── */
+@media (prefers-reduced-motion: reduce) {
+  .deal-card, .group-pop, .discard-card, .turn-banner, .opp-chip.on, .pc {
+    animation: none !important;
+  }
+  .hand-lift, .deck-stack, .drop-discard { transition: none !important; }
+}
