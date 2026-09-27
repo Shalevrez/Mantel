@@ -186,15 +186,13 @@
 [data-deck="casino"] .ja-ink-fill { fill: #111; }
 [data-deck="casino"] .ja-collar { fill: #d0021b; }
 
-/* ══ 6 · JUMBO — huge corner index, four colours, fastest to read ═════ */
+/* ══ 6 · JUMBO — huge corner index, red and black, fastest to read ═════ */
 [data-deck="jumbo"] .pc {
   --ink-red: #dc2626; --ink-black: #111827;
   font-family: "Rubik Variable", system-ui, sans-serif;
   background: #fff;
 }
 [data-deck="jumbo"] .pc::after { display: none; }
-[data-deck="jumbo"] .pc.s-d { color: #2563eb; }
-[data-deck="jumbo"] .pc.s-c { color: #16a34a; }
 [data-deck="jumbo"] .pc-idx.tl { top: 3cqh; left: 5cqw; width: auto; align-items: flex-start; }
 [data-deck="jumbo"] .pc-idx.br { display: none; }
 [data-deck="jumbo"] .pc-idx b { font-size: 34cqh; font-weight: 800; letter-spacing: -.06em; }
@@ -217,9 +215,106 @@
 [data-deck="jumbo"] .pc.s-c:not(:has(.pc-big))::before { content: "♣"; }
 [data-deck="jumbo"] .pc.s-s:not(:has(.pc-big))::before { content: "♠"; }
 
+/* ── Jumbo variants for the king, queen, prince, ace and joker ─────────
+   On the wrapper: data-deck="jumbo" data-v="medal" | "half" | "mirror".
+   medal  — a portrait in a round medallion; ace: one giant suit; joker: clown in a medallion
+   half   — a bust rising from the bottom edge; ace: a solid card in the suit's colour; joker: clown bust
+   mirror — the classic double-headed card; ace: a gold seal; joker: clown on harlequin diamonds */
+
+/* The figures' palette. Red suits dress in red, black suits in black. */
+[data-v] .pc-port * { stroke: rgba(40, 24, 12, .55); stroke-width: .6; stroke-linejoin: round; }
+[data-v] .pt-skin { fill: #f6d3b6; }
+[data-v] .pt-eye { fill: #fff; }
+[data-v] .pt-ink-fill { fill: #1c1410; stroke: none; }
+[data-v] .pt-brow, [data-v] .pt-line { fill: none; stroke: #4a2f1c; stroke-width: 1.3; stroke-linecap: round; }
+[data-v] .pt-lips { fill: #c1121f; }
+[data-v] .pt-gold { fill: #e0b252; stroke: #8a6418; }
+[data-v] .pt-jewel { fill: #c1121f; stroke: #5b0a10; }
+[data-v] .black .pt-jewel { fill: #1e40af; stroke: #0b1d4d; }
+[data-v] .pt-ermine { fill: #fbfaf6; }
+[data-v] .pt-ruff { fill: #fbfaf6; }
+[data-v] .pt-pearls { fill: none; stroke: #fbfaf6; stroke-width: 2.6; stroke-dasharray: .1 3.4; stroke-linecap: round; }
+[data-v] .pt-feather { fill: #fbfaf6; }
+[data-v] .red .pt-robe, [data-v] .red .pt-cap { fill: #b91c1c; }
+[data-v] .black .pt-robe, [data-v] .black .pt-cap { fill: #1f2328; }
+[data-v] .pt-sym { fill: #e0b252; stroke: none; }
+[data-v] .pt-hair, [data-v] .pt-beard { fill: #4b2e19; }
+/* The king's beard: dark brown, a touch of grey at the chin. */
+[data-v] .pt-beard { fill: #5a3a22; }
+[data-v] .red .pc-face.q ~ .pc-port .pt-hair { fill: #8b3a1a; }
+[data-v] .black .pc-face.q ~ .pc-port .pt-hair { fill: #2a1d14; }
+[data-v] .pt-frame { fill: #fff9ec; stroke: currentColor; stroke-width: 1.2; }
+[data-v] .pt-split { stroke: currentColor; stroke-width: 1.2; }
+
+/* The clown. */
+[data-v] .pc-clown * { stroke: rgba(20, 12, 8, .6); stroke-width: .6; stroke-linejoin: round; }
+[data-v] .cl-suit, [data-v] .cl-c1, [data-v] .cl-nose, [data-v] .cl-grin { fill: #c1121f; }
+[data-v] .cl-suit2, [data-v] .cl-c2, [data-v] .cl-mark, [data-v] .cl-ink { fill: #16181d; }
+[data-v] .cl-band, [data-v] .cl-bell { fill: #e0b252; stroke: #8a6418; }
+[data-v] .cl-face { fill: #fdfaf3; }
+[data-v] .cl-ruff { fill: #fdfaf3; }
+
+/* Figures replace the big corner suit; the suit sits under the letter instead. */
+[data-v] .pc:has(.pc-port)::before, [data-v] .pc.joker::before { content: none !important; }
+[data-v] .pc:has(.pc-port) .pc-idx i { display: block; font-size: 17cqh; margin-top: 1cqh; }
+[data-v] .pc.joker .pc-jk { display: none; }
+[data-v] .pc.joker .pc-idx b { font-size: 11cqh; line-height: .95; }
+[data-v] .pc.joker { color: #c1121f; }
+
+/* A · MEDAL */
+[data-v="medal"] .pc-port.pc-single, [data-v="medal"] .pc-clown {
+  display: block; position: absolute; right: 5cqw; bottom: 4cqh; width: 72cqw; height: 72cqw;
+  border-radius: 50%; overflow: hidden;
+  background: radial-gradient(circle at 50% 35%, #fffaf0, #f0e0bd);
+  border: 1cqw solid currentColor; box-shadow: inset 0 0 0 1.6cqw #fffaf0;
+}
+[data-v="medal"] .pc-ace { display: block !important; left: auto; top: auto; right: 4cqw; bottom: 1cqh; transform: none; font-size: 72cqh; line-height: .9; }
+[data-v="medal"] .pc:has(.pc-ace)::before { content: none !important; }
+
+/* B · HALF — the bust stands at the bottom of the card. */
+[data-v="half"] .pc-port.pc-single, [data-v="half"] .pc-clown {
+  display: block; position: absolute; left: 3cqw; right: 3cqw; bottom: 0; width: 94cqw; height: 64cqh;
+}
+[data-v="half"] .pc:has(.pc-port) .pc-idx, [data-v="half"] .pc.joker .pc-idx { z-index: 2; }
+/* Ace: a solid card in the suit's colour, the suit in white. */
+[data-v="half"] .pc.red:has(.pc-ace)   { background: linear-gradient(160deg, #d51e2d, #a3121f); color: #fff; }
+[data-v="half"] .pc.black:has(.pc-ace) { background: linear-gradient(160deg, #2a2d33, #0f1114); color: #fff; }
+[data-v="half"] .pc:has(.pc-ace)::after { display: none; }
+
+/* C · MIRROR — the classic double-headed court card, normal-size corners. */
+[data-v="mirror"] .pc:has(.pc-port) .pc-idx b,
+[data-v="mirror"] .pc:has(.pc-ace) .pc-idx b { font-size: 17cqh; }
+[data-v="mirror"] .pc:has(.pc-port) .pc-idx i,
+[data-v="mirror"] .pc:has(.pc-ace) .pc-idx i { display: block; font-size: 12cqh; margin-top: 0; }
+[data-v="mirror"] .pc:has(.pc-port) .pc-idx.br,
+[data-v="mirror"] .pc:has(.pc-ace) .pc-idx.br,
+[data-v="mirror"] .pc.joker .pc-idx.br { display: flex; width: 17cqw; }
+[data-v="mirror"] .pc:has(.pc-port) .pc-idx.tl,
+[data-v="mirror"] .pc:has(.pc-ace) .pc-idx.tl { width: 17cqw; align-items: center; left: 2.5cqw; }
+[data-v="mirror"] .pc-port.pc-mirror { display: block; position: absolute; inset: 11cqh 19cqw; width: 62cqw; height: 78cqh; }
+/* Ace: a gold seal around a big suit. */
+[data-v="mirror"] .pc:has(.pc-ace)::before { content: none !important; }
+[data-v="mirror"] .pc-ace {
+  display: flex !important; align-items: center; justify-content: center;
+  width: 64cqw; height: 64cqw; border-radius: 50%; font-size: 36cqh;
+  background: radial-gradient(circle, #fffaf0 54%, transparent 55%),
+              repeating-conic-gradient(#e0b252 0 6deg, #b8862e 6deg 12deg);
+  box-shadow: 0 0 0 .8cqw #8a6418, 0 .8cqh 1.6cqh rgba(0,0,0,.2);
+}
+/* Joker: harlequin diamonds, the clown in a white oval. */
+[data-v="mirror"] .pc.joker {
+  background:
+    /* percentages, not cq units: on the card itself those would measure its parent */
+    radial-gradient(ellipse 38% 30% at 50% 55%, #fffaf0 96%, transparent 100%),
+    conic-gradient(from 45deg at 50% 50%, #c1121f 0 25%, #16181d 0 50%, #c1121f 0 75%, #16181d 0) 0 0 / 25% 20%;
+}
+[data-v="mirror"] .pc-clown { display: block; position: absolute; left: 50%; top: 55%; width: 62cqw; height: 52cqh; transform: translate(-50%, -50%); }
+[data-v="mirror"] .pc.joker .pc-idx { background: #fffaf0; border-radius: 2cqw; padding: .6cqh .6cqw; }
+
 /* Small cards (a phone's board): every deck falls back to its simplest form. */
 @container (max-width: 52px) {
-  [data-deck] .pc-art, [data-deck] .pc-jart, [data-deck] .pc-orn { display: none !important; }
+  [data-deck] .pc-art, [data-deck] .pc-jart, [data-deck] .pc-orn,
+  [data-deck] .pc-port, [data-deck] .pc-clown { display: none !important; }
   [data-deck] .pc-face { display: flex !important; inset: 26cqh 16cqw 10cqh !important; }
   [data-deck] .pc-jk { display: block !important; }
 }
