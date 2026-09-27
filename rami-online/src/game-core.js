@@ -53,6 +53,13 @@ const CLOTH =
 const TABLE_BASE = FELTD;
 const TABLE = TABLE_BASE;
 
+// One color per seat, drawn at random for each game (see initGame). It sits as a
+// small patch behind the player's name and tints the mats of the groups they laid,
+// so anyone can see at a glance whose runs are whose. Picked to stay distinct from
+// each other and readable on the navy table.
+const PLAYER_COLORS = ['#3b82f6', '#a855f7', '#ec4899', '#f97316', '#14b8a6', '#84cc16', '#ef4444', '#eab308'];
+const playerColor = (p, i) => (p && p.color) || PLAYER_COLORS[i % PLAYER_COLORS.length];
+
 let _uid = 1;
 const uid = () => `${Date.now()}-${(_uid++).toString(36)}`;
 
@@ -346,8 +353,10 @@ function startHand(base) {
 
 // `starter` is the seat that opens the first mishkakon; drawn at random unless given.
 function initGame(configs, starter = Math.floor(Math.random() * configs.length)) {
+  const colors = shuffle(PLAYER_COLORS);
   const players = configs.map((c, i) => ({
     id: i, name: c.name, isAI: c.isAI, ai: c.ai || 'medium',
+    color: colors[i % colors.length],
     hand: [], hasLaid: false, totalScore: 0,
     // Buys that came with a penalty card, over the whole game — in a paid
     // room each one costs coins that go into the pot (economy.buyPrice).
@@ -516,6 +525,14 @@ function markAttach(g, by, ids) {
   const prev = g.att && g.att.by === by ? g.att.ids : [];
   return { ...g, att: { by, ids: [...prev, ...ids] } };
 }
+
+// Adding to a group you laid yourself this very turn is the same as having laid it
+// longer in the first place, so it keeps an ant alive. Only adding to someone
+// else's group (or one of yours from an earlier turn — impossible on an ant, since
+// laidAtTurnStart is then false) counts as attaching. Groups from before owners
+// were recorded have no `owner` and count as someone else's.
+const attachedThisTurn = (state, grp) =>
+  state.attachedThisTurn || grp.owner !== state.cur;
 
 function G(state, action) {
   const { type } = action;
@@ -750,7 +767,7 @@ function G(state, action) {
     const usedIds = new Set(newStaging.flatMap(g => g.cards.map(c => c.id)));
     const newHand = p.hand.filter(c => !usedIds.has(c.id));
     const newGroups = newStaging.map(g => ({
-      id: uid(), type: isSeq(g.cards) ? 'seq' : 'set', cards: orderGroup(g.cards),
+      id: uid(), type: isSeq(g.cards) ? 'seq' : 'set', cards: orderGroup(g.cards), owner: state.cur,
     }));
     // You must always keep at least one card to discard — going out happens on the
     // discard, never by laying your whole hand. Reject a lay that would empty it.
@@ -800,7 +817,7 @@ function G(state, action) {
         );
         return {
           ...state, board, players, sel: [],
-          mustUseJoker: joker.id, attachedThisTurn: true,
+          mustUseJoker: joker.id, attachedThisTurn: attachedThisTurn(state, grp),
           msg: '🃏 קיבלת ג׳וקר — חובה להשתמש בו לפני הזריקה',
           log: [...state.log, `🃏 ${p.name} לקח ג׳וקר`],
         };
@@ -826,7 +843,7 @@ function G(state, action) {
     return {
       ...state, board, players, sel: [],
       msg: cards.length > 1 ? `✓ הוצמדו ${cards.length} קלפים` : '✓ הצמדה',
-      mustUseJoker, attachedThisTurn: true,
+      mustUseJoker, attachedThisTurn: attachedThisTurn(state, grp),
     };
   }
 
@@ -857,7 +874,7 @@ function G(state, action) {
     const newHand = p.hand.filter(c => !usedIds.has(c.id));
     if (newHand.length === 0) return state; // must keep a card to discard
     const newGroups = resolved.map(g => ({
-      id: uid(), type: isSeq(g.cards) ? 'seq' : 'set', cards: orderGroup(g.cards),
+      id: uid(), type: isSeq(g.cards) ? 'seq' : 'set', cards: orderGroup(g.cards), owner: state.cur,
     }));
     const players = state.players.map((pl, i) =>
       i === state.cur ? { ...pl, hand: newHand, hasLaid: true } : pl
@@ -885,7 +902,7 @@ function G(state, action) {
     const players = state.players.map((pl, i) =>
       i === state.cur ? { ...pl, hand: newHand } : pl
     );
-    return { ...state, board, players, attachedThisTurn: true };
+    return { ...state, board, players, attachedThisTurn: attachedThisTurn(state, grp) };
   }
 
   // ── Discard ───────────────────────────────────────
@@ -1125,7 +1142,7 @@ function aiDiscard(hand, level = 'medium', rnd = Math.random, board = []) {
 
 export {
   SUITS, SYM, COL, VD, cSc, cTxt, MK, FELT, FELTD, GOLD, CREAM,
-  INK, GOLDD, CLOTH, CLOTH_BASE, TABLE, TABLE_BASE,
+  INK, GOLDD, CLOTH, CLOTH_BASE, TABLE, TABLE_BASE, PLAYER_COLORS, playerColor,
   AI_LEVELS, AI_LEVEL_NAMES, aiLevel, cardAffinity, decksFor,
   uid, sortHand, moveCard, mkCard, makeDeck, shuffle, handScore,
   isSeq, isSet, isGroup, orderSeq, orderGroup, jokerValues, attachPos, meetsReq,

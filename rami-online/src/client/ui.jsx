@@ -8,7 +8,7 @@
 import { useState, useReducer, useEffect, useLayoutEffect, useRef } from "react";
 import {
   SUITS, SYM, COL, VD, cSc, cTxt, MK, FELT, FELTD, GOLD, CREAM,
-  INK, GOLDD, CLOTH, CLOTH_BASE,
+  INK, GOLDD, CLOTH, CLOTH_BASE, playerColor,
   isSeq, isSet, isGroup, orderSeq, orderGroup, jokerValues, attachPos, meetsReq,
   seqLayouts, layGroup, sortHand, moveCard, handScore,
 } from "../game-core.js";
@@ -178,7 +178,8 @@ function CardView({ card, sel, onClick, sm, back, glow, faded, newCard, attached
 // `hot`: a card is being dragged over this group and will attach on release.
 // `attBy`: name of the player who just attached to this group (group.att), shown as
 // a tag above it, with the attached cards themselves glowing.
-function GroupView({ group, onAttach, canAttach, hot, attBy }) {
+// `color`: the color of the player who laid the group; its mat is tinted with it.
+function GroupView({ group, onAttach, canAttach, hot, attBy, color }) {
   const seq = group.type === 'seq';
   const att = group.att;
   const attIds = att ? new Set(att.ids) : null;
@@ -188,7 +189,7 @@ function GroupView({ group, onAttach, canAttach, hot, attBy }) {
       display: 'inline-flex', alignItems: 'center',
       // A shallow mat pressed into the felt; the outline says run (green) or
       // set (gold) without shouting over the cards.
-      background: hot ? 'rgba(96,165,250,.22)' : 'rgba(3,10,24,.30)',
+      background: hot ? 'rgba(96,165,250,.22)' : color ? `${color}66` : 'rgba(3,10,24,.30)',
       border: `${hot || canAttach || att ? 2 : 1}px solid ${hot || canAttach ? '#60a5fa' : att ? ATT : seq ? 'rgba(134,239,172,.40)' : 'rgba(240,200,110,.45)'}`,
       borderRadius: 12, padding: '6px 8px', margin: att ? '12px 5px 5px' : '5px 5px',
       cursor: canAttach ? 'pointer' : 'default',
@@ -329,9 +330,20 @@ function Leaderboard({ state, note }) {
 // BOARD REVEAL — what was laid down, after the round is over
 // ═══════════════════════════════════════════════════════
 
+// The color of whoever laid group `g`, or nothing for a group with no known owner.
+const ownerColor = (players, g) =>
+  players && Number.isInteger(g.owner) && players[g.owner] ? playerColor(players[g.owner], g.owner) : null;
+
+// A small patch in the player's color behind their name.
+function NameTag({ p, i, children }) {
+  return (
+    <span className="name-tag" style={{ background: `${playerColor(p, i)}cc` }}>{children}</span>
+  );
+}
+
 // The groups keep their felt background here: their green/amber tints are drawn
 // for the table, and on the cream end-of-round card they'd wash out.
-function BoardReveal({ board, empty = 'לא הורדו קבוצות בסיבוב הזה' }) {
+function BoardReveal({ board, players, empty = 'לא הורדו קבוצות בסיבוב הזה' }) {
   const groups = board || [];
   return (
     <div style={{
@@ -341,7 +353,7 @@ function BoardReveal({ board, empty = 'לא הורדו קבוצות בסיבוב
     }}>
       {groups.length ? (
         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center' }}>
-          {groups.map(g => <GroupView key={g.id} group={g} />)}
+          {groups.map(g => <GroupView key={g.id} group={g} color={ownerColor(players, g)} />)}
         </div>
       ) : (
         <div style={{
@@ -986,7 +998,7 @@ function RoundEnd({ state, dispatch, onLeave }) {
 
           {tab === 'board' && (
             <>
-              <BoardReveal board={state.board} />
+              <BoardReveal board={state.board} players={state.players} />
               <div style={{ color: '#a8a29e', fontSize: 11, textAlign: 'center', marginTop: 8 }}>
                 כל הקבוצות שהורדו לשולחן בסיבוב הזה
               </div>
@@ -1091,7 +1103,7 @@ function GameEnd({ state, onRestart, onExit, extra }) {
 
           {tab === 'board' && (
             <>
-              <BoardReveal board={state.board} empty="לא נשארו קבוצות על השולחן" />
+              <BoardReveal board={state.board} players={state.players} empty="לא נשארו קבוצות על השולחן" />
               <div style={{ color: '#a8a29e', fontSize: 11, textAlign: 'center', marginTop: 8 }}>
                 הקבוצות שהורדו בסיבוב האחרון
               </div>
@@ -1819,6 +1831,10 @@ function Game({ state, dispatch, onLeave, wallet }) {
         }
         .opp-name { font-weight: 700; font-size: 12px; max-width: 100%;
                     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .name-tag { display: inline-block; max-width: 100%; vertical-align: middle;
+                    padding: 0 7px; border-radius: 8px; color: #fff;
+                    text-shadow: 0 1px 2px rgba(0,0,0,.45);
+                    overflow: hidden; text-overflow: ellipsis; }
         .opp-meta { font-size: 11px; color: rgba(255,255,255,.75); white-space: nowrap; }
         .opp-chip.on .opp-name, .opp-chip.on .opp-meta { color: #fffbeb; }
 
@@ -2013,7 +2029,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
           return (
             <div key={i} data-seat={i} className={'opp-chip' + (active ? ' on' : '')}
                  title={active ? `${p.name} — ${state.phase === 'draw' ? 'שולף' : state.phase === 'action' ? 'פועל' : 'בתור'}` : p.name}>
-              <div className="opp-name">{active ? '▶ ' : ''}{p.name}</div>
+              <div className="opp-name">{active ? '▶ ' : ''}<NameTag p={p} i={i}>{p.name}</NameTag></div>
               <div className="opp-meta">
                 {p.out
                   ? <span style={{ color: '#fca5a5' }}>יצא מהמשחק</span>
@@ -2271,6 +2287,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
                 <GroupView
                   key={g.id} group={g}
                   attBy={g.att ? state.players[g.att.by]?.name : null}
+                  color={ownerColor(state.players, g)}
                   // While a card is in the air, every group it could land on
                   // is outlined, so the drop targets are visible up front.
                   canAttach={normalAttach || (!!drag && attachOk)}
@@ -2356,6 +2373,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
                 carried, now where the eye already is. */}
             <span className="hand-phase" style={{ color: CREAM, fontSize: 12, fontWeight: 700, minWidth: 0,
                            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <span style={{ marginInlineEnd: 6 }}><NameTag p={human} i={Math.max(0, mySeat)}>{human.name}</NameTag></span>
               <IconText text={phaseLabel()} />
               <span className="phase-sub" style={{ color: 'rgba(255,255,255,.5)', fontWeight: 400, marginInlineStart: 8 }}>
                 יד: {human.hand.length} · סה״כ {human.totalScore}
