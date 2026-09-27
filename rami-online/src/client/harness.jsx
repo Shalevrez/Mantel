@@ -154,27 +154,24 @@ const JUMBO_CARDS = [
   { group: 'ג׳וקר', cards: [{ id: 'jk', suit: 'j', v: 0, j: true }] },
 ];
 
+// ?set=art — the chosen deck in full: every court card in all four suits.
+const ART_ROWS = [{ id: 'jumbo', v: 'art', name: 'Higgsfield' }];
+const SUIT4 = ['s', 'h', 'd', 'c'];
+const ART_CARDS = [
+  { group: 'מספרים', cards: [{ id: 'a2', suit: 'h', v: 2 }, { id: 'a7', suit: 'c', v: 7 }, { id: 'a10', suit: 'd', v: 10 }] },
+  { group: 'אס', cards: [{ id: 'aas', suit: 's', v: 1 }, { id: 'aah', suit: 'h', v: 1 }] },
+  ...[[13, 'מלך'], [12, 'מלכה'], [11, 'נסיך']].map(([v, group]) => ({
+    group, cards: SUIT4.map(suit => ({ id: `a${v}${suit}`, suit, v })) })),
+  { group: 'ג׳וקר', cards: [{ id: 'ajk', suit: 'j', v: 0, j: true }] },
+];
+
 // ?deck=modern — one deck only; ?cat=2 — one category; ?mini=0 — no small sizes.
-// The Higgsfield images already in public/cards/ (the art row uses them; the
-// rest show the drawn figure in a panel of their colour until they arrive).
-const ART = ['king-red'];
-function markArt() {
-  document.querySelectorAll('[data-v="art"] .pc').forEach(el => {
-    const fig = el.classList.contains('joker') ? 'joker'
-      : el.querySelector('.pc-face.k') ? 'king' : el.querySelector('.pc-face.q') ? 'queen'
-      : el.querySelector('.pc-face.j') ? 'jack' : null;
-    if (!fig) return;
-    const key = fig === 'joker' ? 'joker' : `${fig}-${el.classList.contains('red') ? 'red' : 'black'}`;
-    el.classList.toggle('has-art', ART.includes(key));
-  });
-}
 function Decks() {
-  useEffect(markArt);
-  const jumbo = params.get('set') === 'jumbo';
+  const set = params.get('set');
   const only = params.get('deck');
-  const base = jumbo ? JUMBO_ROWS : DECKS;
+  const base = set === 'art' ? ART_ROWS : set === 'jumbo' ? JUMBO_ROWS : DECKS;
   const decks = only ? base.filter(d => (d.v || d.id) === only) : base;
-  const cats = jumbo ? JUMBO_CARDS : G_CARDS;
+  const cats = set === 'art' ? ART_CARDS : set === 'jumbo' ? JUMBO_CARDS : G_CARDS;
   const groups = params.has('cat') ? [cats[Number(params.get('cat'))]] : cats;
   const allCards = groups.flatMap(g => g.cards);
   const mini = params.get('mini') !== '0';

@@ -311,65 +311,48 @@
 [data-v="mirror"] .pc-clown { display: block; position: absolute; left: 50%; top: 55%; width: 62cqw; height: 52cqh; transform: translate(-50%, -50%); }
 [data-v="mirror"] .pc.joker .pc-idx { background: #fffaf0; border-radius: 2cqw; padding: .6cqh .6cqw; }
 
-/* D · ART — the Higgsfield figures (public/cards/*.webp): jumbo numbers,
-   the medallion ace, and court cards laid out like the reference king —
-   cream stock, a serif letter and suit in the corner, and a framed panel
-   whose figure's crown rises above the frame. */
-[data-v="art"] .pc { background: #fbf8ef; }
+/* D · ART — the user's Higgsfield cards (public/cards/): jumbo numbers, the
+   medallion ace, and whole-card art for the court cards and the joker. Each
+   source image already carries its own corner index and suit, so the card
+   shows the art edge to edge and hides its own index.
+
+   kings.webp / queens.webp — four cards side by side (♠ ♥ ♦ ♣), each ~487×635.
+   Their ratio (1.30) is wider than ours (1.41), so each is cropped to our
+   shape from its inner frame (inside the drawn border), trimming ~3.5% off
+   each side. jacks.webp — four cards (♠ ♥ ♦ ♣), each ~372×663: narrower than
+   ours (1.78), so it is shown whole, centred, with the card's cream on either
+   side. joker.webp — one card, ~1006×1518, shown whole the same way.
+   The crop numbers are measured from the images (card borders at
+   K x 13–500·509–997·1005–1493·1503–1988, y 16–651; Q x 15–502·510–997·
+   1005–1492·1500–1986, y 17–652; J x 9–381·390–763·773–1145·1155–1526,
+   y 181–844; joker x 9–1015, y 8–1526), inset 5px to lose the drawn border —
+   12px for the jacks, whose rounded corners would otherwise show. */
+[data-v="art"] .pc { background: #fdfcf8; }
+[data-v="art"] .pc::after { opacity: .25; }
 [data-v="art"] .pc-ace { display: block !important; left: auto; top: auto; right: 4cqw; bottom: 1cqh; transform: none; font-size: 72cqh; line-height: .9; }
 [data-v="art"] .pc:has(.pc-ace)::before,
 [data-v="art"] .pc:has(.pc-photo)::before { content: none !important; }
-/* Court and joker corners: a serif letter over its suit, as on the reference. */
-[data-v="art"] .pc:has(.pc-photo) .pc-idx.tl { top: 6cqh; left: 6cqw; width: 12cqw; align-items: center; }
-[data-v="art"] .pc:has(.pc-photo) .pc-idx b {
-  font-family: Georgia, "Times New Roman", "DejaVu Serif", serif; font-weight: 700;
-  font-size: 12cqh; letter-spacing: 0;
-}
-[data-v="art"] .pc:has(.pc-photo) .pc-idx i { display: block; font-size: 10cqh; margin-top: 1.2cqh; }
-[data-v="art"] .pc.joker .pc-idx b { font-size: 6.5cqh; line-height: 1; }
-/* The panel. */
+[data-v="art"] .pc:has(.pc-photo) .pc-idx { display: none; }
 [data-v="art"] .pc-photo {
-  display: block; position: absolute; top: 13cqh; bottom: 10cqh; left: 17cqw; right: 16.7cqw;
-  border: .9cqw solid #b0101f;
-  background: linear-gradient(135deg, #f0a6ad, #d23f4c);
+  display: block; position: absolute; top: 0; bottom: 0; left: var(--l, 0%); right: var(--l, 0%);
+  background: var(--art) var(--pos) / var(--size) no-repeat;
 }
-/* The court art: one Higgsfield card per figure and colour — the red card's
-   panel is red, the black card's black (public/cards/<figure>-<red|black>.webp,
-   joker.webp). Each image is cropped to its panel and headwear; the crop is
-   per image (--crop-size / --crop-pos), measured from the source. */
-[data-v="art"] .pc.has-art .pc-photo {
-  top: 9.5cqh; border: none;
-  background: var(--art) var(--crop-pos, 50.5% 48.7%) / var(--crop-size, 150.75% 124.22%) no-repeat;
-}
-[data-v="art"] .pc.red:has(.pc-face.k)   { --art: url(/cards/king-red.webp); }
-[data-v="art"] .pc.black:has(.pc-face.k) { --art: url(/cards/king-black.webp); }
-[data-v="art"] .pc.red:has(.pc-face.q)   { --art: url(/cards/queen-red.webp); }
-[data-v="art"] .pc.black:has(.pc-face.q) { --art: url(/cards/queen-black.webp); }
-[data-v="art"] .pc.red:has(.pc-face.j)   { --art: url(/cards/jack-red.webp); }
-[data-v="art"] .pc.black:has(.pc-face.j) { --art: url(/cards/jack-black.webp); }
-[data-v="art"] .pc.joker                 { --art: url(/cards/joker.webp); }
-/* The source king wears a diamond on his chest; each card shows its own suit. */
-[data-v="art"] .pc.has-art:has(.pc-face.k) .pc-photo::after {
-  position: absolute; left: 50%; top: 66.6%; transform: translate(-50%, -50%);
-  width: 17%; height: 12.5%; background: #7d1120;
-  display: flex; align-items: center; justify-content: center;
-  color: #e7b95c; font-size: 7.5cqh; line-height: 1;
-  font-family: "DejaVu Sans", "Segoe UI Symbol", sans-serif;
-}
-[data-v="art"] .pc.s-h.has-art:has(.pc-face.k) .pc-photo::after { content: "♥"; }
-[data-v="art"] .pc.s-d.has-art:has(.pc-face.k) .pc-photo::after { content: "♦"; }
-[data-v="art"] .pc.s-c.has-art:has(.pc-face.k) .pc-photo::after { content: "♣"; }
-[data-v="art"] .pc.s-s.has-art:has(.pc-face.k) .pc-photo::after { content: "♠"; }
-/* Black cards without art yet: a black panel. */
-[data-v="art"] .pc.black:not(.has-art) .pc-photo { border-color: #16181d; background: linear-gradient(135deg, #3a3d44, #111317); }
-
-/* Queen, prince and joker: placeholders until their Higgsfield art arrives —
-   the drawn figures, standing in the same panel. */
-[data-v="art"] .pc:not(.has-art) .pc-port.pc-single,
-[data-v="art"] .pc.joker:not(.has-art) .pc-clown {
-  display: block; position: absolute; top: 13cqh; bottom: 10cqh; left: 17cqw; right: 16.7cqw;
-  width: auto; height: auto; z-index: 1;
-}
+[data-v="art"] .pc:has(.pc-face.k) { --art: url(/cards/kings.webp);  --size: 451.16% 106.72%; }
+[data-v="art"] .pc:has(.pc-face.q) { --art: url(/cards/queens.webp); --size: 451.16% 107.20%; }
+[data-v="art"] .pc:has(.pc-face.j) { --art: url(/cards/jacks.webp);  --size: 441.38% 160.25%; --l: 11.6%; }
+[data-v="art"] .pc.s-s:has(.pc-face.k) { --pos:  2.24% 50%; }
+[data-v="art"] .pc.s-h:has(.pc-face.k) { --pos: 34.14% 50%; }
+[data-v="art"] .pc.s-d:has(.pc-face.k) { --pos: 66.00% 50%; }
+[data-v="art"] .pc.s-c:has(.pc-face.k) { --pos: 97.89% 50%; }
+[data-v="art"] .pc.s-s:has(.pc-face.q) { --pos:  2.37% 48.89%; }
+[data-v="art"] .pc.s-h:has(.pc-face.q) { --pos: 34.17% 48.89%; }
+[data-v="art"] .pc.s-d:has(.pc-face.q) { --pos: 65.97% 48.89%; }
+[data-v="art"] .pc.s-c:has(.pc-face.q) { --pos: 97.73% 48.89%; }
+[data-v="art"] .pc.s-s:has(.pc-face.j) { --pos:  1.77% 50.13%; }
+[data-v="art"] .pc.s-h:has(.pc-face.j) { --pos: 33.87% 50.13%; }
+[data-v="art"] .pc.s-d:has(.pc-face.j) { --pos: 66.08% 50.13%; }
+[data-v="art"] .pc.s-c:has(.pc-face.j) { --pos: 98.15% 50.13%; }
+[data-v="art"] .pc.joker { --art: url(/cards/joker.webp); --size: 102.81% 101.86%; --pos: 50% 46.43%; --l: 3.44%; }
 
 /* Small cards (a phone's board): every deck falls back to its simplest form. */
 @container (max-width: 52px) {
