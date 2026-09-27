@@ -69,8 +69,8 @@ export function Stall({ title, icon, label, onClose, tabs, tab, setTab, children
         }}><Icon name="x" size={20} strokeWidth={3.5} /></button>
 
         {/* The counter: the tablecloth, framed in gold */}
-        <div style={{
-          flex: 1, minHeight: 0, overflowY: 'auto', background: CLOTH,
+        <div className="cloth" style={{
+          flex: 1, minHeight: 0, overflowY: 'auto',
           borderInline: `3px solid ${GOLD}`, padding: '18px 14px 20px',
         }}>
           {children}

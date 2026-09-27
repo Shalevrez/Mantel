@@ -773,9 +773,8 @@ function Setup({ onStart }) {
   const up = (i, k, v) => setPs(a => a.map((p, j) => j === i ? { ...p, [k]: v } : p));
 
   return (
-    <div style={{
+    <div className="cloth" style={{
       minHeight: '100vh',
-      background: CLOTH,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       direction: 'rtl', padding: 16,
     }}>
@@ -908,9 +907,8 @@ function RoundEnd({ state, dispatch, onLeave }) {
   const iWon = !!(winner && winner.you);
 
   return (
-    <div style={{
+    <div className="felt" style={{
       minHeight: '100vh',
-      background: CLOTH,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       direction: 'rtl', padding: 16,
     }}>
@@ -1038,9 +1036,8 @@ function GameEnd({ state, onRestart, onExit, extra }) {
   const [tab, setTab] = useState('final');
 
   return (
-    <div style={{
+    <div className="felt" style={{
       minHeight: '100vh',
-      background: CLOTH,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       direction: 'rtl', padding: 16,
     }}>
@@ -1713,7 +1710,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
   });
 
   const Btn = ({ label, onClick, disabled, bg, col = 'white', k, tip }) => (
-    <button onClick={onClick} disabled={disabled} data-tip={tip} style={{
+    <button onClick={onClick} disabled={disabled} data-tip={tip} className="tap-44" style={{
       flex: 1, minWidth: 52, padding: '8px 3px',
       background: disabled ? '#374151' : bg,
       color: disabled ? '#6b7280' : col,
@@ -1968,22 +1965,22 @@ function Game({ state, dispatch, onLeave, wallet }) {
         padding: '7px 12px', fontSize: 13, zIndex: 1,
         display: 'flex', alignItems: 'center', gap: 5,
       }}>
-        <button onClick={() => setShowRules(true)} aria-label="חוקים" data-tip="חוקי המשחק" data-tip-below="" style={hdrBtn}>
+        <button onClick={() => setShowRules(true)} aria-label="חוקים" data-tip="חוקי המשחק" data-tip-below="" className="tap-40" style={hdrBtn}>
           <Icon name="book" /><span className="hdr-label"> חוקים</span>
         </button>
-        <button onClick={() => setShowScores(true)} aria-label="טבלת ניקוד" data-tip="טבלת הניקוד" data-tip-below="" style={hdrBtn}>
+        <button onClick={() => setShowScores(true)} aria-label="טבלת ניקוד" data-tip="טבלת הניקוד" data-tip-below="" className="tap-40" style={hdrBtn}>
           <Icon name="trophy" /><span className="hdr-label"> ניקוד</span>
         </button>
-        <button onClick={() => setShowNotes(true)} aria-label="מה חדש בגרסה" data-tip="מה חדש בגרסה" data-tip-below="" style={hdrBtn}>
+        <button onClick={() => setShowNotes(true)} aria-label="מה חדש בגרסה" data-tip="מה חדש בגרסה" data-tip-below="" className="tap-40" style={hdrBtn}>
           <Icon name="sparkles" />
         </button>
         <button onClick={() => setShowKeys(true)} aria-label="קיצורי מקלדת" data-tip="קיצורי מקלדת" data-tip-below="" data-tip-start=""
-          className="mouse-only" style={hdrBtn}>
+          className="mouse-only tap-40" style={hdrBtn}>
           <Icon name="keyboard" />
         </button>
         {onLeave && (
           <button onClick={() => setShowLeave(true)} aria-label="יציאה מהחדר" data-tip="יציאה מהחדר" data-tip-below="" data-tip-start=""
-            style={{ ...hdrBtn, background: 'rgba(185,28,28,.35)' }}>
+            className="tap-40" style={{ ...hdrBtn, background: 'rgba(185,28,28,.35)' }}>
             <Icon name="logOut" /><span className="hdr-label"> יציאה</span>
           </button>
         )}
@@ -2156,6 +2153,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
                 : !cantAfford && dispatch({ type: 'BUY', idx: buy.checker })
               }
               disabled={cantAfford}
+              className="tap-44"
               style={{
                 padding: '9px 24px', background: cantAfford ? '#64748b' : '#16a34a', color: 'white',
                 border: 'none', borderRadius: 9, cursor: cantAfford ? 'not-allowed' : 'pointer',
@@ -2168,6 +2166,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
             </button>
             <button
               onClick={() => dispatch({ type: 'SKIP' })}
+              className="tap-44"
               style={{
                 padding: '9px 24px', background: '#475569', color: 'white',
                 border: 'none', borderRadius: 9, cursor: 'pointer',
@@ -2367,7 +2366,8 @@ function Game({ state, dispatch, onLeave, wallet }) {
                 the full table, so the number is never a dead end. */}
             <button
               onClick={() => setShowScores(true)}
-              title="כמה נקודות ייזקפו לך אם הסיבוב ייגמר עכשיו"
+              className="tap-40"
+              data-tip="כמה נקודות ייזקפו לך אם הסיבוב ייגמר עכשיו"
               style={{
                 background: 'rgba(251,191,36,.14)', color: GOLD,
                 border: `1px solid ${GOLD}55`, borderRadius: 8,
@@ -2379,6 +2379,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
             ><Icon name="hand" /> {myPts} נק׳ ביד</button>
             <button
               onClick={() => { setPendingOrder(null); dispatch({ type: 'SORT' }); }}
+              className="tap-40"
               style={{
                 background: '#1e293b', color: '#cbd5e1', border: '1px solid #334155',
                 borderRadius: 8, fontSize: 12, fontWeight: 700, padding: '5px 12px',

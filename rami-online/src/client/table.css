@@ -323,3 +323,54 @@
   }
   .hand-lift, .deck-stack, .drop-discard { transition: none !important; }
 }
+
+/* ── The tablecloth (the menus, the lobby) ─────────── */
+/* The game's namesake: a gingham mantel. Woven — a fine thread texture over
+   the checks — lit from above, and falling into a soft shadow at the edges,
+   like the cloth on a real table rather than a flat pattern. */
+.cloth {
+  background-color: #f8f2e4;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='w'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9 .35' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .35  0 0 0 0 .3  0 0 0 0 .2  0 0 0 .10 0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23w)'/%3E%3C/svg%3E"),
+    repeating-linear-gradient(45deg, rgba(90,70,40,.025) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(-45deg, rgba(90,70,40,.025) 0 1px, transparent 1px 3px),
+    radial-gradient(ellipse 70% 55% at 50% 28%, rgba(255,255,255,.55), rgba(255,255,255,0) 70%),
+    radial-gradient(ellipse 130% 110% at 50% 40%, rgba(0,0,0,0) 55%, rgba(70,52,24,.24) 100%),
+    repeating-linear-gradient(0deg, rgba(118,160,202,.30) 0 28px, transparent 28px 56px),
+    repeating-linear-gradient(90deg, rgba(118,160,202,.30) 0 28px, transparent 28px 56px);
+}
+
+/* ── Touch screens: every control at least 44px (Apple) / 48dp (Material) ─ */
+@media (pointer: coarse) {
+  .tap-44 { min-height: 44px !important; }
+  /* Small square controls (the top bar's icons, sort, the points chip). */
+  .tap-40 { min-height: 44px !important; min-width: 44px !important; }
+}
+
+/* ── Hub (menu screens): a side rail of destinations on a wide screen ─── */
+.hub-side { display: none; }
+.hub-desk-title { display: none; }
+@media (min-width: 1000px) {
+  .hub-body.has-nav { display: grid !important; grid-template-columns: 232px minmax(0, 1fr); }
+  .hub-side { display: flex; }
+  .hub-body.has-nav .hub-bottom { display: none !important; }
+  .hub-desk-title { display: block; }
+}
+.hub-nav-btn {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 11px 14px; border-radius: 12px; cursor: pointer;
+  background: none; border: 1px solid transparent;
+  color: #dbe4f3; font: 600 15px/1.2 "Rubik Variable", system-ui, sans-serif;
+  text-align: start; transition: background .12s, border-color .12s, color .12s;
+}
+.hub-nav-btn:hover { background: rgba(255,255,255,.07); color: #fff; }
+.hub-nav-btn.on {
+  background: linear-gradient(90deg, rgba(224,178,82,.10), rgba(224,178,82,.22));
+  border-color: rgba(224,178,82,.55); color: #f3d48c;
+}
+.hub-hero { display: none !important; }
+@media (min-width: 1000px) {
+  .hub-hero { display: flex !important; }
+  .hub-mobile-title { display: none; }
+  .menu-card { min-height: 210px !important; }
+}
