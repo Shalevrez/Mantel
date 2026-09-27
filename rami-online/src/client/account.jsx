@@ -10,6 +10,7 @@ import { FELT, FELTD, GOLD, CREAM, CLOTH } from "../game-core.js";
 import { levelInfo, shortNum } from "../economy.js";
 import { Icon, IconLabel } from "./icons.jsx";
 import { hasMouse, KeysEditor } from "./keys.jsx";
+import { animationsOn, setAnimationsOn } from "./anim.jsx";
 import * as P from "./profile.js";
 
 // ── Palette for the hub screens ──────────────────────
@@ -404,6 +405,30 @@ export function MenuCards({ items }) {
 // SETTINGS — keyboard shortcuts (with a mouse); more to come
 // ═══════════════════════════════════════════════════════
 
+// Animations on/off: cards in flight, the deal, confetti (anim.jsx).
+function AnimSwitch() {
+  const [on, setOn] = useState(animationsOn);
+  const flip = () => { setAnimationsOn(!on); setOn(!on); };
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+      padding: '10px 12px', marginBottom: 12, borderRadius: 12, border: `1px solid ${LINE}`,
+    }}>
+      <div>
+        <div style={{ fontWeight: 700 }}>אנימציות</div>
+        <div style={{ color: SOFT, fontSize: 12.5, marginTop: 2 }}>קלפים עפים, חלוקה, זיקוקים</div>
+      </div>
+      <button role="switch" aria-checked={on} aria-label="אנימציות" onClick={flip} style={{
+        flex: 'none', width: 50, height: 28, borderRadius: 99, padding: 3, cursor: 'pointer',
+        border: `1px solid ${on ? GOLD : LINE}`, background: on ? GOLD : 'rgba(255,255,255,.12)',
+        display: 'flex', justifyContent: on ? 'flex-end' : 'flex-start', transition: 'background .15s',
+      }}>
+        <span style={{ width: 20, height: 20, borderRadius: '50%', background: on ? FELTD : SOFT }} />
+      </button>
+    </div>
+  );
+}
+
 export function SettingsSheet({ onClose, version }) {
   return (
     <Modal onClose={onClose} width={400}>
@@ -411,20 +436,14 @@ export function SettingsSheet({ onClose, version }) {
         <Icon name="gear" size={40} color={GOLD} strokeWidth={1.7} />
         <h2 style={{ margin: '6px 0 2px', fontSize: 21 }}>הגדרות</h2>
       </div>
+      <AnimSwitch />
       {/* Keyboard shortcuts: only for a mouse-and-keyboard player. */}
-      {hasMouse() ? (
+      {hasMouse() && (
         <div style={{ marginBottom: 12 }}>
           <div style={{ fontWeight: 700, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
             <Icon name="keyboard" /> קיצורי מקלדת
           </div>
           <KeysEditor />
-        </div>
-      ) : (
-        <div style={{
-          padding: '18px 14px', borderRadius: 12, border: `1px dashed ${LINE}`,
-          color: SOFT, fontSize: 13.5, textAlign: 'center', lineHeight: 1.6,
-        }}>
-          עוד אין כאן הגדרות.<br />בקרוב: צלילים, רטט, מראה הקלפים ועוד.
         </div>
       )}
       {version && (

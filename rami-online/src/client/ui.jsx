@@ -1581,8 +1581,8 @@ function Game({ state, dispatch, onLeave, wallet }) {
 
     // My turn has just begun. A turn opens in 'buying' (I'm offered the discard
     // first), so waiting for 'draw' would miss it: it comes only after everyone
-    // else has passed on the card, and never when I take it. Shown under
-    // reduced motion too — it's a notice, not decoration (the CSS stills it).
+    // else has passed on the card, and never when I take it. Shown with
+    // animations off too — it's a notice, not decoration (the CSS stills it).
     const onTurn = (s) => s.cur === mySeat && TURN_PHASES.has(s.phase);
     if (onTurn(state) && !onTurn(ps)) setBanner(b => b + 1);
 
