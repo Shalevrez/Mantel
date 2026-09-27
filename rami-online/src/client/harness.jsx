@@ -5,7 +5,7 @@ import { createRoot } from "react-dom/client";
 import "@fontsource-variable/rubik";
 import { initGame, startHand, mkCard, G, MK } from "../game-core.js";
 import { viewFor } from "../worker/index.js";
-import { Game, RoundEnd, GameEnd, ScoreModal } from "./ui.jsx";
+import { Game, RoundEnd, GameEnd, ScoreModal, CardView } from "./ui.jsx";
 import { RewardStrip } from "./account.jsx";
 import { settle } from "../economy.js";
 
@@ -119,8 +119,41 @@ function Live() {
   return <Game state={v} dispatch={dispatch} onLeave={() => {}} />;
 }
 
+// ?screen=decks — the whole deck on one sheet: each suit from ace to king, the
+// joker, at the desktop hand size and, on the rail below, at phone and board
+// sizes (where the court cards drop their illustration).
+const SUIT_ROWS = ['s', 'h', 'd', 'c'];
+function Decks() {
+  const row = (suit) => Array.from({ length: 13 }, (_, i) => ({ id: `d${suit}${i + 1}`, suit, v: i + 1 }));
+  const joker = { id: 'djk', suit: 'j', v: 0, j: true };
+  return (
+    <div className="felt" style={{ minHeight: '100vh', minWidth: '100%', width: 'max-content', padding: '24px 28px',
+                                   direction: 'ltr', color: '#fdf8f0', fontFamily: '"Rubik Variable", system-ui, sans-serif' }}>
+      <h1 style={{ margin: '0 0 16px', color: '#f3d48c', fontSize: 26, direction: 'rtl' }}>החפיסה</h1>
+      {SUIT_ROWS.map(suit => (
+        <div key={suit} style={{ marginBottom: 16 }}>
+          <div style={{ display: 'flex', gap: 6, ['--card-w']: '98px', ['--card-h']: '138px' }}>
+            {row(suit).map(c => <CardView key={c.id} card={c} />)}
+            {suit === 's' && <CardView card={joker} />}
+          </div>
+          <div className="wood" style={{ display: 'flex', gap: 18, alignItems: 'center', padding: '8px 12px', marginTop: 6, borderRadius: 10 }}>
+            <div style={{ display: 'flex', ['--card-w']: '47px', ['--card-h']: '66px' }}>
+              {row(suit).map(c => <CardView key={c.id} card={c} />)}
+              {suit === 's' && <CardView card={joker} />}
+            </div>
+            <div style={{ display: 'flex', ['--card-w']: '34px', ['--card-h']: '48px' }}>
+              {row(suit).map(c => <CardView key={c.id} card={c} sm={false} />)}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 createRoot(document.getElementById('root')).render(
-  screen === 'live' ? <Live />
+  screen === 'decks' ? <Decks />
+  : screen === 'live' ? <Live />
   : screen === 'buying' ? <Game state={buying} dispatch={(a) => console.log('dispatch', a)} />
   // ?screen=buypaid / buybroke — a buy with a penalty card in a 500-coin room,
   // with enough coins for it, and without.

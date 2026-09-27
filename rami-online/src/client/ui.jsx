@@ -73,26 +73,6 @@ const hdrBtn = {
 // Colour of the "just attached" mark, on both the group and the card itself.
 const ATT = '#f472b6';
 
-// Where the pips go on a number card, as on a real deck: [column, row] with
-// columns l/c/r and rows from 0 (top) to 1 (bottom). Pips below the middle are
-// printed upside down, the way a card reads from either end.
-const PIP_X = { l: 34, c: 50, r: 66 };
-const PIPS = {
-  2:  [['c', 0], ['c', 1]],
-  3:  [['c', 0], ['c', .5], ['c', 1]],
-  4:  [['l', 0], ['r', 0], ['l', 1], ['r', 1]],
-  5:  [['l', 0], ['r', 0], ['c', .5], ['l', 1], ['r', 1]],
-  6:  [['l', 0], ['r', 0], ['l', .5], ['r', .5], ['l', 1], ['r', 1]],
-  7:  [['l', 0], ['r', 0], ['c', .25], ['l', .5], ['r', .5], ['l', 1], ['r', 1]],
-  8:  [['l', 0], ['r', 0], ['c', .25], ['l', .5], ['r', .5], ['c', .75], ['l', 1], ['r', 1]],
-  9:  [['l', 0], ['r', 0], ['l', 1/3], ['r', 1/3], ['c', .5], ['l', 2/3], ['r', 2/3], ['l', 1], ['r', 1]],
-  10: [['l', 0], ['r', 0], ['c', 1/6], ['l', 1/3], ['r', 1/3], ['l', 2/3], ['r', 2/3], ['c', 5/6], ['l', 1], ['r', 1]],
-};
-// The pip field runs from 19% to 81% of the card's height.
-const pipY = (row) => 19 + row * 62;
-const FACE = { 11: 'j', 12: 'q', 13: 'k' };
-const CROWN = { 11: '⚜', 12: '♛', 13: '♚' };
-
 // `attached`: this card was just attached to a board group — pink ring and a pin.
 // The card itself is drawn by table.css (.pc); this only picks the parts.
 function CardView({ card, sel, onClick, sm, back, glow, faded, newCard, attached }) {
@@ -112,38 +92,14 @@ function CardView({ card, sel, onClick, sm, back, glow, faded, newCard, attached
   const suitCls = card.j ? 'joker' : (card.suit === 'h' || card.suit === 'd') ? 'red' : 'black';
   const vs = card.j ? 'JK' : VD(card.v);
   const sym = card.j ? '★' : SYM[card.suit];
-  const face = !card.j && FACE[card.v];
+  const court = !card.j && card.v >= 11;
 
-  const index = (pos) => (
-    <div className={`pc-idx ${pos}`}>
-      {card.j
-        ? <b>{'JOKER'.split('').map((ch, i) => <span key={i}>{ch}</span>)}</b>
-        : <><b className={vs === '10' ? 'ten' : undefined}>{vs}</b><i>{sym}</i></>}
-    </div>
-  );
-
-  let middle;
-  if (card.j) middle = <div className="pc-jk">★</div>;
-  else if (face) middle = (
-    <div className={`pc-face ${face}`}>
-      <span className="crown">{CROWN[card.v]}</span>
-      <b>{vs}</b>
-      <i>{sym}</i>
-    </div>
-  );
-  else if (card.v === 1) middle = <div className={'pc-ace' + (card.suit === 's' ? ' spade' : '')}>{sym}</div>;
-  else middle = (
-    <>
-      <div className="pc-pips">
-        {(PIPS[card.v] || []).map(([col, row], i) => (
-          <span key={i} className={row > .5 ? 'f' : undefined}
-                style={{ left: `${PIP_X[col]}%`, top: `${pipY(row)}%` }}>{sym}</span>
-        ))}
-      </div>
-      <div className="pc-big">{sym}</div>
-    </>
-  );
-
+  // A number card: its rank and one big suit. The ace: a giant suit. A court
+  // card or the joker: the illustration (.pc-photo, public/cards/) — with the
+  // rank-and-suit layout underneath for when the card is too small for it.
+  const middle = card.j ? <><div className="pc-jk">★</div><div className="pc-photo" /></>
+    : card.v === 1 ? <div className="pc-ace">{sym}</div>
+    : <><div className="pc-big">{sym}</div>{court && <div className="pc-photo" />}</>;
   // Selection, a fresh card, an attach mark: rings drawn over the card's own
   // shadow (inline, so they win over table.css).
   const ring = sel ? '0 0 0 2px #60a5fa, 0 12px 22px rgba(96,165,250,.55)'
@@ -152,7 +108,7 @@ function CardView({ card, sel, onClick, sm, back, glow, faded, newCard, attached
     : glow ? `0 0 0 2px ${GOLD}, 0 0 12px ${GOLD}aa` : undefined;
 
   return (
-    <div onClick={onClick} className={`pc ${suitCls}`} style={{
+    <div onClick={onClick} className={`pc ${suitCls} s-${card.j ? 'j' : card.suit}${card.j ? '' : ` r-${card.v}`}`} style={{
       width: w, height: h, borderRadius: radius,
       margin: sm ? '0 1px' : '0 2px',
       cursor: onClick ? 'pointer' : 'default',
@@ -162,9 +118,12 @@ function CardView({ card, sel, onClick, sm, back, glow, faded, newCard, attached
       opacity: faded ? 0.38 : 1,
       animation: newCard ? 'newCardPulse 1.6s ease-in-out infinite' : 'none',
     }}>
-      {index('tl')}
+      <div className="pc-idx">
+        {card.j
+          ? <b>{'JOKER'.split('').map((ch, i) => <span key={i}>{ch}</span>)}</b>
+          : <b className={vs === '10' ? 'ten' : undefined}>{vs}</b>}
+      </div>
       {middle}
-      {!sm && index('br')}
       {attached && (
         <div style={{
           position: 'absolute', bottom: 1, left: '50%', transform: 'translateX(-50%)',
