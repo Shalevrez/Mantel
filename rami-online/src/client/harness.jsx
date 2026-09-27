@@ -27,9 +27,9 @@ st = {
   buy: null,
   canLay: true,
   board: [
-    { id: 'g1', type: 'seq', cards: [mkCard('h', 5), mkCard('h', 6), mkCard('h', 7)] },
-    { id: 'g2', type: 'set', cards: [mkCard('c', 8), mkCard('d', 8), mkCard('s', 8)] },
-    { id: 'g3', type: 'seq', cards: [mkCard('s', 9), mkCard('s', 10), mkCard('s', 11), mkCard('s', 12)] },
+    { id: 'g1', type: 'seq', owner: 0, cards: [mkCard('h', 5), mkCard('h', 6), mkCard('h', 7)] },
+    { id: 'g2', type: 'set', owner: 1, cards: [mkCard('c', 8), mkCard('d', 8), mkCard('s', 8)] },
+    { id: 'g3', type: 'seq', owner: 2, cards: [mkCard('s', 9), mkCard('s', 10), mkCard('s', 11), mkCard('s', 12)] },
   ],
   players: st.players.map((p, i) => i === 0 ? { ...p, hasLaid: true } : p),
 };

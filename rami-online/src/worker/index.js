@@ -76,7 +76,7 @@ export function viewFor(state, seat) {
       if (i === seat) return { ...p, seat: i, you: true };
       // Opponents: hide hand cards, keep count + public info
       return {
-        id: p.id, name: p.name, isAI: p.isAI, seat: i,
+        id: p.id, name: p.name, isAI: p.isAI, seat: i, color: p.color,
         handCount: p.hand.length,
         hasLaid: p.hasLaid, totalScore: p.totalScore,
         lastScore: p.lastScore, paidBuys: p.paidBuys || 0, out: !!p.out, you: false,
