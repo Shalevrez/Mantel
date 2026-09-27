@@ -6,7 +6,6 @@ import "@fontsource-variable/rubik";
 import { initGame, startHand, mkCard, G, MK } from "../game-core.js";
 import { viewFor } from "../worker/index.js";
 import { Game, RoundEnd, GameEnd, ScoreModal, CardView } from "./ui.jsx";
-import "./decks.css";
 import { RewardStrip } from "./account.jsx";
 import { settle } from "../economy.js";
 
@@ -120,93 +119,34 @@ function Live() {
   return <Game state={v} dispatch={dispatch} onLeave={() => {}} />;
 }
 
-// ?screen=decks — the design gallery: the same cards in each candidate deck
-// (decks.css), side by side, at the desktop hand size and, below, at phone and
-// board sizes on the wooden rail. For choosing a card front; the game itself
-// still uses "classic".
-const DECKS = [
-  { id: 'classic', name: '1 · קלאסי (היום)' },
-  { id: 'modern',  name: '2 · מודרני נקי' },
-  { id: 'deco',    name: '3 · אר-דקו זהב' },
-  { id: 'vintage', name: '4 · וינטג׳ מודפס' },
-  { id: 'casino',  name: '5 · קזינו' },
-  { id: 'jumbo',   name: '6 · ג׳מבו, ארבעה צבעים' },
-];
-const G_CARDS = [
-  { group: 'מספרים', cards: [{ id: 'g2', suit: 'h', v: 2 }, { id: 'g7', suit: 'c', v: 7 }, { id: 'g10', suit: 'd', v: 10 }] },
-  { group: 'אס', cards: [{ id: 'gas', suit: 's', v: 1 }, { id: 'gah', suit: 'h', v: 1 }] },
-  { group: 'נסיך · מלכה · מלך', cards: [{ id: 'gj', suit: 'd', v: 11 }, { id: 'gq', suit: 's', v: 12 }, { id: 'gk', suit: 'h', v: 13 }] },
-  { group: 'ג׳וקר', cards: [{ id: 'gjk', suit: 'j', v: 0, j: true }] },
-];
-// ?set=jumbo — the jumbo deck's figure variants (medal / half / mirror).
-const JUMBO_ROWS = [
-  { id: 'jumbo', v: 'medal',  name: 'A · מדליון' },
-  { id: 'jumbo', v: 'half',   name: 'B · חצי גוף' },
-  { id: 'jumbo', v: 'mirror', name: 'C · קלאסי משוקף' },
-  { id: 'jumbo', v: 'art',    name: 'D · Higgsfield' },
-];
-const JUMBO_CARDS = [
-  { group: 'מספרים', cards: [{ id: 'n2', suit: 'h', v: 2 }, { id: 'n7', suit: 'c', v: 7 }, { id: 'n10', suit: 'd', v: 10 }] },
-  { group: 'מלך', cards: [{ id: 'kh', suit: 'h', v: 13 }, { id: 'ks', suit: 's', v: 13 }] },
-  { group: 'מלכה', cards: [{ id: 'qd', suit: 'd', v: 12 }, { id: 'qc', suit: 'c', v: 12 }] },
-  { group: 'נסיך', cards: [{ id: 'jh', suit: 'h', v: 11 }, { id: 'js', suit: 's', v: 11 }] },
-  { group: 'אס', cards: [{ id: 'as', suit: 's', v: 1 }, { id: 'ah', suit: 'h', v: 1 }] },
-  { group: 'ג׳וקר', cards: [{ id: 'jk', suit: 'j', v: 0, j: true }] },
-];
-
-// ?set=art — the chosen deck in full: every court card in all four suits.
-const ART_ROWS = [{ id: 'jumbo', v: 'art', name: 'Higgsfield' }];
-const SUIT4 = ['s', 'h', 'd', 'c'];
-const ART_CARDS = [
-  { group: 'מספרים', cards: [{ id: 'a2', suit: 'h', v: 2 }, { id: 'a7', suit: 'c', v: 7 }, { id: 'a10', suit: 'd', v: 10 }] },
-  { group: 'אס', cards: [{ id: 'aas', suit: 's', v: 1 }, { id: 'aah', suit: 'h', v: 1 }] },
-  ...[[13, 'מלך'], [12, 'מלכה'], [11, 'נסיך']].map(([v, group]) => ({
-    group, cards: SUIT4.map(suit => ({ id: `a${v}${suit}`, suit, v })) })),
-  { group: 'ג׳וקר', cards: [{ id: 'ajk', suit: 'j', v: 0, j: true }] },
-];
-
-// ?deck=modern — one deck only; ?cat=2 — one category; ?mini=0 — no small sizes.
+// ?screen=decks — the whole deck on one sheet: each suit from ace to king, the
+// joker, at the desktop hand size and, on the rail below, at phone and board
+// sizes (where the court cards drop their illustration).
+const SUIT_ROWS = ['s', 'h', 'd', 'c'];
 function Decks() {
-  const set = params.get('set');
-  const only = params.get('deck');
-  const base = set === 'art' ? ART_ROWS : set === 'jumbo' ? JUMBO_ROWS : DECKS;
-  const decks = only ? base.filter(d => (d.v || d.id) === only) : base;
-  const cats = set === 'art' ? ART_CARDS : set === 'jumbo' ? JUMBO_CARDS : G_CARDS;
-  const groups = params.has('cat') ? [cats[Number(params.get('cat'))]] : cats;
-  const allCards = groups.flatMap(g => g.cards);
-  const mini = params.get('mini') !== '0';
+  const row = (suit) => Array.from({ length: 13 }, (_, i) => ({ id: `d${suit}${i + 1}`, suit, v: i + 1 }));
+  const joker = { id: 'djk', suit: 'j', v: 0, j: true };
   return (
-    <div className="felt" style={{ minHeight: '100vh', minWidth: '100%', width: 'max-content', padding: '24px 28px', direction: 'rtl', color: '#fdf8f0',
-                                   fontFamily: '"Rubik Variable", system-ui, sans-serif' }}>
-      <h1 style={{ margin: '0 0 4px', color: '#f3d48c', fontSize: 28 }}>עיצובים לחזית הקלפים</h1>
-      <div style={{ color: '#c7d2e3', marginBottom: 18, fontSize: 14 }}>כל שורה היא עיצוב, ובכל עמודה אותו קלף. מתחת לכל שורה: אותם קלפים בגודל טלפון ובגודל הלוח.</div>
-      <div style={{ display: 'grid', gridTemplateColumns: `170px repeat(${allCards.length}, 104px)`, gap: '0 6px', alignItems: 'end',
-                    ['--card-w']: '98px', ['--card-h']: '138px' }}>
-        <div />
-        {groups.map(g => (
-          <div key={g.group} style={{ gridColumn: `span ${g.cards.length}`, textAlign: 'center', color: '#f3d48c', fontWeight: 700,
-                                      borderBottom: '1px solid rgba(214,170,84,.5)', paddingBottom: 6, marginBottom: 10 }}>{g.group}</div>
-        ))}
-        {decks.map(d => (
-          <div key={d.v || d.id} data-deck={d.id === 'classic' ? undefined : d.id} data-v={d.v} style={{ display: 'contents' }}>
-            <div style={{ alignSelf: 'center', fontWeight: 800, fontSize: 17, color: '#fdf8f0' }}>{d.name}</div>
-            {allCards.map(c => <div key={c.id} style={{ padding: '10px 0 4px' }}><CardView card={c} /></div>)}
-            {mini && <div />}
-            {mini && <div className="wood" data-deck={d.id === 'classic' ? undefined : d.id} data-v={d.v}
-                 style={{ gridColumn: `span ${allCards.length}`, display: 'flex', alignItems: 'center', gap: 14,
-                          padding: '8px 12px', margin: '2px 0 18px', borderRadius: 10 }}>
-              <span style={{ fontSize: 12, color: '#e9d8b4', width: 56 }}>טלפון</span>
-              <div style={{ display: 'flex', ['--card-w']: '47px', ['--card-h']: '66px' }}>
-                {allCards.map(c => <CardView key={c.id} card={c} />)}
-              </div>
-              <span style={{ fontSize: 12, color: '#e9d8b4', width: 40, marginInlineStart: 12 }}>לוח</span>
-              <div style={{ display: 'flex', ['--card-w']: '34px', ['--card-h']: '48px' }}>
-                {allCards.map(c => <CardView key={c.id} card={c} />)}
-              </div>
-            </div>}
+    <div className="felt" style={{ minHeight: '100vh', minWidth: '100%', width: 'max-content', padding: '24px 28px',
+                                   direction: 'ltr', color: '#fdf8f0', fontFamily: '"Rubik Variable", system-ui, sans-serif' }}>
+      <h1 style={{ margin: '0 0 16px', color: '#f3d48c', fontSize: 26, direction: 'rtl' }}>החפיסה</h1>
+      {SUIT_ROWS.map(suit => (
+        <div key={suit} style={{ marginBottom: 16 }}>
+          <div style={{ display: 'flex', gap: 6, ['--card-w']: '98px', ['--card-h']: '138px' }}>
+            {row(suit).map(c => <CardView key={c.id} card={c} />)}
+            {suit === 's' && <CardView card={joker} />}
           </div>
-        ))}
-      </div>
+          <div className="wood" style={{ display: 'flex', gap: 18, alignItems: 'center', padding: '8px 12px', marginTop: 6, borderRadius: 10 }}>
+            <div style={{ display: 'flex', ['--card-w']: '47px', ['--card-h']: '66px' }}>
+              {row(suit).map(c => <CardView key={c.id} card={c} />)}
+              {suit === 's' && <CardView card={joker} />}
+            </div>
+            <div style={{ display: 'flex', ['--card-w']: '34px', ['--card-h']: '48px' }}>
+              {row(suit).map(c => <CardView key={c.id} card={c} sm={false} />)}
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

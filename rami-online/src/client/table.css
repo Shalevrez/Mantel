@@ -1,31 +1,28 @@
 /*
-  The look of the table: real-looking playing cards, the felt, and the wooden
-  rail the hand rests on. Imported by ui.jsx, so every screen that draws a card
-  (the game, the round-end board, the score table) gets the same deck.
+  The look of the table: the cards, the felt, and the wooden rail the hand
+  rests on. Imported by ui.jsx, so every screen that draws a card (the game,
+  the round-end board, the score table) gets the same deck.
 
-  A card is a size container (container-type: size), so everything drawn on it
-  is sized in cqw/cqh — a percentage of that card's own width and height. One
-  card component then serves every size, from a 34px card on a phone's board
-  to a 100px card in a desktop hand, and the pip layout switches to a single
-  big suit (below) when a card is too small to carry it.
+  The deck: "jumbo" number cards — a big rank in the corner and one big suit
+  opposite, in red and black — a giant-suit ace, and illustrated court cards
+  and joker (public/cards/, made with Higgsfield). A card is a size container
+  (container-type: size), so everything on it is sized in cqw/cqh — a share
+  of that card's own width and height — and one card serves every size.
 */
 
 /* ── The card ─────────────────────────────────────── */
 .pc {
-  --ink-red: #c1121f;
-  --ink-black: #16181d;
+  --ink-red: #dc2626;
+  --ink-black: #111827;
   position: relative;
   container-type: size;
   flex-shrink: 0;
   overflow: hidden;
   /* border-radius is set inline from the card's height: cq units on the card
      itself would measure its parent, not the card. */
-  font-family: Georgia, "Times New Roman", "DejaVu Serif", serif;
-  /* Card stock: warm white, a touch darker toward the lower corner, as it
-     catches the light. */
-  background:
-    radial-gradient(120% 90% at 20% 10%, rgba(255,255,255,.9), rgba(255,255,255,0) 60%),
-    linear-gradient(160deg, #fffdf8 0%, #faf5ea 55%, #efe7d6 100%);
+  font-family: "Rubik Variable", system-ui, sans-serif;
+  /* Card stock, the same cream as the illustrations. */
+  background: #fdfcf8;
   border: 1px solid rgba(48, 36, 20, .30);
   /* Three shadows: contact, near and far — a card lying on cloth. */
   box-shadow:
@@ -42,92 +39,83 @@
   pointer-events: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.3' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .45  0 0 0 0 .38  0 0 0 0 .28  0 0 0 .22 0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
   mix-blend-mode: multiply;
-  opacity: .55;
+  opacity: .25;
 }
 .pc.red   { color: var(--ink-red); }
 .pc.black { color: var(--ink-black); }
 
-/* Corner index: rank over suit, top-left and (turned) bottom-right. */
+/* Corner index: a big rank, top-left — the first thing the eye reads. */
 .pc-idx {
   position: absolute; z-index: 1;
-  display: flex; flex-direction: column; align-items: center;
-  width: 17cqw; line-height: .9;
+  top: 3cqh; left: 5cqw;
+  display: flex; flex-direction: column; align-items: flex-start;
+  line-height: .9;
 }
-.pc-idx.tl { top: 3cqh; left: 2.5cqw; }
-.pc-idx.br { bottom: 3cqh; right: 2.5cqw; transform: rotate(180deg); }
 .pc-idx b {
-  font-size: 15.5cqh; font-weight: 700; letter-spacing: -.06em;
+  font-size: 34cqh; font-weight: 800; letter-spacing: -.06em;
   font-variant-numeric: lining-nums;
 }
-.pc-idx b.ten { letter-spacing: -.16em; font-size: 13.5cqh; }
-.pc-idx i { font-style: normal; font-size: 11cqh; margin-top: .4cqh; }
+.pc-idx b.ten { font-size: 30cqh; letter-spacing: -.12em; }
 
-/* Number cards: the pips, laid out as on a real deck (see PIPS in ui.jsx). */
-.pc-pips { position: absolute; inset: 0; }
-.pc-pips span {
-  position: absolute;
-  font-size: 13.5cqh; line-height: 1;
-  transform: translate(-50%, -50%);
-}
-.pc-pips span.f { transform: translate(-50%, -50%) rotate(180deg); }
-.pc-big, .pc-ace {
-  position: absolute; left: 50%; top: 50%;
-  transform: translate(-50%, -50%);
-  line-height: 1;
-}
-.pc-big { display: none; font-size: 38cqh; }
-.pc-ace { font-size: 44cqh; }
-/* The ace of spades gets its traditional flourish: bigger and ringed. */
-.pc-ace.spade { font-size: 52cqh; filter: drop-shadow(0 0 .6cqh rgba(0,0,0,.25)); }
+/* One big suit in the opposite corner (numbers — and, when small, courts). */
+.pc-big { position: absolute; right: 6cqw; bottom: 3cqh; font-size: 44cqh; line-height: 1; }
+/* The ace: a giant suit filling the card. */
+.pc-ace { position: absolute; right: 4cqw; bottom: 1cqh; font-size: 72cqh; line-height: .9; }
 
-/* Court cards: a framed panel with a woven tint and a large serif letter. */
-.pc-face {
-  position: absolute; inset: 14cqh 21cqw;
-  border-radius: 3cqw;
-  border: .9cqw solid currentColor;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  box-shadow: inset 0 0 0 1.2cqw #fffaf0, inset 0 0 0 1.8cqw rgba(201,151,58,.9);
-  overflow: hidden;
-}
-.pc-face.k { background: repeating-linear-gradient(45deg, rgba(201,151,58,.22) 0 1.5cqw, transparent 1.5cqw 4cqw), radial-gradient(circle at 50% 40%, #fff6dc, #f2dfae); }
-.pc-face.q { background: repeating-linear-gradient(-45deg, rgba(193,18,31,.12) 0 1.5cqw, transparent 1.5cqw 4cqw), radial-gradient(circle at 50% 40%, #fff3f1, #f5d6cf); }
-.pc-face.j { background: repeating-linear-gradient(90deg, rgba(30,58,95,.12) 0 1.5cqw, transparent 1.5cqw 4cqw), radial-gradient(circle at 50% 40%, #f1f6ff, #d5e0f2); }
-.pc-face b {
-  font-size: 34cqh; line-height: 1; font-weight: 700;
-  text-shadow: 0 .4cqh 0 rgba(201,151,58,.55);
-}
-.pc-face i { font-style: normal; font-size: 13cqh; line-height: 1; margin-top: .5cqh; }
-.pc-face .crown { font-size: 10cqh; line-height: 1; color: #b8862e; margin-bottom: .5cqh; }
-
-/* Joker: a white card, the word down the corner, a many-coloured star. */
-.pc.joker { color: #6d28d9; }
-.pc.joker .pc-idx b { font-size: 9.5cqh; letter-spacing: 0; line-height: .95; display: flex; flex-direction: column; }
+/* Joker: the word down the corner; a many-coloured star when small. */
+.pc.joker { color: #c1121f; }
+.pc.joker .pc-idx b { font-size: 12cqh; letter-spacing: 0; line-height: .95; display: flex; flex-direction: column; }
 .pc-jk {
-  position: absolute; left: 50%; top: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 50cqh; line-height: 1;
+  position: absolute; right: 4cqw; bottom: 2cqh;
+  font-size: 46cqh; line-height: 1;
   background: linear-gradient(135deg, #7c3aed 10%, #db2777 50%, #f59e0b 90%);
   -webkit-background-clip: text; background-clip: text;
   color: transparent;
-  filter: drop-shadow(0 .6cqh .6cqh rgba(109,40,217,.35));
 }
-.pc.joker { box-shadow:
-    inset 0 0 0 1px rgba(255,255,255,.75), inset 0 0 0 3px rgba(124,58,237,.12),
-    0 1px 1px rgba(0,0,0,.28), 0 3px 6px rgba(0,0,0,.22), 0 10px 18px -8px rgba(0,0,0,.45); }
 
-/* Too small for pips or a portrait (a phone's board, the round-end table):
-   one big suit, like the old cards, and the court panel loses its extras.
-   Phones always land here: a big suit reads faster than pips at that size. */
+/* Court cards and the joker: the illustration, edge to edge. Each source image
+   carries its own corner rank and suit, so the card's own index, big suit and
+   star step aside for it.
+
+   kings.webp / queens.webp — four cards side by side (♠ ♥ ♦ ♣), each ~487×635.
+   Their ratio (1.30) is wider than ours (1.41), so each is cropped to our
+   shape from its inner frame, trimming ~3.5% off each side. jacks.webp — four
+   cards (♠ ♥ ♦ ♣), each ~372×663: narrower than ours, so it is shown whole,
+   centred, on the card's cream. joker.webp — one card, ~1006×1518, the same.
+   Crop numbers are measured from the images (card borders at
+   K x 13–500·509–997·1005–1493·1503–1988, y 16–651; Q x 15–502·510–997·
+   1005–1492·1500–1986, y 17–652; J x 9–381·390–763·773–1145·1155–1526,
+   y 181–844; joker x 9–1015, y 8–1526), inset 5px to lose the drawn border —
+   12px for the jacks, whose rounded corners would otherwise show. */
+.pc-photo {
+  position: absolute; top: 0; bottom: 0; left: var(--l, 0%); right: var(--l, 0%);
+  background: var(--art) var(--pos) / var(--size) no-repeat;
+}
+.pc:has(.pc-photo) .pc-idx, .pc:has(.pc-photo) .pc-big, .pc-jk { display: none; }
+.pc.r-13 { --art: url(/cards/kings.webp);  --size: 451.16% 106.72%; }
+.pc.r-12 { --art: url(/cards/queens.webp); --size: 451.16% 107.20%; }
+.pc.r-11 { --art: url(/cards/jacks.webp);  --size: 441.38% 160.25%; --l: 11.6%; }
+.pc.r-13.s-s { --pos:  2.24% 50%; }
+.pc.r-13.s-h { --pos: 34.14% 50%; }
+.pc.r-13.s-d { --pos: 66.00% 50%; }
+.pc.r-13.s-c { --pos: 97.89% 50%; }
+.pc.r-12.s-s { --pos:  2.37% 48.89%; }
+.pc.r-12.s-h { --pos: 34.17% 48.89%; }
+.pc.r-12.s-d { --pos: 65.97% 48.89%; }
+.pc.r-12.s-c { --pos: 97.73% 48.89%; }
+.pc.r-11.s-s { --pos:  1.77% 50.13%; }
+.pc.r-11.s-h { --pos: 33.87% 50.13%; }
+.pc.r-11.s-d { --pos: 66.08% 50.13%; }
+.pc.r-11.s-c { --pos: 98.15% 50.13%; }
+.pc.joker { --art: url(/cards/joker.webp); --size: 102.81% 101.86%; --pos: 50% 46.43%; --l: 3.44%; }
+
+/* Too small for an illustration (a phone's board, the round-end table): a court
+   card reads like a number card — its letter and one big suit — and the joker
+   gets its star back. */
 @container (max-width: 52px) {
-  .pc-pips { display: none; }
-  .pc-big { display: block; }
-  .pc-face { inset: 26cqh 16cqw 10cqh; border-width: 1px; box-shadow: none; }
-  .pc-face b { font-size: 30cqh; text-shadow: none; }
-  .pc-face i, .pc-face .crown { display: none; }
-  .pc-idx.tl { left: 2cqw; }
-  .pc-idx b { font-size: 21cqh; }
-  .pc-idx i { font-size: 15cqh; }
-  .pc.joker .pc-idx b { font-size: 11cqh; }
+  .pc-photo { display: none; }
+  .pc:has(.pc-photo) .pc-idx { display: flex; }
+  .pc:has(.pc-photo) .pc-big, .pc-jk { display: block; }
 }
 
 /* ── The back ─────────────────────────────────────── */
@@ -374,7 +362,3 @@
   .hub-mobile-title { display: none; }
   .menu-card { min-height: 210px !important; }
 }
-
-/* Optional card art (cardart.jsx) — off in the game's own deck. The design
-   gallery's alternative decks (decks.css) turn it on. */
-.pc-art, .pc-jart, .pc-orn, .pc-port, .pc-clown, .pc-photo { display: none; }
