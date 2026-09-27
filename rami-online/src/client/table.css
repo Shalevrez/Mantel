@@ -94,7 +94,7 @@
 .pc:has(.pc-photo) .pc-idx, .pc:has(.pc-photo) .pc-big, .pc-jk { display: none; }
 .pc.r-13 { --art: url(/cards/kings.webp);  --size: 451.16% 106.72%; }
 .pc.r-12 { --art: url(/cards/queens.webp); --size: 451.16% 107.20%; }
-.pc.r-11 { --art: url(/cards/jacks.webp);  --size: 441.38% 160.25%; --l: 11.6%; }
+.pc.r-11 { --art: url(/cards/jacks.webp?v=2);  --size: 441.38% 160.25%; --l: 11.6%; }
 .pc.r-13.s-s { --pos:  2.24% 50%; }
 .pc.r-13.s-h { --pos: 34.14% 50%; }
 .pc.r-13.s-d { --pos: 66.00% 50%; }
@@ -107,7 +107,7 @@
 .pc.r-11.s-h { --pos: 33.87% 50.13%; }
 .pc.r-11.s-d { --pos: 66.08% 50.13%; }
 .pc.r-11.s-c { --pos: 98.15% 50.13%; }
-.pc.joker { --art: url(/cards/joker.webp); --size: 102.81% 101.86%; --pos: 50% 46.43%; --l: 3.44%; }
+.pc.joker { --art: url(/cards/joker.webp?v=2); --size: 102.81% 101.86%; --pos: 50% 46.43%; --l: 3.44%; }
 
 /* Too small for an illustration (the board and the round-end table on a phone,
    ~22–30px): a court card reads like a number card — its letter and one big
