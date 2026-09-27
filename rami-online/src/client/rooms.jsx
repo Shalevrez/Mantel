@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════
 // ROOM SETUP — the practice table and the online room
 // Pick the table size and either the bots' level (practice) or
-// the entry fee (online), then PLAY. The prize maths comes from
+// the entry fee (online), then start. The prize maths comes from
 // economy.js, the same code that settles the game at the end.
 // ═══════════════════════════════════════════════════════
 
@@ -196,7 +196,7 @@ export function OnlineSetup({ coins, busy, error, onPlay, onGetCoins }) {
   );
 }
 
-function PlayBar({ busy, error, disabled, onPlay, label = 'PLAY' }) {
+function PlayBar({ busy, error, disabled, onPlay, label = 'התחל' }) {
   return (
     <div style={{ maxWidth: 440, margin: '26px auto 0' }}>
       <button onClick={onPlay} disabled={busy || disabled}
