@@ -377,4 +377,4 @@
 
 /* Optional card art (cardart.jsx) — off in the game's own deck. The design
    gallery's alternative decks (decks.css) turn it on. */
-.pc-art, .pc-jart, .pc-orn, .pc-port, .pc-clown { display: none; }
+.pc-art, .pc-jart, .pc-orn, .pc-port, .pc-clown, .pc-photo { display: none; }

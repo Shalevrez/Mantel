@@ -311,10 +311,58 @@
 [data-v="mirror"] .pc-clown { display: block; position: absolute; left: 50%; top: 55%; width: 62cqw; height: 52cqh; transform: translate(-50%, -50%); }
 [data-v="mirror"] .pc.joker .pc-idx { background: #fffaf0; border-radius: 2cqw; padding: .6cqh .6cqw; }
 
+/* D · ART — the Higgsfield figures (public/cards/*.webp): jumbo numbers,
+   the medallion ace, and court cards laid out like the reference king —
+   cream stock, a serif letter and suit in the corner, and a framed panel
+   whose figure's crown rises above the frame. */
+[data-v="art"] .pc { background: #fbf8ef; }
+[data-v="art"] .pc-ace { display: block !important; left: auto; top: auto; right: 4cqw; bottom: 1cqh; transform: none; font-size: 72cqh; line-height: .9; }
+[data-v="art"] .pc:has(.pc-ace)::before,
+[data-v="art"] .pc:has(.pc-photo)::before { content: none !important; }
+/* Court and joker corners: a serif letter over its suit, as on the reference. */
+[data-v="art"] .pc:has(.pc-photo) .pc-idx.tl { top: 6cqh; left: 6cqw; width: 12cqw; align-items: center; }
+[data-v="art"] .pc:has(.pc-photo) .pc-idx b {
+  font-family: Georgia, "Times New Roman", "DejaVu Serif", serif; font-weight: 700;
+  font-size: 12cqh; letter-spacing: 0;
+}
+[data-v="art"] .pc:has(.pc-photo) .pc-idx i { display: block; font-size: 10cqh; margin-top: 1.2cqh; }
+[data-v="art"] .pc.joker .pc-idx b { font-size: 6.5cqh; line-height: 1; }
+/* The panel. */
+[data-v="art"] .pc-photo {
+  display: block; position: absolute; top: 13cqh; bottom: 10cqh; left: 17cqw; right: 16.7cqw;
+  border: .9cqw solid #b0101f;
+  background: linear-gradient(135deg, #f0a6ad, #d23f4c);
+}
+/* The king: the reference art itself, cropped to its panel and crown
+   (x 255–1250, y 190–1800 of the 1500×2000 source). */
+[data-v="art"] .pc:has(.pc-face.k) .pc-photo {
+  top: 9.5cqh; border: none;
+  background: url(/cards/king.webp) 50.5% 48.7% / 150.75% 124.22% no-repeat;
+}
+/* The source king wears a diamond on his chest; each card shows its own suit. */
+[data-v="art"] .pc:has(.pc-face.k) .pc-photo::after {
+  position: absolute; left: 50%; top: 66.6%; transform: translate(-50%, -50%);
+  width: 17%; height: 12.5%; background: #7d1120;
+  display: flex; align-items: center; justify-content: center;
+  color: #e7b95c; font-size: 7.5cqh; line-height: 1;
+  font-family: "DejaVu Sans", "Segoe UI Symbol", sans-serif;
+}
+[data-v="art"] .pc.s-h:has(.pc-face.k) .pc-photo::after { content: "♥"; }
+[data-v="art"] .pc.s-d:has(.pc-face.k) .pc-photo::after { content: "♦"; }
+[data-v="art"] .pc.s-c:has(.pc-face.k) .pc-photo::after { content: "♣"; }
+[data-v="art"] .pc.s-s:has(.pc-face.k) .pc-photo::after { content: "♠"; }
+/* Queen, prince and joker: placeholders until their Higgsfield art arrives —
+   the drawn figures, standing in the same panel. */
+[data-v="art"] .pc:not(:has(.pc-face.k)) .pc-port.pc-single,
+[data-v="art"] .pc.joker .pc-clown {
+  display: block; position: absolute; top: 13cqh; bottom: 10cqh; left: 17cqw; right: 16.7cqw;
+  width: auto; height: auto; z-index: 1;
+}
+
 /* Small cards (a phone's board): every deck falls back to its simplest form. */
 @container (max-width: 52px) {
   [data-deck] .pc-art, [data-deck] .pc-jart, [data-deck] .pc-orn,
-  [data-deck] .pc-port, [data-deck] .pc-clown { display: none !important; }
+  [data-deck] .pc-port, [data-deck] .pc-clown, [data-deck] .pc-photo { display: none !important; }
   [data-deck] .pc-face { display: flex !important; inset: 26cqh 16cqw 10cqh !important; }
   [data-deck] .pc-jk { display: block !important; }
 }

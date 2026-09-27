@@ -143,6 +143,7 @@ const JUMBO_ROWS = [
   { id: 'jumbo', v: 'medal',  name: 'A · מדליון' },
   { id: 'jumbo', v: 'half',   name: 'B · חצי גוף' },
   { id: 'jumbo', v: 'mirror', name: 'C · קלאסי משוקף' },
+  { id: 'jumbo', v: 'art',    name: 'D · Higgsfield' },
 ];
 const JUMBO_CARDS = [
   { group: 'מספרים', cards: [{ id: 'n2', suit: 'h', v: 2 }, { id: 'n7', suit: 'c', v: 7 }, { id: 'n10', suit: 'd', v: 10 }] },

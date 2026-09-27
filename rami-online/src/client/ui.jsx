@@ -126,7 +126,7 @@ function CardView({ card, sel, onClick, sm, back, glow, faded, newCard, attached
   let middle;
   // The art (CourtArt, JokerArt) is hidden in the game's own deck; the
   // alternative decks in the design gallery show it instead (decks.css).
-  if (card.j) middle = <><div className="pc-jk">★</div><JokerArt /><Clown /></>;
+  if (card.j) middle = <><div className="pc-jk">★</div><JokerArt /><Clown /><div className="pc-photo" /></>;
   else if (face) middle = (
     <>
       <div className={`pc-face ${face}`}>
@@ -137,6 +137,7 @@ function CardView({ card, sel, onClick, sm, back, glow, faded, newCard, attached
       <CourtArt v={card.v} sym={sym} />
       <Portrait v={card.v} sym={sym} />
       <Portrait v={card.v} sym={sym} mirror />
+      <div className="pc-photo" />
     </>
   );
   else if (card.v === 1) middle = <div className={'pc-ace' + (card.suit === 's' ? ' spade' : '')}>{sym}</div>;
