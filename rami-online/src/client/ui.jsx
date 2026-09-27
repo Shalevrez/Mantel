@@ -23,6 +23,7 @@ function tilt(id) {
 }
 import { RELEASES } from "../releases.js";
 import "./table.css";
+import { useKeys, hasMouse, keyLabel, Kbd, KeysEditor } from "./keys.jsx";
 
 
 // Card geometry comes from --card-w/--card-h (declared in Game's stylesheet), so
@@ -1170,6 +1171,40 @@ function LeaveConfirm({ started, onConfirm, onClose }) {
   );
 }
 
+// ── Keyboard shortcuts, opened from the game's top bar (mouse users only).
+// The same editor lives in the settings on the home screen.
+function KeysModal({ onClose }) {
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 1000,
+        background: 'rgba(0,0,0,.6)', backdropFilter: 'blur(2px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        direction: 'rtl', padding: 14,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: CREAM, color: FELTD, borderRadius: 20, maxWidth: 420, width: '100%',
+          padding: '20px 20px 16px',
+          border: `2px solid ${GOLD}88`, boxShadow: '0 24px 72px rgba(0,0,0,.6)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <div style={{ fontSize: 19, fontWeight: 700 }}><Icon name="keyboard" /> קיצורי מקלדת</div>
+          <button onClick={onClose} aria-label="סגור" style={{
+            background: '#e7e5e4', border: 'none', borderRadius: 8, width: 30, height: 30,
+            cursor: 'pointer', color: '#57534e',
+          }}><Icon name="x" /></button>
+        </div>
+        <KeysEditor />
+      </div>
+    </div>
+  );
+}
+
 // ═══════════════════════════════════════════════════════
 // MAIN GAME SCREEN
 // ═══════════════════════════════════════════════════════
@@ -1186,6 +1221,8 @@ function Game({ state, dispatch, onLeave, wallet }) {
   const [showNotes, setShowNotes] = useState(false);
   const [showScores, setShowScores] = useState(false);
   const [showLeave, setShowLeave] = useState(false);
+  const [showKeys, setShowKeys] = useState(false);
+  const keys = useKeys();
   // Card drag. `drag` is { card, touch } while a card is lifted and only changes
   // when a drag starts or ends; the pointer position, the insertion slot and the
   // ghost's placement live in dragRef and go straight to the DOM, so following
@@ -1193,10 +1230,12 @@ function Game({ state, dispatch, onLeave, wallet }) {
   const [drag, setDrag] = useState(null);
   // The board group the dragged card is over, if releasing would attach it.
   const [hotGid, setHotGid] = useState(null);
+  // The dragged card is over the discard pile, and releasing would throw it.
+  const [hotDiscard, setHotDiscard] = useState(false);
   const dragRef = useRef({
     card: null, active: false, pointerId: null, touch: false,
     startX: 0, startY: 0, x: 0, y: 0, lift: 0, slop: DRAG_SLOP_MOUSE,
-    slot: null, gid: null,
+    slot: null, gid: null, discard: false,
   });
   const ghostRef  = useRef(null);
   const markerRef = useRef(null);
@@ -1356,6 +1395,13 @@ function Game({ state, dispatch, onLeave, wallet }) {
     return g ? g.getAttribute('data-gid') : null;
   }
 
+  // Over the discard pile, on my turn to act: releasing throws the card.
+  function discardAt(x, y) {
+    if (!isMyTurn || state.phase !== 'action') return false;
+    const el = document.elementFromPoint(x, y);
+    return !!(el && el.closest('[data-drop="discard"]'));
+  }
+
   // Put the ghost and the insertion bar where dragRef says, straight on the DOM.
   function paintDrag() {
     const d = dragRef.current;
@@ -1377,8 +1423,10 @@ function Game({ state, dispatch, onLeave, wallet }) {
     // The drop point is the ghost's centre: on touch that's above the finger.
     const hx = x, hy = y - d.lift;
     d.slot = slotAt(hx, hy, d.card.id);
-    d.gid = d.slot ? null : groupAt(hx, hy);
+    d.discard = !d.slot && discardAt(hx, hy);
+    d.gid = d.slot || d.discard ? null : groupAt(hx, hy);
     setHotGid(g => g === d.gid ? g : d.gid);
+    setHotDiscard(d.discard);
     paintDrag();
   }
 
@@ -1393,7 +1441,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
       startX: e.clientX, startY: e.clientY, x: e.clientX, y: e.clientY,
       slop: touch ? DRAG_SLOP_TOUCH : DRAG_SLOP_MOUSE,
       lift: touch ? h * TOUCH_LIFT : 0,
-      slot: null, gid: null,
+      slot: null, gid: null, discard: false,
     });
   }
   function movePress(e) {
@@ -1418,7 +1466,9 @@ function Game({ state, dispatch, onLeave, wallet }) {
     if (d.active && d.card) {
       swallowClick.current = true;
       setTimeout(() => { swallowClick.current = false; }, 80);
-      if (drop && d.gid) {
+      if (drop && d.discard) {
+        dispatch({ type: 'DISCARD', cid: d.card.id });
+      } else if (drop && d.gid) {
         // If the dragged card is part of a current multi-card selection, attach the
         // whole selection at once; otherwise attach just the dragged card.
         if (state.sel.length > 1 && state.sel.includes(d.card.id))
@@ -1434,10 +1484,11 @@ function Game({ state, dispatch, onLeave, wallet }) {
         }
       }
     }
-    Object.assign(d, { card: null, active: false, pointerId: null, slot: null, gid: null });
+    Object.assign(d, { card: null, active: false, pointerId: null, slot: null, gid: null, discard: false });
     clearSelection();
     setDrag(null);
     setHotGid(null);
+    setHotDiscard(false);
   }
   function endPress(e) {
     const d = dragRef.current;
@@ -1452,7 +1503,11 @@ function Game({ state, dispatch, onLeave, wallet }) {
     const move = (e) => movePress(e);
     const up = (e) => endPress(e);
     // Esc drops a card back where it came from.
-    const key = (e) => { if (e.key === 'Escape' && dragRef.current.active) finish(false); };
+    const key = (e) => {
+      if (e.key !== 'Escape') return;
+      if (dragRef.current.active) finish(false);
+      else setAttachMode(false);
+    };
     const click = (e) => {
       if (!swallowClick.current) return;
       swallowClick.current = false;
@@ -1488,15 +1543,64 @@ function Game({ state, dispatch, onLeave, wallet }) {
   // so there is no local AI effect here. The client only renders state and
   // sends the local player's actions.
 
-  const Btn = ({ label, onClick, disabled, bg, col = 'white' }) => (
-    <button onClick={onClick} disabled={disabled} style={{
+  // ── What can be done right now: one answer for the buttons, the keyboard
+  // and the drop targets alike. ──
+  const acting    = isMyTurn && state.phase === 'action';
+  const layOk     = acting && state.canLay && selCards.length >= (state.mustUseJoker ? 2 : 3);
+  const attachOk  = acting && human.hasLaid;
+  const undoShown = acting && !!state.undoBefore &&
+    (state.undoBefore.fromBeit ||
+     state.board.length > (state.undoBefore.board?.length || 0) ||
+     state.staging.length > 0);
+  const discardOk = acting && selCards.length === 1;
+  const drawOk    = isMyTurn && state.phase === 'draw';
+  const deciding  = state.phase === 'buying' && humanDecides;
+  const doUndo    = () => { dispatch({ type: 'UNDO' }); setAttachMode(false); };
+  const doDiscard = () => discardOk && dispatch({ type: 'DISCARD', cid: selCards[0].id });
+  const doTake    = () => isFreeOffer
+    ? dispatch({ type: 'TAKE_FREE' })
+    : !cantAfford && dispatch({ type: 'BUY', idx: buy.checker });
+
+  // Keyboard shortcuts (a mouse-and-keyboard player only). Matched on the
+  // physical key, so they work whatever the keyboard layout.
+  useEffect(() => {
+    if (!hasMouse()) return;
+    const onKey = (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (showRules || showScores || showNotes || showLeave || showKeys || jokerPick) return;
+      if (dragRef.current.active) return;
+      const act = Object.keys(keys).find(id => keys[id] && keys[id] === e.code);
+      if (!act) return;
+      const run = {
+        draw:    () => drawOk && drawOnce({ type: 'DRAW' }),
+        lay:     () => layOk && lay(),
+        attach:  () => attachOk && setAttachMode(m => !m),
+        discard: () => doDiscard(),
+        undo:    () => undoShown && doUndo(),
+        sort:    () => { setPendingOrder(null); dispatch({ type: 'SORT' }); },
+        take:    () => deciding && doTake(),
+        skip:    () => deciding && dispatch({ type: 'SKIP' }),
+      }[act];
+      if (!run) return;
+      // Space would otherwise press whichever button has focus as well.
+      e.preventDefault();
+      run();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
+  const Btn = ({ label, onClick, disabled, bg, col = 'white', k, tip }) => (
+    <button onClick={onClick} disabled={disabled} data-tip={tip} style={{
       flex: 1, minWidth: 52, padding: '8px 3px',
       background: disabled ? '#374151' : bg,
       color: disabled ? '#6b7280' : col,
       border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700,
       cursor: disabled ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
       opacity: disabled ? 0.55 : 1, transition: 'opacity .08s',
-    }}><IconText text={label} /></button>
+    }}><IconText text={label} />{k && <Kbd code={k} />}</button>
   );
 
   const phaseLabel = () => {
@@ -1573,6 +1677,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
         /* The top bar's background: one box behind the title, opponent and
            tools cells, however many rows they take. */
         .ga-topbg  { grid-area: 1 / 1 / 3 / -1; }
+        .ga-top    { display: contents; }
         .ga-title  { grid-area: title; }
         .ga-tools  { grid-area: tools; }
         .ga-opp    { grid-area: opp; }
@@ -1615,16 +1720,22 @@ function Game({ state, dispatch, onLeave, wallet }) {
            upright keeps the phone's column, with bigger cards (below). ── */
         @media (orientation: landscape) {
           .game-grid {
-            grid-template-columns: auto minmax(0, 1fr) auto;
+            grid-template-columns: minmax(0, 1fr) auto;
             grid-template-rows: auto minmax(0, 1fr) auto auto auto;
             grid-template-areas:
-              "title  opp    tools"
-              "board  board  board"
-              "prompt prompt prompt"
-              "msg    msg    msg"
-              "hand   hand   piles";
+              "top    top"
+              "board  board"
+              "prompt prompt"
+              "msg    msg"
+              "hand   piles";
           }
           .ga-topbg { grid-area: 1 / 1 / 2 / -1; }
+          /* The top bar is its own flex row here, so its buttons never set
+             the width of the piles' column below them. */
+          .ga-top { grid-area: top; display: flex; align-items: center; min-width: 0; }
+          .ga-title { order: 1; flex: none; }
+          .ga-opp   { order: 2; flex: 1 1 auto; min-width: 0; }
+          .ga-tools { order: 3; flex: none; }
           .ga-opp { justify-content: center !important; padding: 5px 8px !important; }
           .ga-board { padding: 10px 16px !important; }
           /* Phase · actions · points and sort, in one row. */
@@ -1718,6 +1829,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
           opponents and the buttons (tools). A phone stacks the opponents under
           the other two; anything wider lays all three out in one thin row. */}
       <div className="ga-topbg leather" />
+      <div className="ga-top">
       <div className="ga-title" style={{
         padding: '7px 12px', color: CREAM, fontSize: 13, zIndex: 1,
         display: 'flex', alignItems: 'center', gap: 10, whiteSpace: 'nowrap',
@@ -1736,17 +1848,21 @@ function Game({ state, dispatch, onLeave, wallet }) {
         padding: '7px 12px', fontSize: 13, zIndex: 1,
         display: 'flex', alignItems: 'center', gap: 5,
       }}>
-        <button onClick={() => setShowRules(true)} title="חוקים" style={hdrBtn}>
+        <button onClick={() => setShowRules(true)} aria-label="חוקים" data-tip="חוקי המשחק" data-tip-below="" style={hdrBtn}>
           <Icon name="book" /><span className="hdr-label"> חוקים</span>
         </button>
-        <button onClick={() => setShowScores(true)} title="טבלת ניקוד" style={hdrBtn}>
+        <button onClick={() => setShowScores(true)} aria-label="טבלת ניקוד" data-tip="טבלת הניקוד" data-tip-below="" style={hdrBtn}>
           <Icon name="trophy" /><span className="hdr-label"> ניקוד</span>
         </button>
-        <button onClick={() => setShowNotes(true)} title="מה חדש בגרסה" style={hdrBtn}>
+        <button onClick={() => setShowNotes(true)} aria-label="מה חדש בגרסה" data-tip="מה חדש בגרסה" data-tip-below="" style={hdrBtn}>
           <Icon name="sparkles" />
         </button>
+        <button onClick={() => setShowKeys(true)} aria-label="קיצורי מקלדת" data-tip="קיצורי מקלדת" data-tip-below="" data-tip-start=""
+          className="mouse-only" style={hdrBtn}>
+          <Icon name="keyboard" />
+        </button>
         {onLeave && (
-          <button onClick={() => setShowLeave(true)} title="יציאה מהחדר"
+          <button onClick={() => setShowLeave(true)} aria-label="יציאה מהחדר" data-tip="יציאה מהחדר" data-tip-below="" data-tip-start=""
             style={{ ...hdrBtn, background: 'rgba(185,28,28,.35)' }}>
             <Icon name="logOut" /><span className="hdr-label"> יציאה</span>
           </button>
@@ -1757,6 +1873,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
       {showRules && <RulesModal onClose={() => setShowRules(false)} />}
       {showNotes && <ReleaseNotes onClose={() => setShowNotes(false)} />}
       {showScores && <ScoreModal state={state} onClose={() => setShowScores(false)} />}
+      {showKeys && <KeysModal onClose={() => setShowKeys(false)} />}
       {jokerPick && (
         <JokerPick
           opts={jokerPick.opts}
@@ -1766,6 +1883,8 @@ function Game({ state, dispatch, onLeave, wallet }) {
       )}
 
       {/* ── Opponents — compact chips in the top bar ── */}
+      {/* (The tools come first in the DOM; in the one-row top bar the order
+          property puts the opponents between the title and the tools.) */}
       <div className="ga-opp" style={{
         display: 'flex', gap: 6, padding: '0 10px 6px', zIndex: 1,
         minWidth: 0, justifyContent: 'center', alignItems: 'center',
@@ -1787,6 +1906,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
           );
         })}
       </div>
+      </div>{/* /ga-top */}
 
       {/* ── Piles row ─────────────────────────────── */}
       <div className={'ga-piles wood' + (dockTurn ? ' turn' : '')} style={{
@@ -1827,6 +1947,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
               <div
                 onClick={() => live && drawOnce({ type: 'DRAW' })}
                 className={'deck-stack' + (live ? ' live' : left < 12 ? ' thin' : '')}
+                data-tip={live ? `שלוף קלף${keys.draw ? ` · ${keyLabel(keys.draw)}` : ''}` : undefined}
                 style={{ cursor: live ? 'pointer' : 'default', margin: '0 4px 6px 0' }}
               >
                 <CardView card={{ id: 'deck' }} back />
@@ -1840,6 +1961,9 @@ function Game({ state, dispatch, onLeave, wallet }) {
           <div style={{ color: 'rgba(255,255,255,.7)', fontSize: 10, marginBottom: 3 }}>
             אשפה ({state.discard.length})
           </div>
+          {/* Also a drop target: a card dragged here on my turn is thrown. */}
+          <div data-drop="discard"
+               className={'drop-discard' + (drag && acting ? ' can' : '') + (hotDiscard ? ' hot' : '')}>
           {discard ? (() => {
             const pile = state.discard;
             const depth = Math.min(pile.length, 4);
@@ -1881,6 +2005,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
               <span style={{ color: 'rgba(255,255,255,.3)', fontSize: 18 }}>∅</span>
             </div>
           )}
+          </div>
         </div>
       </div>
 
@@ -1918,6 +2043,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
               }}
             >
               <IconText text={(isFreeOffer || isFreeBuy) ? '✓ קח' : buyCost ? `💰 קנה · ${buyCost}` : '💰 קנה'} />
+              {keys.take && <Kbd code={keys.take} />}
             </button>
             <button
               onClick={() => dispatch({ type: 'SKIP' })}
@@ -1928,6 +2054,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
               }}
             >
               <Icon name="x" /> וותר
+              {keys.skip && <Kbd code={keys.skip} />}
             </button>
           </div>
           {cantAfford && (
@@ -2024,7 +2151,9 @@ function Game({ state, dispatch, onLeave, wallet }) {
                 <GroupView
                   key={g.id} group={g}
                   attBy={g.att ? state.players[g.att.by]?.name : null}
-                  canAttach={normalAttach}
+                  // While a card is in the air, every group it could land on
+                  // is outlined, so the drop targets are visible up front.
+                  canAttach={normalAttach || (!!drag && attachOk)}
                   hot={hotGid === g.id}
                   onAttach={() => {
                     if (normalAttach) {
@@ -2063,31 +2192,36 @@ function Game({ state, dispatch, onLeave, wallet }) {
             }}>
               <Btn
                 label={!state.canLay ? '🚫 הורד (סבב ראשון)' : '⬇️ הורד'}
-                disabled={selCards.length < (state.mustUseJoker ? 2 : 3) || !state.canLay}
+                disabled={!layOk}
                 bg={FELT} col={GOLD}
                 onClick={lay}
+                k={keys.lay}
+                tip={state.canLay ? 'בחרו 3 קלפים ומעלה שיוצרים קבוצה' : 'בסבב הראשון עוד אי אפשר להוריד'}
               />
               <Btn
                 label={attachMode ? '❌ בטל' : '📌 הצמד'}
-                disabled={!human.hasLaid}
+                disabled={!attachOk}
                 bg={attachMode ? GOLD : FELT} col={attachMode ? FELTD : GOLD}
                 onClick={() => setAttachMode(m => !m)}
+                k={keys.attach}
+                tip={human.hasLaid ? 'בחרו קלפים ואז קבוצה על הלוח — או גררו קלף אל הקבוצה' : 'אפשר להצמיד רק אחרי שהורדת'}
               />
-              {state.undoBefore &&
-                (state.undoBefore.fromBeit ||
-                 state.board.length > (state.undoBefore.board?.length || 0) ||
-                 state.staging.length > 0) && (
+              {undoShown && (
                 <Btn
                   label={state.undoBefore.fromBeit ? '↩️ החזר בית' : '↩️ בטל הורדה'}
                   bg="#374151" col="#d1d5db"
-                  onClick={() => { dispatch({ type: 'UNDO' }); setAttachMode(false); }}
+                  onClick={doUndo}
+                  k={keys.undo}
+                  tip="מחזיר את מה שהורדת בתור הזה ליד"
                 />
               )}
               <Btn
                 label="🗑️ זרוק"
-                disabled={selCards.length !== 1}
+                disabled={!discardOk}
                 bg="#9f1239"
-                onClick={() => selCards.length === 1 && dispatch({ type: 'DISCARD', cid: selCards[0].id })}
+                onClick={doDiscard}
+                k={keys.discard}
+                tip="בחרו קלף אחד — או גררו אותו אל האשפה"
               />
             </div>
           )}
@@ -2129,7 +2263,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
                 borderRadius: 8, fontSize: 12, fontWeight: 700, padding: '5px 12px',
                 cursor: 'pointer', fontFamily: 'inherit',
               }}
-            ><Icon name="sort" /> מיין</button>
+            ><Icon name="sort" /> מיין{keys.sort && <Kbd code={keys.sort} />}</button>
             </span>
           </div>
         </div>{/* /hand-bar */}

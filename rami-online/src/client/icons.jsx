@@ -27,6 +27,7 @@ const ICONS = {
   // A small fanned pair of cards — the game itself.
   cards:      [<rect x="8" y="3" width="12" height="16" rx="2" />, P('M4.5 7.5v11a2.5 2.5 0 0 0 2.5 2.5h8.5')],
   logOut:     [P('M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4'), P('M16 17l5-5-5-5'), P('M21 12H9')],
+  keyboard:   [<rect x="2" y="5" width="20" height="14" rx="2" />, P('M6 9h.01'), P('M10 9h.01'), P('M14 9h.01'), P('M18 9h.01'), P('M8 13h.01'), P('M12 13h.01'), P('M16 13h.01'), P('M7 16.5h10')],
   sparkles:   [P('M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z'), P('M19 3v4'), P('M17 5h4')],
   bot:        [<rect x="4" y="8" width="16" height="12" rx="2" />, P('M12 8V4H8'), P('M2 14h2'), P('M20 14h2'), P('M15 13v2'), P('M9 13v2')],
   book:       [P('M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z'), P('M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z')],

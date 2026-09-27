@@ -223,3 +223,65 @@
   border-bottom: 1px solid rgba(214,170,84,.55);
   box-shadow: 0 6px 16px rgba(0,0,0,.45);
 }
+
+/* ── Mouse-only helpers: key caps and tooltips ────── */
+/* Touch screens have no keyboard shortcuts and no hover, so both stay hidden
+   there; .mouse-only hides anything else that only makes sense with a mouse. */
+.kbd, .mouse-only { display: none; }
+@media (hover: hover) and (pointer: fine) {
+  .kbd {
+    display: inline-block;
+    margin-inline-start: 6px;
+    min-width: 1.5em; padding: 0 .35em;
+    border-radius: 4px;
+    font: 700 10.5px/1.5 ui-monospace, Menlo, Consolas, monospace;
+    color: inherit; opacity: .85;
+    background: rgba(255,255,255,.12);
+    border: 1px solid rgba(255,255,255,.28);
+    border-bottom-width: 2px;
+    vertical-align: 1px;
+  }
+  .mouse-only { display: inline-flex; }
+
+  /* Tooltip: data-tip on any element. Opens above; data-tip-below for the
+     top bar, where above would be off the screen. */
+  [data-tip] { position: relative; }
+  [data-tip]::after {
+    content: attr(data-tip);
+    position: absolute; z-index: 60;
+    left: 50%; bottom: calc(100% + 8px);
+    transform: translate(-50%, 4px);
+    padding: 5px 9px; border-radius: 7px;
+    background: rgba(8,16,30,.95); color: #fdf8f0;
+    border: 1px solid rgba(214,170,84,.55);
+    box-shadow: 0 6px 16px rgba(0,0,0,.45);
+    font: 600 12px/1.35 "Rubik Variable", system-ui, sans-serif;
+    white-space: nowrap; pointer-events: none;
+    opacity: 0; transition: opacity .12s .35s, transform .12s .35s;
+  }
+  [data-tip-below]::after { bottom: auto; top: calc(100% + 8px); transform: translate(-50%, -4px); }
+  [data-tip]:hover::after { opacity: 1; transform: translate(-50%, 0); }
+  /* Near the screen edge the bubble would spill out: pin it to that side. */
+  [data-tip-end]::after { left: auto; right: 0; transform: translateY(4px); }
+  [data-tip-end]:hover::after { transform: none; }
+  [data-tip-start]::after { left: 0; transform: translateY(4px); }
+  [data-tip-start]:hover::after { transform: none; }
+}
+
+/* ── Drop zones while a card is being dragged ─────── */
+.drop-discard { position: relative; border-radius: calc(var(--card-w) * .12); transition: transform .12s, box-shadow .12s; }
+.drop-discard.can {
+  box-shadow: 0 0 0 2px rgba(224,178,82,.75), 0 0 0 6px rgba(224,178,82,.18);
+}
+.drop-discard.can::before {
+  content: "זרוק כאן";
+  position: absolute; left: 50%; bottom: calc(100% + 24px); transform: translateX(-50%);
+  z-index: 5; white-space: nowrap; pointer-events: none;
+  padding: 2px 8px; border-radius: 6px;
+  font: 700 11px/1.5 "Rubik Variable", system-ui, sans-serif;
+  background: #9f1239; color: #fff;
+}
+.drop-discard.hot {
+  transform: scale(1.08);
+  box-shadow: 0 0 0 3px #e0b252, 0 0 26px 6px rgba(224,178,82,.7);
+}

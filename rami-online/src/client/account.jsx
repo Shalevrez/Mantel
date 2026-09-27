@@ -9,6 +9,7 @@ import { useState, useEffect } from "react";
 import { FELT, FELTD, GOLD, CREAM, CLOTH } from "../game-core.js";
 import { levelInfo, shortNum } from "../economy.js";
 import { Icon, IconLabel } from "./icons.jsx";
+import { hasMouse, KeysEditor } from "./keys.jsx";
 import * as P from "./profile.js";
 
 // ── Palette for the hub screens ──────────────────────
@@ -377,22 +378,32 @@ export function MenuCards({ items }) {
 }
 
 // ═══════════════════════════════════════════════════════
-// SETTINGS — a place for them; nothing to set yet
+// SETTINGS — keyboard shortcuts (with a mouse); more to come
 // ═══════════════════════════════════════════════════════
 
 export function SettingsSheet({ onClose, version }) {
   return (
-    <Modal onClose={onClose} width={360}>
+    <Modal onClose={onClose} width={400}>
       <div style={{ textAlign: 'center', marginBottom: 14 }}>
         <Icon name="gear" size={40} color={GOLD} strokeWidth={1.7} />
         <h2 style={{ margin: '6px 0 2px', fontSize: 21 }}>הגדרות</h2>
       </div>
-      <div style={{
-        padding: '18px 14px', borderRadius: 12, border: `1px dashed ${LINE}`,
-        color: SOFT, fontSize: 13.5, textAlign: 'center', lineHeight: 1.6,
-      }}>
-        עוד אין כאן הגדרות.<br />בקרוב: צלילים, רטט, מראה הקלפים ועוד.
-      </div>
+      {/* Keyboard shortcuts: only for a mouse-and-keyboard player. */}
+      {hasMouse() ? (
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontWeight: 700, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Icon name="keyboard" /> קיצורי מקלדת
+          </div>
+          <KeysEditor />
+        </div>
+      ) : (
+        <div style={{
+          padding: '18px 14px', borderRadius: 12, border: `1px dashed ${LINE}`,
+          color: SOFT, fontSize: 13.5, textAlign: 'center', lineHeight: 1.6,
+        }}>
+          עוד אין כאן הגדרות.<br />בקרוב: צלילים, רטט, מראה הקלפים ועוד.
+        </div>
+      )}
       {version && (
         <div style={{ textAlign: 'center', color: SOFT, fontSize: 11.5, marginTop: 12, direction: 'ltr' }}>v{version}</div>
       )}
