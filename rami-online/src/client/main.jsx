@@ -26,7 +26,7 @@ import { LeaderboardStall } from "./leaderboard.jsx";
 const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev';
 
 // Which release the player has already been shown the notes for.
-const SEEN_RELEASE_KEY = 'rami_seen_release';
+const SEEN_RELEASE_KEY = 'mantel_seen_release';
 
 // ── Browser storage ──────────────────────────────────
 // Every read and write is guarded: a browser with storage blocked (private
@@ -43,7 +43,7 @@ function writeStore(key, value) {
 // The player's name, kept between visits. It is typed once and comes back
 // filled in on every later entry — a reload mid-game, a return after the
 // browser was closed, or a fresh invite link.
-const NAME_KEY = 'rami_name';
+const NAME_KEY = 'mantel_name';
 
 // ── Read ?code= from the URL so a shared link auto-fills the room ──
 function urlCode() {
@@ -55,7 +55,7 @@ function urlCode() {
 // their URL, so without this, closing the browser and coming back leaves them
 // with nothing to type. The server still knows them (see playerId in net.js) —
 // they just need the code to get back to their seat and their host controls.
-const LAST_ROOM_KEY = 'rami_last_room';
+const LAST_ROOM_KEY = 'mantel_last_room';
 function lastRoom() {
   return readStore(LAST_ROOM_KEY).toUpperCase();
 }
@@ -65,7 +65,7 @@ function lastRoom() {
 // up a new version, or by accident) finds it here and goes straight back to
 // the table instead of the home screen; the server hands the same seat back
 // (see playerId in net.js). An invite link to a different room wins over it.
-const ACTIVE_ROOM_KEY = 'rami_active_room';
+const ACTIVE_ROOM_KEY = 'mantel_active_room';
 function roomToResume() {
   const active = readStore(ACTIVE_ROOM_KEY).toUpperCase();
   const invited = urlCode();
@@ -79,7 +79,7 @@ function leaveRoom(next) {
   location.href = location.pathname + (typeof next === 'string' ? `?go=${next}` : '');
 }
 // "צור חדר" opens on the kind of room the player made last: online or practice.
-const CREATE_MODE_KEY = 'rami_create_mode';
+const CREATE_MODE_KEY = 'mantel_create_mode';
 function createMode() {
   return readStore(CREATE_MODE_KEY) === 'practice' ? 'practice' : 'online';
 }
@@ -118,7 +118,7 @@ function App() {
   // The game on screen, for walking out of it (see handleLeave).
   const gameIdRef = useRef(null);
 
-  // The name at the table is the profile's. Kept in rami_name too, where the
+  // The name at the table is the profile's. Kept in mantel_name too, where the
   // older builds looked for it.
   const name = profile ? profile.displayName : '';
   useEffect(() => { if (name) writeStore(NAME_KEY, name); }, [name]);
@@ -674,7 +674,7 @@ function HomeHero({ onCreate, onJoin }) {
       <div style={{ color: CREAM, zIndex: 1 }}>
         <h1 style={{ margin: 0, fontSize: 52, letterSpacing: 3, color: '#f3d48c', textShadow: '0 2px 10px rgba(0,0,0,.45)' }}>מנטל</h1>
         <div style={{ width: 70, height: 3, background: GOLD, margin: '8px 0 12px' }} />
-        <div style={{ fontSize: 17, color: '#dbe4f3', marginBottom: 22 }}>רמי אקסטרים אונליין · 2–6 שחקנים</div>
+        <div style={{ fontSize: 17, color: '#dbe4f3', marginBottom: 22 }}>משחק קלפים אונליין · 2–6 שחקנים</div>
         <div style={{ display: 'flex', gap: 12 }}>
           <button onClick={onCreate} style={{ ...primaryBtn, width: 'auto', padding: '12px 30px', background: `linear-gradient(#f3d48c, ${GOLD})`, color: FELTD, border: 'none' }}>
             <IconLabel name="plus">צור חדר</IconLabel>
