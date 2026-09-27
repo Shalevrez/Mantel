@@ -109,16 +109,6 @@
 .pc.r-11.s-c { --pos: 98.15% 50.13%; }
 .pc.joker { --art: url(/cards/joker.webp?v=2); --size: 102.81% 101.86%; --pos: 50% 46.43%; --l: 3.44%; }
 
-/* Too small for an illustration (the board and the round-end table on a phone,
-   ~22–30px): a court card reads like a number card — its letter and one big
-   suit — and the joker gets its star back. A phone's hand (37–56px) keeps the
-   illustration. */
-@container (max-width: 30px) {
-  .pc-photo { display: none; }
-  .pc:has(.pc-photo) .pc-idx { display: flex; }
-  .pc:has(.pc-photo) .pc-big, .pc-jk { display: block; }
-}
-
 /* ── The back ─────────────────────────────────────── */
 /* White border, a navy field with a fine gold lattice, a gold frame, and the
    game's monogram in the middle. */
