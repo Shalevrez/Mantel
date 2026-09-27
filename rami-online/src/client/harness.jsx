@@ -72,7 +72,7 @@ const withHistory = { ...view, history };
 const ended = {
   ...withHistory,
   // ?w=0 — I won (the confetti case).
-  result: { w: params.has('w') ? Number(params.get('w')) % n : 1 % n, isAnt: true, empty: false },
+  result: { w: params.has('w') ? Number(params.get('w')) % n : 1 % n, isAnt: params.get('ant') !== '0', empty: false },
   players: view.players.map((p, i) => ({
     ...p, totalScore: running[i], lastScore: history[history.length - 1].scores[i],
   })),

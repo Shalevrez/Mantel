@@ -24,7 +24,7 @@ function tilt(id) {
 import { RELEASES } from "../releases.js";
 import "./table.css";
 import { useKeys, hasMouse, keyLabel, Kbd, KeysEditor } from "./keys.jsx";
-import { Flyer, TurnBanner, Confetti, reducedMotion } from "./anim.jsx";
+import { Flyer, TurnBanner, Confetti, Fireworks, reducedMotion } from "./anim.jsx";
 
 
 // Card geometry comes from --card-w/--card-h (declared in Game's stylesheet), so
@@ -902,7 +902,9 @@ function RoundEnd({ state, dispatch, onLeave }) {
   // were laid down are one tap away, and stay there until somebody deals again.
   const [tab, setTab] = useState('round');
   const [showLeave, setShowLeave] = useState(false);
-  // I won this round (an ant counts double — and gets more confetti).
+  // Celebrations are for the round's winner only: `you` marks this screen's own
+  // seat, so everyone else at the table sees the result without the confetti.
+  // An ant gets a lot more confetti, and fireworks.
   const iWon = !!(winner && winner.you);
 
   return (
@@ -912,7 +914,8 @@ function RoundEnd({ state, dispatch, onLeave }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       direction: 'rtl', padding: 16,
     }}>
-      {iWon && <Confetti pieces={result.isAnt ? 220 : 110} duration={result.isAnt ? 4200 : 3000} />}
+      {iWon && <Confetti pieces={result.isAnt ? 380 : 110} duration={result.isAnt ? 5200 : 3000} />}
+      {iWon && result.isAnt && <Fireworks />}
       <div className="rules-card" style={{
         background: CREAM, borderRadius: 22, padding: 24,
         maxWidth: 420, width: '100%',
@@ -1041,6 +1044,7 @@ function GameEnd({ state, onRestart, onExit, extra }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       direction: 'rtl', padding: 16,
     }}>
+      {/* The game's winner only — see RoundEnd. */}
       {sorted[0].you && <Confetti pieces={240} duration={5000} />}
       <div className="rules-card" style={{
         background: CREAM, borderRadius: 22, padding: 28,
