@@ -9,13 +9,14 @@ import { useState, useEffect } from "react";
 import { FELT, FELTD, GOLD, CREAM, CLOTH } from "../game-core.js";
 import { levelInfo, shortNum } from "../economy.js";
 import { Icon, IconLabel } from "./icons.jsx";
+import { hasMouse, KeysEditor } from "./keys.jsx";
 import * as P from "./profile.js";
 
 // ── Palette for the hub screens ──────────────────────
 // The menus sit on the checkered tablecloth, like the waiting room, with
 // navy strips top and bottom. PANEL/SOFT are for the navy parts (the bars,
 // the modals); CARD/MUTED for what sits on the cloth.
-export const HUB_BG = CLOTH;
+export const HUB_BG = CLOTH; // (the .cloth class in table.css draws the textured version)
 export const PANEL = 'rgba(8, 20, 45, .55)';
 export const LINE = 'rgba(201, 151, 58, .45)';
 export const SOFT = '#9fb3d1';
@@ -147,18 +148,41 @@ function Pill({ icon, color, value, title, action, onClick }) {
 // ── Hub frame ────────────────────────────────────────
 // Top bar, the screen itself, and a bottom strip with the way back and
 // the screen's name (the layout of the reference game's menus).
-export function Hub({ profile, title, onBack, onProfile, onCoins, onTrophies, onSettings, children, footer }) {
+// `nav` — [{ key, label, icon, onClick, on }] — is the list of destinations.
+// On a wide screen it becomes a side rail and replaces the bottom strip
+// (the title moves to the top of the page); phones keep the strip.
+export function Hub({ profile, title, onBack, onProfile, onCoins, onTrophies, onSettings, children, footer, nav }) {
   return (
-    <div style={{
-      minHeight: '100dvh', background: HUB_BG, color: FELTD, direction: 'rtl',
+    <div className={'cloth hub-body' + (nav ? ' has-nav' : '')} style={{
+      minHeight: '100dvh', color: FELTD, direction: 'rtl',
       display: 'flex', flexDirection: 'column',
+      gridTemplateRows: 'auto minmax(0, 1fr)',
     }}>
-      <TopBar profile={profile} onProfile={onProfile} onCoins={onCoins} onTrophies={onTrophies} onSettings={onSettings} />
-      <div style={{ flex: 1, padding: '18px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        <div style={{ width: '100%', maxWidth: 820 }}>{children}</div>
+      <div style={{ gridColumn: '1 / -1' }}>
+        <TopBar profile={profile} onProfile={onProfile} onCoins={onCoins} onTrophies={onTrophies} onSettings={onSettings} />
+      </div>
+      {nav && (
+        <nav className="hub-side leather" style={{
+          flexDirection: 'column', gap: 4, padding: '18px 12px',
+          borderBottom: 'none', borderInlineEnd: `1px solid ${LINE}`,
+        }}>
+          {nav.map(n => (
+            <button key={n.key} onClick={n.onClick} className={'hub-nav-btn' + (n.on ? ' on' : '')}>
+              <Icon name={n.icon} size={19} /> {n.label}
+            </button>
+          ))}
+        </nav>
+      )}
+      <div style={{ flex: 1, padding: '18px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 0 }}>
+        <div style={{ width: '100%', maxWidth: nav ? 1100 : 820 }}>
+          {nav && title && (
+            <h2 className="hub-desk-title" style={{ margin: '4px 0 18px', fontSize: 26, color: FELTD }}>{title}</h2>
+          )}
+          {children}
+        </div>
       </div>
       {(onBack || title || footer) && (
-        <div style={{
+        <div className="hub-bottom" style={{
           display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px',
           paddingBottom: 'calc(10px + env(safe-area-inset-bottom, 0px))',
           background: 'rgba(5, 14, 32, .94)', borderTop: `1px solid ${LINE}`, color: CREAM,
@@ -229,8 +253,8 @@ export function LoginScreen() {
   ];
 
   return (
-    <div style={{
-      minHeight: '100dvh', background: HUB_BG, color: FELTD, direction: 'rtl',
+    <div className="cloth" style={{
+      minHeight: '100dvh', color: FELTD, direction: 'rtl',
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
     }}>
       <div style={{
@@ -344,7 +368,7 @@ export function MenuCards({ items }) {
           }}>{it.suit}</span>
         );
         return (
-          <button key={it.key} onClick={it.onClick} style={{
+          <button key={it.key} onClick={it.onClick} className="menu-card" style={{
             position: 'relative', minHeight: 150, borderRadius: 18, cursor: 'pointer',
             background: `linear-gradient(160deg, ${FELT}, ${FELTD})`,
             border: `2px solid ${GOLD}`,
@@ -377,22 +401,32 @@ export function MenuCards({ items }) {
 }
 
 // ═══════════════════════════════════════════════════════
-// SETTINGS — a place for them; nothing to set yet
+// SETTINGS — keyboard shortcuts (with a mouse); more to come
 // ═══════════════════════════════════════════════════════
 
 export function SettingsSheet({ onClose, version }) {
   return (
-    <Modal onClose={onClose} width={360}>
+    <Modal onClose={onClose} width={400}>
       <div style={{ textAlign: 'center', marginBottom: 14 }}>
         <Icon name="gear" size={40} color={GOLD} strokeWidth={1.7} />
         <h2 style={{ margin: '6px 0 2px', fontSize: 21 }}>הגדרות</h2>
       </div>
-      <div style={{
-        padding: '18px 14px', borderRadius: 12, border: `1px dashed ${LINE}`,
-        color: SOFT, fontSize: 13.5, textAlign: 'center', lineHeight: 1.6,
-      }}>
-        עוד אין כאן הגדרות.<br />בקרוב: צלילים, רטט, מראה הקלפים ועוד.
-      </div>
+      {/* Keyboard shortcuts: only for a mouse-and-keyboard player. */}
+      {hasMouse() ? (
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontWeight: 700, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Icon name="keyboard" /> קיצורי מקלדת
+          </div>
+          <KeysEditor />
+        </div>
+      ) : (
+        <div style={{
+          padding: '18px 14px', borderRadius: 12, border: `1px dashed ${LINE}`,
+          color: SOFT, fontSize: 13.5, textAlign: 'center', lineHeight: 1.6,
+        }}>
+          עוד אין כאן הגדרות.<br />בקרוב: צלילים, רטט, מראה הקלפים ועוד.
+        </div>
+      )}
       {version && (
         <div style={{ textAlign: 'center', color: SOFT, fontSize: 11.5, marginTop: 12, direction: 'ltr' }}>v{version}</div>
       )}

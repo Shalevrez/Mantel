@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 // The app's one typeface, bundled and served with the app (see index.html).
 import "@fontsource-variable/rubik";
 import { FELT, FELTD, GOLD, CREAM, CLOTH, AI_LEVELS, AI_LEVEL_NAMES } from "../game-core.js";
-import { Game, RoundEnd, GameEnd, RulesModal, ReleaseNotes, LeaveConfirm } from "./ui.jsx";
+import { Game, RoundEnd, GameEnd, RulesModal, ReleaseNotes, LeaveConfirm, CardView } from "./ui.jsx";
 import { Icon, IconLabel } from "./icons.jsx";
 import { LATEST_RELEASE } from "../releases.js";
 import { createRoom, joinRoom } from "./net.js";
@@ -26,7 +26,7 @@ import { LeaderboardStall } from "./leaderboard.jsx";
 const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev';
 
 // Which release the player has already been shown the notes for.
-const SEEN_RELEASE_KEY = 'rami_seen_release';
+const SEEN_RELEASE_KEY = 'mantel_seen_release';
 
 // ── Browser storage ──────────────────────────────────
 // Every read and write is guarded: a browser with storage blocked (private
@@ -43,7 +43,7 @@ function writeStore(key, value) {
 // The player's name, kept between visits. It is typed once and comes back
 // filled in on every later entry — a reload mid-game, a return after the
 // browser was closed, or a fresh invite link.
-const NAME_KEY = 'rami_name';
+const NAME_KEY = 'mantel_name';
 
 // ── Read ?code= from the URL so a shared link auto-fills the room ──
 function urlCode() {
@@ -55,7 +55,7 @@ function urlCode() {
 // their URL, so without this, closing the browser and coming back leaves them
 // with nothing to type. The server still knows them (see playerId in net.js) —
 // they just need the code to get back to their seat and their host controls.
-const LAST_ROOM_KEY = 'rami_last_room';
+const LAST_ROOM_KEY = 'mantel_last_room';
 function lastRoom() {
   return readStore(LAST_ROOM_KEY).toUpperCase();
 }
@@ -65,7 +65,7 @@ function lastRoom() {
 // up a new version, or by accident) finds it here and goes straight back to
 // the table instead of the home screen; the server hands the same seat back
 // (see playerId in net.js). An invite link to a different room wins over it.
-const ACTIVE_ROOM_KEY = 'rami_active_room';
+const ACTIVE_ROOM_KEY = 'mantel_active_room';
 function roomToResume() {
   const active = readStore(ACTIVE_ROOM_KEY).toUpperCase();
   const invited = urlCode();
@@ -79,7 +79,7 @@ function leaveRoom(next) {
   location.href = location.pathname + (typeof next === 'string' ? `?go=${next}` : '');
 }
 // "צור חדר" opens on the kind of room the player made last: online or practice.
-const CREATE_MODE_KEY = 'rami_create_mode';
+const CREATE_MODE_KEY = 'mantel_create_mode';
 function createMode() {
   return readStore(CREATE_MODE_KEY) === 'practice' ? 'practice' : 'online';
 }
@@ -118,7 +118,7 @@ function App() {
   // The game on screen, for walking out of it (see handleLeave).
   const gameIdRef = useRef(null);
 
-  // The name at the table is the profile's. Kept in rami_name too, where the
+  // The name at the table is the profile's. Kept in mantel_name too, where the
   // older builds looked for it.
   const name = profile ? profile.displayName : '';
   useEffect(() => { if (name) writeStore(NAME_KEY, name); }, [name]);
@@ -274,22 +274,38 @@ function App() {
 
     if (screen === 'resume') return <Splash text="חוזרים למשחק..." />;
 
+    // The destinations, as the side rail shows them on a wide screen. Join and
+    // the rules open over the home screen, so from elsewhere they go there first.
+    const onHome = screen === 'home';
+    const nav = [
+      { key: 'home',   label: 'בית',          icon: 'home',     on: onHome,           onClick: () => go('home') },
+      { key: 'create', label: 'צור חדר',      icon: 'plus',     on: screen === 'practice' || screen === 'online',
+        onClick: () => go(createMode()) },
+      { key: 'join',   label: 'הצטרף לחדר',  icon: 'users',    onClick: () => { if (!onHome) go('home'); setError(''); setShowJoin(true); } },
+      { key: 'rank',   label: 'דירוג',        icon: 'trophy',   onClick: () => setShowBoard(true) },
+      { key: 'store',  label: 'חנות',         icon: 'cart',     onClick: () => setShowStore(true) },
+      { key: 'rules',  label: 'חוקים',        icon: 'book',     onClick: () => { if (!onHome) go('home'); setShowRules(true); } },
+      { key: 'notes',  label: 'מה חדש',       icon: 'sparkles', onClick: () => setNotes(true) },
+      { key: 'set',    label: 'הגדרות',       icon: 'gear',     onClick: () => setShowSettings(true) },
+    ];
+
     const hub = (title, body, back = () => go('home')) => (
       <Hub profile={profile} title={title} onBack={back} onSettings={() => setShowSettings(true)}
            onProfile={() => setShowProfile(true)} onCoins={() => setShowStore(true)}
-           onTrophies={() => setShowBoard(true)}>
+           onTrophies={() => setShowBoard(true)} nav={nav}>
         {body}
       </Hub>
     );
 
     if (screen === 'home') return (
       <Hub profile={profile} onProfile={() => setShowProfile(true)} onCoins={() => setShowStore(true)}
-           onTrophies={() => setShowBoard(true)} onSettings={() => setShowSettings(true)}
+           onTrophies={() => setShowBoard(true)} onSettings={() => setShowSettings(true)} nav={nav}
            footer={<>
              <button onClick={() => setShowRules(true)} style={hubLink}><IconLabel name="book">חוקים</IconLabel></button>
              <button onClick={() => setNotes(true)} style={hubLink}><IconLabel name="sparkles">מה חדש ב־{LATEST_RELEASE.version}</IconLabel></button>
            </>}>
-        <div style={{ textAlign: 'center', margin: '4px 0 18px' }}>
+        <HomeHero onCreate={() => go(createMode())} onJoin={() => { setError(''); setShowJoin(true); }} />
+        <div className="hub-mobile-title" style={{ textAlign: 'center', margin: '4px 0 18px' }}>
           <h1 style={{ margin: 0, fontSize: 30, color: FELTD, letterSpacing: 2 }}>מנטל</h1>
           <div style={{ width: 50, height: 2, background: GOLD, margin: '6px auto' }} />
           <div style={{ color: '#78716c', fontSize: 13 }}>אונליין · 2–6 שחקנים</div>
@@ -640,11 +656,54 @@ function RoomClosed({ reason }) {
 // SHARED BITS
 // ═══════════════════════════════════════════════════════
 
+// ── The home screen's welcome panel, on a wide screen only: a strip of the
+// felt table with the name, the two ways in, and a fanned hand from the
+// game's own deck. Phones go straight to the menu cards.
+const HERO_HAND = [
+  { id: 'h1', suit: 's', v: 1 }, { id: 'h2', suit: 'h', v: 13 }, { id: 'h3', suit: 'd', v: 12 },
+  { id: 'h4', suit: 'c', v: 11 }, { id: 'h5', suit: 'j', v: 0, j: true },
+];
+function HomeHero({ onCreate, onJoin }) {
+  return (
+    <div className="hub-hero felt" style={{
+      position: 'relative', overflow: 'hidden', borderRadius: 22, marginBottom: 22,
+      border: `2px solid ${GOLD}`, boxShadow: `0 18px 40px rgba(19,40,79,.35), inset 0 0 0 5px #0f2344, inset 0 0 0 6px ${GOLD}55`,
+      padding: '34px 40px', alignItems: 'center', justifyContent: 'space-between', gap: 24, minHeight: 250,
+      ['--card-w']: '96px', ['--card-h']: '135px',
+    }}>
+      <div style={{ color: CREAM, zIndex: 1 }}>
+        <h1 style={{ margin: 0, fontSize: 52, letterSpacing: 3, color: '#f3d48c', textShadow: '0 2px 10px rgba(0,0,0,.45)' }}>מנטל</h1>
+        <div style={{ width: 70, height: 3, background: GOLD, margin: '8px 0 12px' }} />
+        <div style={{ fontSize: 17, color: '#dbe4f3', marginBottom: 22 }}>משחק קלפים אונליין · 2–6 שחקנים</div>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <button onClick={onCreate} style={{ ...primaryBtn, width: 'auto', padding: '12px 30px', background: `linear-gradient(#f3d48c, ${GOLD})`, color: FELTD, border: 'none' }}>
+            <IconLabel name="plus">צור חדר</IconLabel>
+          </button>
+          <button onClick={onJoin} style={{ ...primaryBtn, width: 'auto', padding: '12px 30px', background: 'rgba(255,255,255,.08)', color: CREAM, border: `2px solid ${GOLD}88`, boxShadow: 'none' }}>
+            <IconLabel name="users">הצטרף עם קוד</IconLabel>
+          </button>
+        </div>
+      </div>
+      <div aria-hidden="true" style={{ position: 'relative', width: 380, height: 190, flexShrink: 0 }}>
+        {HERO_HAND.map((c, i) => {
+          const a = (i - 2) * 11;
+          return (
+            <div key={c.id} style={{
+              position: 'absolute', left: '50%', bottom: 0,
+              transform: `translateX(-50%) translateX(${(i - 2) * 52}px) translateY(${Math.abs(i - 2) * 9}px) rotate(${a}deg)`,
+              transformOrigin: '50% 120%',
+            }}><CardView card={c} /></div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function Shell({ children }) {
   return (
-    <div style={{
+    <div className="cloth" style={{
       minHeight: '100dvh',
-      background: CLOTH,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       direction: 'rtl', padding: 16,
     }}>

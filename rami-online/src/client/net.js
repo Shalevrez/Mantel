@@ -10,11 +10,27 @@ function wsBase() {
   return `${proto}//${location.host}`;
 }
 
+// ── Storage keys ─────────────────────────────────────
+// Everything this app keeps in the browser is named mantel_*. Keys from
+// before the rename (rami_*) are carried over once, on the first load, so a
+// returning player keeps their seat id, name, rooms and seen release notes.
+// This module loads before main.jsx reads any of them.
+(function carryOverOldKeys() {
+  try {
+    for (const k of ['pid', 'name', 'last_room', 'active_room', 'create_mode', 'seen_release']) {
+      const old = localStorage.getItem('rami_' + k);
+      if (old === null) continue;
+      if (localStorage.getItem('mantel_' + k) === null) localStorage.setItem('mantel_' + k, old);
+      localStorage.removeItem('rami_' + k);
+    }
+  } catch { /* storage blocked — nothing to carry over */ }
+})();
+
 // ── Player id ────────────────────────────────────────
 // A stable id for this browser. The server uses it to recognise a player who
 // comes back — after a refresh, a dropped connection, or closing the browser
 // and reopening it — and hand them their own seat, and the host their controls.
-const PID_KEY = 'rami_pid';
+const PID_KEY = 'mantel_pid';
 let pid = null;
 export function playerId() {
   if (pid) return pid;
