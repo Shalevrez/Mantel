@@ -327,8 +327,12 @@ export class Room {
     // browser and came back is the same player, and gets their seat (and, if it
     // was theirs, the host role) back.
     let seat = this.seats.findIndex(s => !s.isAI && s.uid === uid);
-    // Older clients that reconnect without an id still match by name.
-    if (seat === -1) seat = this.seats.findIndex(s => !s.isAI && !s.left && s.name === name && !s.connected);
+    // Older clients that reconnect without an id still match by name — only
+    // they do, and only onto a seat that has no id either. A client that sends
+    // an id and isn't in the room is a newcomer, however its name reads: letting
+    // it borrow a dropped player's chair by name would walk a stranger into a
+    // game that has already started.
+    if (seat === -1 && !pid) seat = this.seats.findIndex(s => !s.isAI && !s.left && s.name === name && !s.connected && !String(s.uid || '').startsWith('pid:'));
 
     // A resume is a page that reloaded mid-game and is looking for the seat it
     // already had — never a request to sit down. With no seat to hand back (the
@@ -348,11 +352,15 @@ export class Room {
       // back, and nobody is turned away from a game that hasn't started.
       if (!this.started && this.seats.length >= this.cap) this.removeAISeat(-1);
       if (this.seats.length >= this.cap || this.started) {
-        // Room full or already started with no seat for this player. Drop it from
-        // the socket map on the way out, or this dead connection would keep the
-        // room looking occupied and it would never hit the empty-room deadline.
+        // Room full or already started with no seat for this player. Once the
+        // cards are dealt the table is closed: only the players who started the
+        // game carry on, and nobody new sits down — not by link, not by code.
+        // `refused` tells the client not to keep knocking. Drop the socket from
+        // the map on the way out, or this dead connection would keep the room
+        // looking occupied and it would never hit the empty-room deadline.
         this.sockets.delete(connId);
-        ws.send(JSON.stringify({ t: 'error', msg: this.started ? 'המשחק כבר התחיל' : `החדר מלא (${this.cap} שחקנים)` }));
+        ws.send(JSON.stringify({ t: 'error', refused: true,
+          msg: this.started ? 'המשחק בחדר הזה כבר התחיל — אי אפשר להצטרף אליו' : `החדר מלא (${this.cap} שחקנים)` }));
         ws.close(1008, 'no seat');
         return;
       }

@@ -86,7 +86,12 @@ export function joinRoom({ code, name, host = false, resume = false }, callbacks
       try { msg = JSON.parse(evt.data); } catch { return; }
       if (msg.t === 'lobby') { seated = true; callbacks.onLobby && callbacks.onLobby(msg); }
       else if (msg.t === 'state') callbacks.onState && callbacks.onState(msg.state);
-      else if (msg.t === 'error') callbacks.onError && callbacks.onError(msg.msg);
+      else if (msg.t === 'error') {
+        // Turned away at the door (the game already started, or the room is
+        // full): knocking again would only be turned away again.
+        if (msg.refused) closedByUs = true;
+        callbacks.onError && callbacks.onError(msg.msg);
+      }
       else if (msg.t === 'closed') {
         // The server retired the room (game over, or nobody playing). Stop the
         // auto-reconnect below — reconnecting would silently open a new, empty
