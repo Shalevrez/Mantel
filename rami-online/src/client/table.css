@@ -270,8 +270,10 @@
   position: fixed; left: 0; right: 0; top: 38%;
   z-index: 8000; pointer-events: none;
   display: flex; justify-content: center;
-  animation: bannerLife 1.25s cubic-bezier(.2,.8,.2,1) both;
+  animation: bannerIn .45s cubic-bezier(.2,.8,.2,1) both;
 }
+/* Leaving once the player touches the screen or moves the mouse. */
+.turn-banner.out { animation: bannerOut .3s ease-in both; }
 .turn-banner span {
   padding: 10px 56px;
   font: 800 clamp(26px, 4.2vw, 46px)/1.2 "Rubik Variable", system-ui, sans-serif;
@@ -284,12 +286,14 @@
   /* Ribbon ends cut in a swallowtail. */
   clip-path: polygon(0 0, 100% 0, calc(100% - 18px) 50%, 100% 100%, 0 100%, 18px 50%);
 }
-@keyframes bannerLife {
+@keyframes bannerIn {
   0%   { opacity: 0; transform: scaleX(.3); }
-  18%  { opacity: 1; transform: scaleX(1.04); }
-  28%  { transform: scaleX(1); }
-  78%  { opacity: 1; transform: none; }
-  100% { opacity: 0; transform: translateY(-14px); }
+  65%  { opacity: 1; transform: scaleX(1.04); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes bannerOut {
+  from { opacity: 1; transform: none; }
+  to   { opacity: 0; transform: translateY(-14px); }
 }
 
 /* A card still in the air: its place is kept, but it isn't drawn yet. */

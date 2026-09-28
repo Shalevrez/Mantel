@@ -1585,6 +1585,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
     // animations off too — it's a notice, not decoration (the CSS stills it).
     const onTurn = (s) => s.cur === mySeat && TURN_PHASES.has(s.phase);
     if (onTurn(state) && !onTurn(ps)) setBanner(b => b + 1);
+    else if (!onTurn(state)) setBanner(0);   // the turn is over — the notice goes too
 
     if (reducedMotion()) return;
     const box = (sel) => document.querySelector(sel)?.getBoundingClientRect();
