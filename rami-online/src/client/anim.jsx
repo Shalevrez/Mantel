@@ -6,7 +6,7 @@
 // is a notice and is shown still.
 // ═══════════════════════════════════════════════════════
 
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 // Animations are on unless the player turns them off in the settings. The
 // system's "reduce motion" is not consulted: phones set it for battery or
@@ -81,15 +81,45 @@ export function Flyer({ f, onDone }) {
   );
 }
 
-// "Your turn!" — a gold ribbon across the table for a moment. Click-through.
-// The timer starts once, on mount: the parent passes a fresh `onDone` on every
-// render, and restarting on each one kept the ribbon up while the table was busy.
+// "Your turn!" — a gold ribbon across the table that stays until the player
+// shows they're there: a touch, a click, a key, or the mouse moving. Then it
+// fades out. Click-through. The listeners are set once, on mount: the parent
+// passes a fresh `onDone` on every render.
 export function TurnBanner({ onDone, text = 'תורך!' }) {
   const done = useRef(onDone);
   done.current = onDone;
-  useEffect(() => { const t = setTimeout(() => done.current(), 1250); return () => clearTimeout(t); }, []);
+  const [out, setOut] = useState(false);
+  useEffect(() => {
+    let origin = null, fade = 0;
+    const leave = () => {
+      stop();
+      setOut(true);
+      fade = setTimeout(() => done.current(), 300);
+    };
+    // A mouse resting on the desk still jitters a pixel or two — only a real
+    // move counts. A finger on the glass counts at once.
+    const move = (e) => {
+      if (e.pointerType !== 'mouse') return leave();
+      if (!origin) { origin = [e.clientX, e.clientY]; return; }
+      if (Math.hypot(e.clientX - origin[0], e.clientY - origin[1]) > 6) leave();
+    };
+    const opts = { capture: true, passive: true };
+    const stop = () => {
+      window.removeEventListener('pointermove', move, opts);
+      window.removeEventListener('pointerdown', leave, opts);
+      window.removeEventListener('keydown', leave, opts);
+    };
+    // Give the ribbon a moment to unfurl, so a hand already on the mouse
+    // doesn't wipe it away before it's been seen.
+    const arm = setTimeout(() => {
+      window.addEventListener('pointermove', move, opts);
+      window.addEventListener('pointerdown', leave, opts);
+      window.addEventListener('keydown', leave, opts);
+    }, 500);
+    return () => { clearTimeout(arm); clearTimeout(fade); stop(); };
+  }, []);
   return (
-    <div className="turn-banner" aria-live="polite">
+    <div className={'turn-banner' + (out ? ' out' : '')} aria-live="polite">
       <span>{text}</span>
     </div>
   );
