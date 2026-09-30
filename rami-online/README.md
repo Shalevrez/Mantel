@@ -21,6 +21,7 @@ rami-online/
 │   └── client/
 │       ├── main.jsx      ← אפליקציית React: בית → לובי → משחק
 │       ├── ui.jsx        ← רכיבי התצוגה (הקלפים, השולחן, החוקים)
+│       ├── tutorial.jsx  ← מסך ברוכים הבאים והדרכה לשחקן חדש
 │       └── net.js        ← חיבור WebSocket לשרת
 └── tests/
     ├── fake-storage.mjs   ← חיקוי אחסון ה-Durable Object לבדיקות
