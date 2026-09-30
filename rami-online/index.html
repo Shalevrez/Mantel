@@ -5,6 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#faf6ee" />
     <title>מנטל · אונליין</title>
+    <!--
+      Home-screen icon. iOS reads apple-touch-icon when the page is saved with
+      "Add to Home Screen"; Android Chrome reads the manifest's icons. The
+      manifest keeps display "browser", so a saved icon opens the game in the
+      browser as before — it adds the icon, not an app-mode shell.
+    -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="apple-mobile-web-app-title" content="מנטל" />
     <style>
       /*
         One typeface for the whole app: Rubik, which draws Hebrew, Latin and
