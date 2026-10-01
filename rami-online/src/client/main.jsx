@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, Component } from "react";
 import { createRoot } from "react-dom/client";
 // The app's one typeface, bundled and served with the app (see index.html).
-import "@fontsource-variable/rubik";
+import "@fontsource-variable/assistant";
 import { FELT, FELTD, GOLD, CREAM, CLOTH, AI_LEVELS, AI_LEVEL_NAMES } from "../game-core.js";
 import { Game, RoundEnd, GameEnd, RulesModal, ReleaseNotes, LeaveConfirm, CardView } from "./ui.jsx";
 import { Icon, IconLabel } from "./icons.jsx";

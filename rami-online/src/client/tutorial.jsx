@@ -31,12 +31,19 @@ const SET = cards('h8 c8 s8');
 const JOKER = cards('s4 jk s6');
 const BUY = [c('dQ'), { id: 'tback', back: true }];
 
-// A row of cards, with an optional caption under it.
-function Row({ list, caption, sm }) {
+// A row of cards, with an optional caption under it. `labels` puts a line
+// under each card instead — the cards run left to right, so a caption
+// written as one Hebrew line would list them in the opposite order.
+function Row({ list, caption, labels, sm }) {
   return (
     <div style={{ textAlign: 'center', margin: '8px 0 12px' }}>
-      <div style={{ display: 'inline-flex', direction: 'ltr' }}>
-        {list.map(card => <CardView key={card.id} card={card} back={card.back} sm={sm} />)}
+      <div style={{ display: 'inline-flex', direction: 'ltr', gap: labels ? 10 : 0 }}>
+        {list.map((card, k) => (
+          <div key={card.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <CardView card={card} back={card.back} sm={sm} />
+            {labels && <div style={{ color: '#78716c', fontSize: 12, marginTop: 5, direction: 'rtl' }}>{labels[k]}</div>}
+          </div>
+        ))}
       </div>
       {caption && <div style={{ color: '#78716c', fontSize: 12, marginTop: 5 }}>{caption}</div>}
     </div>
@@ -167,7 +174,7 @@ const PAGES = [
           משחק שלם הוא <b>6 משחקונים</b>. בכל משחקון מנסים להוריד את כל הקלפים מהיד.
           מה שנשאר ביד בסוף המשחקון — נספר לחובתכם.
         </P>
-        <Row list={VALUES} caption="7 נקודות · 10 נקודות · 10 נקודות" />
+        <Row list={VALUES} labels={['7 נקודות', '10 נקודות', '10 נקודות']} />
         <P>
           קלפים 2–10 שווים את הערך שלהם; אס, נסיך, מלכה, מלך וג׳וקר — 10 כל אחד.
           <b> בסוף ששת המשחקונים מנצח מי שצבר הכי מעט נקודות.</b>

@@ -17,17 +17,19 @@
     <meta name="apple-mobile-web-app-title" content="מנטל" />
     <style>
       /*
-        One typeface for the whole app: Rubik, which draws Hebrew, Latin and
+        One typeface for the whole app: Assistant, which draws Hebrew, Latin and
         digits alike. The platform UI fonts don't — San Francisco and Roboto
         have no Hebrew, so a line like "רמה 3 · 1,200" came out in two fonts
         (Hebrew from a fallback, the numbers from the system font). The font
         files are bundled by Vite (imported in main.jsx) and served with the
         app, not from a font CDN; the browser only fetches the Hebrew and
         Latin files a page actually uses. Until they arrive, and anywhere
-        Rubik has no glyph (card suits, emoji), the system stack takes over.
+        Assistant has no glyph (card suits, emoji), the system stack takes over.
+        This variable is the one place the font is named: everything else —
+        table.css, the inline styles — uses var(--font-ui) or inherits it.
       */
       :root {
-        --font-ui: "Rubik Variable", system-ui, -apple-system, "Segoe UI", Roboto,
+        --font-ui: "Assistant Variable", system-ui, -apple-system, "Segoe UI", Roboto,
                    "Helvetica Neue", "Noto Sans Hebrew", Arial, sans-serif;
       }
 
