@@ -55,6 +55,9 @@ function blank(fields) {
     passHash: null, salt: null, displayName: 'שחקן',
     coins: START_COINS, xp: 0, trophies: 0, games: 0, wins: 0,
     createdAt: Date.now(),
+    // A new profile opens on the welcome and the tutorial (tutorial.jsx).
+    // Profiles made before it have no field, and aren't new: they skip it.
+    welcomed: false,
     done: [],      // gameIds already settled — a reload must not pay twice
     pending: {},   // gameId → coins paid (fee + buys) for a game still under way
     buys: {},      // gameId → how many paid buys have been charged so far
@@ -168,6 +171,11 @@ export async function upgradeGuest(username, password) {
 export function logout() {
   load().current = null;
   save();
+}
+
+// The welcome was seen (read through or skipped) — it doesn't come back.
+export function markWelcomed() {
+  return update(u => { u.welcomed = true; });
 }
 
 export function rename(name) {

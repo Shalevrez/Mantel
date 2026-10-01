@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, Component } from "react";
 import { createRoot } from "react-dom/client";
 // The app's one typeface, bundled and served with the app (see index.html).
-import "@fontsource-variable/rubik";
+import "@fontsource-variable/assistant";
 import { FELT, FELTD, GOLD, CREAM, CLOTH, AI_LEVELS, AI_LEVEL_NAMES } from "../game-core.js";
 import { Game, RoundEnd, GameEnd, RulesModal, ReleaseNotes, LeaveConfirm, CardView } from "./ui.jsx";
 import { Icon, IconLabel } from "./icons.jsx";
@@ -13,6 +13,7 @@ import { useProfile, LoginScreen, Hub, MenuCards, ProfileSheet, SettingsSheet, R
 import { PracticeSetup, OnlineSetup, ModeSwitch, JoinDialog, RoomTerms } from "./rooms.jsx";
 import { StoreStall } from "./store.jsx";
 import { LeaderboardStall } from "./leaderboard.jsx";
+import { Tutorial } from "./tutorial.jsx";
 
 // ═══════════════════════════════════════════════════════
 // ONLINE APP
@@ -109,6 +110,7 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showStore, setShowStore] = useState(false);
   const [showBoard, setShowBoard] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(false);
   // An invite link opens the join box straight away.
   const [showJoin, setShowJoin] = useState(() => !!urlCode() && !resumeCode);
   const connRef = useRef(null);
@@ -123,15 +125,27 @@ function App() {
   const name = profile ? profile.displayName : '';
   useEffect(() => { if (name) writeStore(NAME_KEY, name); }, [name]);
 
+  // A brand-new player gets the welcome and the tutorial (tutorial.jsx), once.
+  const welcome = !!profile && profile.welcomed === false;
+
   // "What's new": pop the release notes once per version, then remember it was
-  // seen.
+  // seen. Only for a signed-in player who knows the game already — someone who
+  // never saw the old version has nothing to compare, so theirs is marked seen.
+  const profileId = profile && profile.id;
   useEffect(() => {
-    if (readStore(SEEN_RELEASE_KEY) !== LATEST_RELEASE.version) setNotes(true);
-  }, []);
+    if (!profileId) return;
+    if (welcome) writeStore(SEEN_RELEASE_KEY, LATEST_RELEASE.version);
+    else if (readStore(SEEN_RELEASE_KEY) !== LATEST_RELEASE.version) setNotes(true);
+  }, [profileId, welcome]);
 
   const closeNotes = useCallback(() => {
     setNotes(false);
     writeStore(SEEN_RELEASE_KEY, LATEST_RELEASE.version);
+  }, []);
+
+  const closeTutorial = useCallback(() => {
+    setShowTutorial(false);
+    if (P.current() && P.current().welcomed === false) P.markWelcomed();
   }, []);
 
   // ── The wallet follows the game (demo — see profile.js) ──
@@ -284,6 +298,7 @@ function App() {
       { key: 'join',   label: 'הצטרף לחדר',  icon: 'users',    onClick: () => { if (!onHome) go('home'); setError(''); setShowJoin(true); } },
       { key: 'rank',   label: 'דירוג',        icon: 'trophy',   onClick: () => setShowBoard(true) },
       { key: 'store',  label: 'חנות',         icon: 'cart',     onClick: () => setShowStore(true) },
+      { key: 'learn',  label: 'איך משחקים',   icon: 'hand',     onClick: () => setShowTutorial(true) },
       { key: 'rules',  label: 'חוקים',        icon: 'book',     onClick: () => { if (!onHome) go('home'); setShowRules(true); } },
       { key: 'notes',  label: 'מה חדש',       icon: 'sparkles', onClick: () => setNotes(true) },
       { key: 'set',    label: 'הגדרות',       icon: 'gear',     onClick: () => setShowSettings(true) },
@@ -301,6 +316,7 @@ function App() {
       <Hub profile={profile} onProfile={() => setShowProfile(true)} onCoins={() => setShowStore(true)}
            onTrophies={() => setShowBoard(true)} onSettings={() => setShowSettings(true)} nav={nav}
            footer={<>
+             <button onClick={() => setShowTutorial(true)} style={hubLink}><IconLabel name="hand">איך משחקים</IconLabel></button>
              <button onClick={() => setShowRules(true)} style={hubLink}><IconLabel name="book">חוקים</IconLabel></button>
              <button onClick={() => setNotes(true)} style={hubLink}><IconLabel name="sparkles">מה חדש ב־{LATEST_RELEASE.version}</IconLabel></button>
            </>}>
@@ -380,6 +396,10 @@ function App() {
       {showBoard && profile && <LeaderboardStall onClose={() => setShowBoard(false)} />}
       {showSettings && <SettingsSheet version={APP_VERSION} onClose={() => setShowSettings(false)} />}
       {notes && <ReleaseNotes onClose={closeNotes} current={APP_VERSION} />}
+      {(welcome || showTutorial) && profile && (
+        <Tutorial name={profile.displayName} welcome={welcome} onClose={closeTutorial}
+                  onPractice={() => { closeTutorial(); writeStore(CREATE_MODE_KEY, 'practice'); go('practice'); }} />
+      )}
     </>
   );
 }

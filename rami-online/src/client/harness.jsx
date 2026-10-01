@@ -2,7 +2,7 @@
 // layout can be inspected at any viewport without a Worker or a second player.
 import { useState, useRef, useEffect } from "react";
 import { createRoot } from "react-dom/client";
-import "@fontsource-variable/rubik";
+import "@fontsource-variable/assistant";
 import { initGame, startHand, mkCard, G, MK } from "../game-core.js";
 import { viewFor } from "../worker/index.js";
 import { Game, RoundEnd, GameEnd, ScoreModal, CardView } from "./ui.jsx";
@@ -128,7 +128,7 @@ function Decks() {
   const joker = { id: 'djk', suit: 'j', v: 0, j: true };
   return (
     <div className="felt" style={{ minHeight: '100vh', minWidth: '100%', width: 'max-content', padding: '24px 28px',
-                                   direction: 'ltr', color: '#fdf8f0', fontFamily: '"Rubik Variable", system-ui, sans-serif' }}>
+                                   direction: 'ltr', color: '#fdf8f0', fontFamily: 'var(--font-ui)' }}>
       <h1 style={{ margin: '0 0 16px', color: '#f3d48c', fontSize: 26, direction: 'rtl' }}>החפיסה</h1>
       {SUIT_ROWS.map(suit => (
         <div key={suit} style={{ marginBottom: 16 }}>

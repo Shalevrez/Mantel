@@ -26,6 +26,15 @@ function check(label, cond) {
   check('and is signed in', P.current().id === user.id);
 }
 
+// ── Welcome ──
+{
+  check('a new profile has not seen the welcome', P.current().welcomed === false);
+  P.markWelcomed();
+  check('once seen, it stays seen', P.current().welcomed === true);
+  P._reset();
+  check('and is remembered after a reload', P.current().welcomed === true);
+}
+
 // ── Entry fee and settlement are idempotent ──
 {
   check('the fee is charged', P.chargeEntry('g1', 500) && P.current().coins === START_COINS - 500);
