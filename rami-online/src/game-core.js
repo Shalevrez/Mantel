@@ -485,8 +485,10 @@ function retireSeat(state, seat) {
   const p = state.players[seat];
   if (!p || p.out) return state;
   let st = state;
-  // Mid-turn work is rolled back first, as the player's own "undo" would.
-  if (st.cur === seat && st.phase === 'action' && st.undoBefore) st = G(st, { type: 'UNDO' });
+  // Mid-turn work is rolled back first, as the player's own "undo" would (under
+  // touch-move that is only a taken beit — laid groups stay on the table).
+  if (st.cur === seat && st.phase === 'action' && st.undoBefore && (st.undoBefore.fromBeit || !st.touchMove))
+    st = G(st, { type: 'UNDO' });
   st = {
     ...st,
     players: st.players.map((pl, i) => i === seat ? { ...pl, out: true, hand: [], newIds: [], hasLaid: false } : pl),
@@ -716,6 +718,13 @@ function G(state, action) {
         undoBefore: null, mustUseJoker: null, attachedThisTurn: false, tookBeit: false,
       };
     }
+    // "Touch-move" (נגעת נסעת), a room rule the host sets: what went down on the
+    // table stays there. Only the beit above is still given back whole — it is an
+    // ant attempt that must end as one, and refusing it could leave the turn with
+    // no legal discard. Groups still being put together (staging) never reached
+    // the table, so CLEAR_STAGE returns them as before.
+    if (state.touchMove)
+      return { ...state, msg: '👆 נגעת נסעת — מה שהורד נשאר על השולחן' };
     // Normal draw/take: undo only the lays/attaches this turn; the drawn card stays
     // in hand and the turn continues (you can't un-draw from the deck).
     const players = state.players.map((pl, i) =>

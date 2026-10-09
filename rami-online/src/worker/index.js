@@ -121,6 +121,9 @@ export class Room {
     this.code = null;
     this.started = false;
     this.aiLevel = 'medium';       // difficulty the host picked, for every bot in the room
+    // "Touch-move" (נגעת נסעת): once laid, a group can't be taken back to the
+    // hand. On unless the host turns it off in the lobby (see game-core UNDO).
+    this.touchMove = true;
     // What kind of room this is, set when it is created (see /create): a free
     // practice table, or an online room with an entry fee (0 = a free friendly
     // game). `cap` is the table size the creator picked. The wallet itself is
@@ -153,6 +156,7 @@ export class Room {
       this.code = saved.code;
       this.started = saved.started;
       this.aiLevel = normLevel(saved.aiLevel);
+      this.touchMove = saved.touchMove !== false;
       this.mode = normMode(saved.mode);
       this.fee = saved.fee || 0;
       this.cap = saved.cap || MAX_SEATS;
@@ -178,6 +182,7 @@ export class Room {
       code: this.code,
       started: this.started,
       aiLevel: this.aiLevel,
+      touchMove: this.touchMove,
       mode: this.mode,
       fee: this.fee,
       cap: this.cap,
@@ -484,7 +489,9 @@ export class Room {
         // Mid-turn work a bot can't pick up — a beit taken for an ant, lays
         // that haven't been thrown on — is rolled back, as the player's own
         // "undo" would, so the computer starts the turn from a clean position.
-        if (st.cur === seat && st.phase === 'action' && st.undoBefore) st = stampMsg(st, G(st, { type: 'UNDO' }), -1);
+        // Under touch-move only the beit goes back; laid groups stay.
+        if (st.cur === seat && st.phase === 'action' && st.undoBefore &&
+            (st.undoBefore.fromBeit || !st.touchMove)) st = stampMsg(st, G(st, { type: 'UNDO' }), -1);
         st = {
           ...st,
           players: st.players.map((p, i) => i === seat ? { ...p, isAI: true, ai: this.aiLevel } : p),
@@ -570,6 +577,7 @@ export class Room {
       maxAI: this.maxAI(),
       aiLevel: this.aiLevel,
       aiCount: this.aiCount(),
+      touchMove: this.touchMove,
       players: this.seats.map((s, i) => ({
         seat: i, name: s.name, connected: s.connected, isAI: s.isAI, left: !!s.left,
         ai: s.isAI ? normLevel(s.ai) : null,
@@ -606,13 +614,16 @@ export class Room {
     if (seat === -1) return;      // a socket with no chair has nothing to say
     this.touch();
 
-    // ── Host sets up the computer players (lobby only) ──
-    // Adding, removing and the difficulty are all the host's call, and all three
-    // are refused once the game is under way — the seats are dealt in by then.
-    if (msg.t === 'addAI' || msg.t === 'removeAI' || msg.t === 'aiLevel') {
+    // ── Host sets up the room (lobby only) ──
+    // Adding, removing and the difficulty of computer players, and the
+    // touch-move rule, are all the host's call, and all are refused once the
+    // game is under way — the seats are dealt in and the rules set by then.
+    if (msg.t === 'addAI' || msg.t === 'removeAI' || msg.t === 'aiLevel' || msg.t === 'touchMove') {
       if (seat !== this.hostSeat()) return;
       if (this.started) return;
-      if (msg.t === 'addAI') {
+      if (msg.t === 'touchMove') {
+        this.touchMove = !!msg.on;
+      } else if (msg.t === 'addAI') {
         const why = this.addAISeat();
         if (why) { this.sendError(seat, why); return; }
       } else if (msg.t === 'removeAI') {
@@ -660,6 +671,7 @@ export class Room {
       this.state = {
         ...initGame(configs),
         room: { mode: this.mode, fee: this.fee, gameId: crypto.randomUUID() },
+        touchMove: this.touchMove,
       };
       this.started = true;
       await this.persist();
