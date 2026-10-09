@@ -158,7 +158,7 @@ createRoot(document.getElementById('root')).render(
   // ?screen=buypaid / buybroke — a buy with a penalty card in a 500-coin room,
   // with enough coins for it, and without.
   : screen === 'buypaid' || screen === 'buybroke' ? (
-      <Game state={viewFor({ ...st, phase: 'buying', cur: 1, buy: { checker: 0, origNext: 2 % n, prev: 1, free: false } }, 0)}
+      <Game state={viewFor({ ...st, phase: 'buying', cur: 1, buy: { checker: 0, origNext: 2 % n, prev: 1 } }, 0)}
             wallet={{ coins: screen === 'buybroke' ? 5 : 1500, buyPrice: 10 }}
             dispatch={(a) => console.log('dispatch', a)} onLeave={() => {}} />
     )

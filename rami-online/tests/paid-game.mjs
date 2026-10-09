@@ -40,7 +40,7 @@ ws[0].msg({ t: 'start' });
 await tick();
 check('the game starts with the room terms', room.started && room.state.room.fee === 500);
 
-let buysSent = 0, freeBuys = 0, steps = 0, offers = 0;
+let buysSent = 0, steps = 0, offers = 0;
 while (room.state.phase !== 'game_end' && steps++ < 20000) {
   const st = room.state;
   if (st.phase === 'round_end') {
@@ -52,7 +52,7 @@ while (room.state.phase !== 'game_end' && steps++ < 20000) {
     // moves on to the others — who then buy it.
     if (c === st.buy.origNext) ws[c].msg({ t: 'action', action: { type: onLast || (offers++ % 2) ? 'SKIP' : 'TAKE_FREE' } });
     else if (!onLast && st.deck.length > 2) {
-      if (st.buy.free) freeBuys++; else buysSent++;
+      buysSent++;
       ws[c].msg({ t: 'action', action: { type: 'BUY', idx: c } });
     } else ws[c].msg({ t: 'action', action: { type: 'SKIP' } });
   } else if (st.phase === 'draw') {
@@ -69,7 +69,6 @@ check('the game reached its end', st.phase === 'game_end');
 check('all six mishkakonim were played', st.history.length >= 6);
 const counted = st.players.reduce((a, p) => a + p.paidBuys, 0);
 check(`every paid buy was counted (${counted})`, counted === buysSent && counted > 0);
-check(`the ${freeBuys} penalty-free opening buys were not`, counted === buysSent);
 
 const res = settle(st);
 const price = buyPrice(500);
