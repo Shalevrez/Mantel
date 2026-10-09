@@ -143,6 +143,10 @@ export function joinRoom({ code, name, host = false, resume = false }, callbacks
     setAILevel(level) {
       if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ t: 'aiLevel', level }));
     },
+    // Host: the room's touch-move rule (נגעת נסעת), on or off.
+    setTouchMove(on) {
+      if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ t: 'touchMove', on: !!on }));
+    },
     // Give up the seat for good (see leaveSeat on the server), then hang up.
     // Resolves once the server has hung up on us (or after a short wait), so a
     // page navigating away right after doesn't cut the message off in flight.

@@ -602,6 +602,13 @@ function RulesModal({ onClose }) {
             ולבחור שליפה אחרת.
           </Section>
 
+          <Section title="👆 נגעת נסעת">
+            חוק שהמארח בוחר בחדר ההמתנה (ברירת המחדל: כן). כשהוא פעיל, מה שהורדת או
+            הצמדת לשולחן <b>נשאר שם</b> — אי אפשר להחזיר אותו ליד. קבוצה לא חוקית ממילא
+            לא יורדת, וקבוצות שעדיין מחכות להשלמת דרישת הפתיחה אפשר לבטל.
+            "<Icon name="undo" /> החזר בית" עובד כרגיל.
+          </Section>
+
           <Section title="✋ סידור היד">
             אפשר לסדר את הקלפים ביד כרצונך <b>בכל רגע — גם כשזה לא התור שלך</b>:
             פשוט <b>גוררים</b> קלף למקום החדש — קו זהב מראה בדיוק איפה הוא ינחת. כפתור <b><Icon name="sort" /> מיין</b> ממיין
@@ -1678,10 +1685,13 @@ function Game({ state, dispatch, onLeave, wallet }) {
   const acting    = isMyTurn && state.phase === 'action';
   const layOk     = acting && state.canLay && selCards.length >= (state.mustUseJoker ? 2 : 3);
   const attachOk  = acting && human.hasLaid;
+  // Under touch-move (נגעת נסעת) laid groups stay on the table; only a taken
+  // beit can still be given back.
   const undoShown = acting && !!state.undoBefore &&
     (state.undoBefore.fromBeit ||
-     state.board.length > (state.undoBefore.board?.length || 0) ||
-     state.staging.length > 0);
+     (!state.touchMove &&
+      (state.board.length > (state.undoBefore.board?.length || 0) ||
+       state.staging.length > 0)));
   const discardOk = acting && selCards.length === 1;
   const drawOk    = isMyTurn && state.phase === 'draw';
   const deciding  = state.phase === 'buying' && humanDecides;
