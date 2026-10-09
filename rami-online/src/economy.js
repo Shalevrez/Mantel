@@ -30,8 +30,8 @@ export function normMode(mode) {
 // ── Buying with a penalty card ───────────────────────
 // Buying the discard out of turn (the one that comes with a penalty card from
 // the deck) also costs coins in a paid room: 2% of the entry fee, rounded —
-// 100 → 2, 500 → 10, 5000 → 100. The coins go into the pot. Free takes, the
-// penalty-free opening discard, practice and free rooms cost nothing.
+// 100 → 2, 500 → 10, 5000 → 100. The coins go into the pot. Free takes,
+// practice and free rooms cost nothing.
 export const BUY_RATE = 0.02;
 export function buyPrice(fee) {
   return Math.round((fee || 0) * BUY_RATE);

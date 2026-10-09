@@ -104,12 +104,10 @@ function check(label, cond) {
 {
   const base = initGame([{ name: 'א', isAI: false }, { name: 'ב', isAI: false }, { name: 'ג', isAI: false }], 0);
   check('a new game counts no buys', base.players.every(p => p.paidBuys === 0));
-  const buying = { ...base, phase: 'buying', cur: 0, buy: { checker: 2, origNext: 1, prev: 0, free: false } };
+  const buying = { ...base, phase: 'buying', cur: 0, buy: { checker: 2, origNext: 1, prev: 0 } };
   const paid = G(buying, { type: 'BUY', idx: 2 });
   check('a buy with a penalty card is counted', paid.players[2].paidBuys === 1 && paid.players[2].hand.length === base.players[2].hand.length + 2);
-  const freeBuy = G({ ...buying, buy: { ...buying.buy, free: true } }, { type: 'BUY', idx: 2 });
-  check('the penalty-free opening buy is not counted', freeBuy.players[2].paidBuys === 0);
-  const take = G({ ...buying, cur: 1, buy: { checker: 1, origNext: 1, prev: 0, free: false } }, { type: 'TAKE_FREE' });
+  const take = G({ ...buying, cur: 1, buy: { checker: 1, origNext: 1, prev: 0 } }, { type: 'TAKE_FREE' });
   check('a free take is not counted', take.players[1].paidBuys === 0);
   check('everyone sees how many times a player bought', viewFor(paid, 0).players[2].paidBuys === 1);
 }
@@ -127,7 +125,7 @@ function check(label, cond) {
         draw.players.every(p => p.paidBuys === 0) && potOf(draw) === 1500);
   // The player on turn is offered the discard first (checker === origNext),
   // and not only in the first round: here it's round 2, where buys cost.
-  const offer = { ...fresh, phase: 'buying', buy: { checker: 1, origNext: 1, prev: 0, free: false } };
+  const offer = { ...fresh, phase: 'buying', buy: { checker: 1, origNext: 1, prev: 0 } };
   const took = G(offer, { type: 'TAKE_FREE' });
   check('taking the discard on your turn is free', took.phase === 'action' &&
         took.players.every(p => p.paidBuys === 0) && potOf(took) === 1500);

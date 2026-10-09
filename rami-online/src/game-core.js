@@ -341,10 +341,10 @@ function startHand(base) {
     })),
     phase: 'buying',
     cur: first,
-    // In the first round of a mishkakon the opening discard is free for everyone:
-    // if the first player passes on it, whoever takes it after them gets it
-    // without a penalty card. From round 2 on it's bought as usual.
-    buy: { checker: first, origNext: first, prev: -1, free: sivuv === 1 },
+    // The opening card is offered like any discard: the first player takes it or
+    // passes, and if they pass the others may buy it (with a penalty card) before
+    // the first player draws. No one threw it, so no seat is skipped.
+    buy: { checker: first, origNext: first, prev: -1 },
     sel: [], staging: [], msg: '', undoBefore: null, mustUseJoker: null, buyNote: null,
     laidAtTurnStart: false, attachedThisTurn: false, tookBeit: false,
     log: [...(base.log || []), `— ${MK[base.mk].name} • סיבוב ${sivuv} —`],
@@ -502,7 +502,7 @@ function retireSeat(state, seat) {
     return settleBuy({
       ...st, cur: next, sel: [], staging: [], undoBefore: null, mustUseJoker: null,
       tookBeit: false, buyNote: null,
-    }, { checker: next, origNext: next, prev: prevActive(st, seat), free: !!(st.buy && st.buy.free) });
+    }, { checker: next, origNext: next, prev: prevActive(st, seat) });
   }
   if (st.phase === 'buying' && st.buy && st.buy.checker === seat) {
     const nc = nextCk(st.buy, st.players.length);
@@ -571,11 +571,10 @@ function G(state, action) {
     if (onLastCard(state.players[action.idx]))
       return { ...state, msg: '🚫 עם קלף אחרון ביד אי אפשר לקנות' };
     // The penalty card comes from the deck, so an empty deck is refilled first.
-    if (!state.buy.free) state = refillDeck(state);
+    state = refillDeck(state);
     const top = state.discard[state.discard.length - 1];
-    const free = !!state.buy.free;
-    const pen = free ? null : state.deck[0];
-    if (!top || (!free && !pen)) {
+    const pen = state.deck[0];
+    if (!top || !pen) {
       // Can't buy (nothing to take, or deck has no penalty card) — treat as a skip
       const n = state.players.length;
       const nc = nextCk(state.buy, n);
@@ -584,23 +583,19 @@ function G(state, action) {
     }
     const players = state.players.map((p, i) =>
       i === action.idx
-        ? free
-          ? { ...p, hand: [...p.hand, top], newIds: [...(p.newIds || []), top.id] }
-          : { ...p, hand: [...p.hand, top, pen], newIds: [...(p.newIds || []), top.id, pen.id],
-              paidBuys: (p.paidBuys || 0) + 1 }
+        ? { ...p, hand: [...p.hand, top, pen], newIds: [...(p.newIds || []), top.id, pen.id],
+            paidBuys: (p.paidBuys || 0) + 1 }
         : p
     );
     return refillDeck({
       ...state, phase: 'draw', buy: null,
-      deck: free ? state.deck : state.deck.slice(1),
+      deck: state.deck.slice(1),
       discard: state.discard.slice(0, -1),
       players,
       // Public: everyone sees who took the discard out of turn, until the
       // player on turn discards.
-      buyNote: { seat: action.idx, paid: !free },
-      log: [...state.log, free
-        ? `↑ ${state.players[action.idx].name} לקח מהאשפה (ללא קנס)`
-        : `💰 ${state.players[action.idx].name} קנה`],
+      buyNote: { seat: action.idx, paid: true },
+      log: [...state.log, `💰 ${state.players[action.idx].name} קנה`],
     });
   }
 

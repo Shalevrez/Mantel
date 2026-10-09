@@ -570,8 +570,8 @@ function RulesModal({ onClose }) {
             כשמישהו זורק קלף, השחקן הבא בתור יכול לקחת אותו בחינם. אם הוא מוותר,
             שחקנים אחרים יכולים "לקנות" אותו — ומקבלים יחד איתו קלף עונשין מהחבילה.
             אם אף אחד לא לקח — הקלף נשרף והשחקן הבא שולף מהחבילה.<br/>
-            <b>הקלף הפתוח בתחילת הסיבוב הראשון</b> של כל משחקון — בלי קנס לאף אחד: אם הראשון מוותר עליו,
-            מי שלוקח אחריו מקבל אותו בחינם, בלי קלף עונשין.
+            <b>הקלף הפתוח בתחילת הסיבוב</b> מתנהג כמו כל קלף שנזרק: הראשון בתור יכול לקחת אותו או לשלוף
+            מהחבילה, ואם הוא מוותר — שאר השחקנים יכולים לקנות אותו עם קלף עונשין.
           </Section>
 
           <Section title="☝️ קלף אחרון ביד">
@@ -1266,10 +1266,8 @@ function Game({ state, dispatch, onLeave, wallet }) {
   // I decide in the buying phase only when I'm the checker.
   const humanDecides  = buy && buy.checker === mySeat;
   const isFreeOffer   = buy && buy.checker === buy.origNext;
-  // The opening discard of a mishkakon's first round carries no penalty for anyone.
-  const isFreeBuy     = buy && !isFreeOffer && !!buy.free;
   // What this buy costs in coins: only a buy that brings a penalty card.
-  const buyCost       = buy && !isFreeOffer && !isFreeBuy && wallet ? wallet.buyPrice : 0;
+  const buyCost       = buy && !isFreeOffer && wallet ? wallet.buyPrice : 0;
   const cantAfford    = buyCost > 0 && wallet.coins < buyCost;
   // Someone took the discard (bought it out of turn, or took it on their turn):
   // shown to everyone until the next discard. A draw from the deck shows nothing.
@@ -1734,7 +1732,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
   const phaseLabel = () => {
     // Buying phase: whoever is the checker decides
     if (state.phase === 'buying') {
-      if (humanDecides) return (isFreeOffer || isFreeBuy) ? `🎁 האם לקחת מהאשפה?` : `💰 האם לקנות?`;
+      if (humanDecides) return isFreeOffer ? `🎁 האם לקחת מהאשפה?` : `💰 האם לקנות?`;
       return `⏳ ממתין ל${checker?.name || '...'}`;
     }
     // Not my turn → show who we're waiting on
@@ -2182,7 +2180,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
           flexShrink: 0, border: '1px solid rgba(255,255,255,.12)',
         }}>
           <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8 }}>
-            {(isFreeOffer || isFreeBuy)
+            {isFreeOffer
               ? `קח את ${discard ? cTxt(discard) : '?'} מהאשפה — בחינם?`
               : `לקנות ${discard ? cTxt(discard) : '?'}? (+קלף קנס מהחבילה${buyCost ? ` · ${buyCost} מטבעות` : ''})`
             }
@@ -2207,7 +2205,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
                 fontSize: 14, fontWeight: 700, fontFamily: 'inherit',
               }}
             >
-              <IconText text={(isFreeOffer || isFreeBuy) ? '✓ קח' : buyCost ? `💰 קנה · ${buyCost}` : '💰 קנה'} />
+              <IconText text={isFreeOffer ? '✓ קח' : buyCost ? `💰 קנה · ${buyCost}` : '💰 קנה'} />
               {keys.take && <Kbd code={keys.take} />}
             </button>
             <button
