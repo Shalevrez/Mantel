@@ -1582,7 +1582,11 @@ function Game({ state, dispatch, onLeave, wallet }) {
     // else has passed on the card, and never when I take it. Shown with
     // animations off too — it's a notice, not decoration (the CSS stills it).
     const onTurn = (s) => s.cur === mySeat && TURN_PHASES.has(s.phase);
-    if (onTurn(state) && !onTurn(ps)) setBanner(b => b + 1);
+    // And again when I passed on the discard and the others had their say on
+    // buying it: the turn is back with me, now to draw.
+    const backToMe = state.cur === mySeat && state.phase === 'draw'
+      && ps.phase === 'buying' && ps.buy && ps.buy.checker !== mySeat;
+    if ((onTurn(state) && !onTurn(ps)) || backToMe) setBanner(b => b + 1);
     else if (!onTurn(state)) setBanner(0);   // the turn is over — the notice goes too
 
     if (reducedMotion()) return;
