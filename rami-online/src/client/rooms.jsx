@@ -119,7 +119,7 @@ function RulesCard({ rules, onChange }) {
         </div>
       )}
       <div style={{ height: 1, background: `linear-gradient(90deg, transparent, ${FELTD}33, transparent)`, margin: '14px 0 12px' }} />
-      <div style={label}>👆 נגעת נסעת</div>
+      <div style={label}>נגעת נסעת</div>
       <Choice value={rules.touch} onPick={set('touch')}
               options={[{ value: true, label: 'כן' }, { value: false, label: 'לא' }]} />
       <div style={{ color: MUTED, fontSize: 12, marginTop: 6, lineHeight: 1.5, textAlign: 'center' }}>
