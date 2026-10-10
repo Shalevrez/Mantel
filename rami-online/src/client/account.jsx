@@ -11,6 +11,7 @@ import { levelInfo, shortNum } from "../economy.js";
 import { Icon, IconLabel } from "./icons.jsx";
 import { hasMouse, KeysEditor } from "./keys.jsx";
 import { animationsOn, setAnimationsOn } from "./anim.jsx";
+import { canVibrate, vibrationOn, setVibrationOn } from "./vibrate.js";
 import * as P from "./profile.js";
 
 // ── Palette for the hub screens ──────────────────────
@@ -402,23 +403,23 @@ export function MenuCards({ items }) {
 }
 
 // ═══════════════════════════════════════════════════════
-// SETTINGS — keyboard shortcuts (with a mouse); more to come
+// SETTINGS — animations, vibration, keyboard shortcuts (with a mouse)
 // ═══════════════════════════════════════════════════════
 
-// Animations on/off: cards in flight, the deal, confetti (anim.jsx).
-function AnimSwitch() {
-  const [on, setOn] = useState(animationsOn);
-  const flip = () => { setAnimationsOn(!on); setOn(!on); };
+// One on/off row in the settings. `get` and `set` read and store the choice.
+function SettingSwitch({ label, hint, get, set }) {
+  const [on, setOn] = useState(get);
+  const flip = () => { set(!on); setOn(!on); };
   return (
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
       padding: '10px 12px', marginBottom: 12, borderRadius: 12, border: `1px solid ${LINE}`,
     }}>
       <div>
-        <div style={{ fontWeight: 700 }}>אנימציות</div>
-        <div style={{ color: SOFT, fontSize: 12.5, marginTop: 2 }}>קלפים עפים, חלוקה, זיקוקים</div>
+        <div style={{ fontWeight: 700 }}>{label}</div>
+        <div style={{ color: SOFT, fontSize: 12.5, marginTop: 2 }}>{hint}</div>
       </div>
-      <button role="switch" aria-checked={on} aria-label="אנימציות" onClick={flip} style={{
+      <button role="switch" aria-checked={on} aria-label={label} onClick={flip} style={{
         flex: 'none', width: 50, height: 28, borderRadius: 99, padding: 3, cursor: 'pointer',
         border: `1px solid ${on ? GOLD : LINE}`, background: on ? GOLD : 'rgba(255,255,255,.12)',
         display: 'flex', justifyContent: on ? 'flex-end' : 'flex-start', transition: 'background .15s',
@@ -436,7 +437,14 @@ export function SettingsSheet({ onClose, version }) {
         <Icon name="gear" size={40} color={GOLD} strokeWidth={1.7} />
         <h2 style={{ margin: '6px 0 2px', fontSize: 21 }}>הגדרות</h2>
       </div>
-      <AnimSwitch />
+      {/* Animations: cards in flight, the deal, confetti (anim.jsx). */}
+      <SettingSwitch label="אנימציות" hint="קלפים עפים, חלוקה, זיקוקים"
+                     get={animationsOn} set={setAnimationsOn} />
+      {/* Vibration: only where the phone can (vibrate.js). */}
+      {canVibrate() && (
+        <SettingSwitch label="רטט" hint="כשמגיע תורך לשלוף, או כשמציעים לך לקנות קלף"
+                       get={vibrationOn} set={setVibrationOn} />
+      )}
       {/* Keyboard shortcuts: only for a mouse-and-keyboard player. */}
       {hasMouse() && (
         <div style={{ marginBottom: 12 }}>
