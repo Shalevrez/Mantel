@@ -384,7 +384,7 @@ function App() {
     }
     if (state.phase === 'round_end') return <RoundEnd state={state} dispatch={dispatch} onLeave={handleLeave} />;
     const wallet = state.room && state.room.mode === 'online' && state.room.fee > 0
-      ? { coins: profile.coins, buyPrice: buyPrice(state.room.fee) } : null;
+      ? { coins: profile.coins, buyPrice: buyPrice(state.room.fee), fee: state.room.fee } : null;
     return <Game state={state} dispatch={dispatch} onLeave={handleLeave} wallet={wallet} />;
   })();
 

@@ -380,7 +380,8 @@ function startHand(base) {
     // The opening card is offered like any discard: the first player takes it or
     // passes, and if they pass the others may buy it (with a penalty card) before
     // the first player draws. No one threw it, so no seat is skipped.
-    buy: { checker: first, origNext: first, prev: -1 },
+    buy: { id: (base.buyWin || 0) + 1, checker: first, origNext: first, prev: -1, picks: {} },
+    buyWin: (base.buyWin || 0) + 1,
     sel: [], staging: [], msg: '', undoBefore: null, mustUseJoker: null, buyNote: null,
     laidAtTurnStart: false, attachedThisTurn: false, tookBeit: false,
     log: [...(base.log || []), `— ${MK[base.mk].name} • סיבוב ${sivuv} —`],
@@ -502,18 +503,118 @@ function prevActive(state, i) {
 }
 const activeCount = state => state.players.filter(p => !p.out).length;
 
-// Settle the buying round on the next seat that may actually decide: seats on their
-// last card are passed over without being asked. Once the offer comes back around
-// to the next player the round is over and they draw.
-function settleBuy(state, buy) {
-  const n = state.players.length;
-  let b = buy;
-  while (onLastCard(state.players[b.checker]) || state.players[b.checker].out) {
-    const nc = nextCk(b, n);
-    if (nc === b.origNext) return { ...state, phase: 'draw', buy: null };
-    b = { ...b, checker: nc };
+// ── The buying window ────────────────────────────────
+// A discard is offered to everyone who may take it at once, and each of them
+// answers "want" or "don't want" (buy.picks, by seat) whenever they like —
+// nobody waits for their turn to be asked. Who gets the card is still decided
+// by turn order: the player on turn first (for free), then the seats after
+// them, never the one who threw it. The card goes to the first seat in that
+// order that wants it, as soon as everyone before it has said no; a "want"
+// further down simply waits. If nobody wants it, the player on turn draws.
+// A seat may change its answer until the card is decided.
+
+// How long a window stays open. Whoever hasn't answered by then doesn't want
+// the card (BUY_CLOSE, sent by the server), so one slow or absent player never
+// holds up the table.
+const BUY_MS = 10000;
+
+// Every seat in the order the discard is offered, from the player on turn on.
+function buyOrder(buy, n) {
+  const order = [buy.origNext];
+  for (let s = nextCk({ ...buy, checker: buy.origNext }, n);
+       s !== buy.origNext && order.length < n;
+       s = nextCk({ ...buy, checker: s }, n)) order.push(s);
+  return order;
+}
+
+// The seats that are actually offered the card: one on their last card, or
+// one that walked out, is passed over without being asked.
+function buyOffered(state) {
+  if (!state.buy) return [];
+  return buyOrder(state.buy, state.players.length)
+    .filter(s => state.players[s] && !state.players[s].out && !onLastCard(state.players[s]));
+}
+
+// Open a fresh window for the discard on top of the pile.
+function openBuy(state, origNext, prev) {
+  const id = (state.buyWin || 0) + 1;
+  return settleBuy({ ...state, buyWin: id, buy: { id, origNext, prev, checker: origNext, picks: {} } });
+}
+
+// Decide the window if its answers already decide it, else keep it open.
+// `checker` is the seat the decision waits on: the first one, in order, that
+// hasn't answered yet.
+function settleBuy(state) {
+  const buy = state.buy;
+  const picks = buy.picks || {};
+  for (const s of buyOffered(state)) {
+    if (picks[s] === undefined) return { ...state, phase: 'buying', buy: { ...buy, checker: s } };
+    if (!picks[s]) continue;
+    const won = s === buy.origNext ? takeFree(state) : buyPaid(state, s);
+    if (won) return won;
+    // Nothing to take, or no penalty card left for it: counts as a pass.
   }
-  return { ...state, phase: 'buying', buy: b };
+  return { ...state, phase: 'draw', buy: null };
+}
+
+// The seats that wanted the card but were beaten to it by someone earlier in
+// the order. In a paid room what they had put aside for it goes back to them.
+// Private: each seat only ever learns whether it was one of them (viewFor).
+function outbid(state, winner) {
+  const picks = state.buy.picks || {};
+  return buyOffered(state).filter(s => s !== winner && picks[s] === true);
+}
+
+function takeFree(state) {
+  const top = state.discard[state.discard.length - 1];
+  if (!top) return null;
+  const p = state.players[state.cur];
+  const players = state.players.map((pl, i) =>
+    i === state.cur ? { ...pl, hand: [...pl.hand, top], newIds: [top.id] } : pl
+  );
+  return {
+    ...state, phase: 'action', buy: null,
+    discard: state.discard.slice(0, -1), // remove only the taken (top) card; rest of pile stays
+    players, sel: [], staging: [], msg: '',
+    laidAtTurnStart: p.hasLaid, attachedThisTurn: false, tookBeit: false,
+    undoBefore: { hand: [...p.hand, top], board: state.board, hasLaid: p.hasLaid, beit: state.beit },
+    // Public: everyone sees the player on turn took the discard (a draw from
+    // the deck is not announced). Clears when they discard.
+    buyNote: { seat: state.cur, paid: false, onTurn: true, outbid: outbid(state, state.cur) },
+    log: [...state.log, `↑ ${state.players[state.cur].name} לקח מהאשפה`],
+  };
+}
+
+function buyPaid(state, seat) {
+  // The penalty card comes from the deck, so an empty deck is refilled first.
+  const st = refillDeck(state);
+  const top = st.discard[st.discard.length - 1];
+  const pen = st.deck[0];
+  if (!top || !pen) return null;
+  const players = st.players.map((p, i) =>
+    i === seat
+      ? { ...p, hand: [...p.hand, top, pen], newIds: [...(p.newIds || []), top.id, pen.id],
+          paidBuys: (p.paidBuys || 0) + 1 }
+      : p
+  );
+  return refillDeck({
+    ...st, phase: 'draw', buy: null,
+    deck: st.deck.slice(1),
+    discard: st.discard.slice(0, -1),
+    players,
+    // Public: everyone sees who took the discard out of turn, until the
+    // player on turn discards.
+    buyNote: { seat, paid: true, outbid: outbid(st, seat) },
+    log: [...st.log, `💰 ${st.players[seat].name} קנה`],
+  });
+}
+
+// One seat answers. Refused (state unchanged) for a seat that isn't offered
+// the card.
+function pickBuy(state, seat, want) {
+  if (state.phase !== 'buying' || !state.buy) return state;
+  if (!buyOffered(state).includes(seat)) return state;
+  return settleBuy({ ...state, buy: { ...state.buy, picks: { ...(state.buy.picks || {}), [seat]: want } } });
 }
 
 // ── Walking out of a paid game ───────────────────────
@@ -541,16 +642,13 @@ function retireSeat(state, seat) {
   if (st.cur === seat) {
     // Their turn passes on, with the pile's top card offered as after a discard.
     const next = nextActive(st, seat);
-    return settleBuy({
+    return openBuy({
       ...st, cur: next, sel: [], staging: [], undoBefore: null, mustUseJoker: null,
       tookBeit: false, buyNote: null,
-    }, { checker: next, origNext: next, prev: prevActive(st, seat) });
+    }, next, prevActive(st, seat));
   }
-  if (st.phase === 'buying' && st.buy && st.buy.checker === seat) {
-    const nc = nextCk(st.buy, st.players.length);
-    if (nc === st.buy.origNext) return { ...st, phase: 'draw', buy: null };
-    return settleBuy(st, { ...st.buy, checker: nc });
-  }
+  // Whatever they answered no longer counts: the window may be decided now.
+  if (st.phase === 'buying' && st.buy) return settleBuy(st);
   return st;
 }
 
@@ -582,72 +680,37 @@ function G(state, action) {
   if (type === '__INIT__') return initGame(action.players);
 
   // ── Buying phase ──────────────────────────────────
+  // Every offered seat answers on its own (see settleBuy): TAKE_FREE is the
+  // player on turn's "want", BUY {idx} anyone else's, SKIP {seat} a "don't
+  // want" from either (the seat the window waits on when no seat is given).
   if (type === 'TAKE_FREE') {
-    // Free take is allowed ONLY as the next-player's first offer. Once you pass
-    // (skip) or move past it, you can no longer take that discard for free.
-    if (state.phase !== 'buying' || !state.buy || state.buy.checker !== state.buy.origNext)
-      return { ...state, msg: '🚫 כבר ויתרת על קלף האשפה — שלוף מהחבילה' };
-    const top = state.discard[state.discard.length - 1];
-    if (!top) return state;
-    const p = state.players[state.cur];
-    if (onLastCard(p))
+    if (state.phase !== 'buying' || !state.buy) return state;
+    if (onLastCard(state.players[state.buy.origNext]))
       return { ...state, msg: '🚫 עם קלף אחרון ביד אפשר רק לשלוף מהחבילה' };
-    const players = state.players.map((pl, i) =>
-      i === state.cur ? { ...pl, hand: [...pl.hand, top], newIds: [top.id] } : pl
-    );
-    return {
-      ...state, phase: 'action', buy: null,
-      discard: state.discard.slice(0, -1), // remove only the taken (top) card; rest of pile stays
-      players, sel: [], staging: [], msg: '',
-      laidAtTurnStart: p.hasLaid, attachedThisTurn: false, tookBeit: false,
-      undoBefore: { hand: [...p.hand, top], board: state.board, hasLaid: p.hasLaid, beit: state.beit },
-      // Public: everyone sees the player on turn took the discard (a draw from
-      // the deck is not announced). Clears when they discard.
-      buyNote: { seat: state.cur, paid: false, onTurn: true },
-      log: [...state.log, `↑ ${state.players[state.cur].name} לקח מהאשפה`],
-    };
+    return pickBuy(state, state.buy.origNext, true);
   }
 
   if (type === 'BUY') {
     if (state.phase !== 'buying' || !state.buy || !state.players[action.idx]) return state;
+    // The player on turn takes it for free, never with a penalty card.
+    if (action.idx === state.buy.origNext) return state;
     if (onLastCard(state.players[action.idx]))
       return { ...state, msg: '🚫 עם קלף אחרון ביד אי אפשר לקנות' };
-    // The penalty card comes from the deck, so an empty deck is refilled first.
-    state = refillDeck(state);
-    const top = state.discard[state.discard.length - 1];
-    const pen = state.deck[0];
-    if (!top || !pen) {
-      // Can't buy (nothing to take, or deck has no penalty card) — treat as a skip
-      const n = state.players.length;
-      const nc = nextCk(state.buy, n);
-      if (nc === state.buy.origNext) return { ...state, phase: 'draw', buy: null };
-      return settleBuy(state, { ...state.buy, checker: nc });
-    }
-    const players = state.players.map((p, i) =>
-      i === action.idx
-        ? { ...p, hand: [...p.hand, top, pen], newIds: [...(p.newIds || []), top.id, pen.id],
-            paidBuys: (p.paidBuys || 0) + 1 }
-        : p
-    );
-    return refillDeck({
-      ...state, phase: 'draw', buy: null,
-      deck: state.deck.slice(1),
-      discard: state.discard.slice(0, -1),
-      players,
-      // Public: everyone sees who took the discard out of turn, until the
-      // player on turn discards.
-      buyNote: { seat: action.idx, paid: true },
-      log: [...state.log, `💰 ${state.players[action.idx].name} קנה`],
-    });
+    return pickBuy(state, action.idx, true);
   }
 
   if (type === 'SKIP') {
     if (state.phase !== 'buying' || !state.buy) return state;
-    const n = state.players.length;
-    const nc = nextCk(state.buy, n);
-    if (nc === state.buy.origNext)
-      return { ...state, phase: 'draw', buy: null };
-    return settleBuy(state, { ...state.buy, checker: nc });
+    return pickBuy(state, action.seat ?? state.buy.checker, false);
+  }
+
+  // Server-internal: the window's time is up, and whoever hasn't answered
+  // doesn't want the card. Only for the window it was set for (`id`).
+  if (type === 'BUY_CLOSE') {
+    if (state.phase !== 'buying' || !state.buy || state.buy.id !== action.id) return state;
+    const picks = { ...(state.buy.picks || {}) };
+    for (const s of buyOffered(state)) if (picks[s] === undefined) picks[s] = false;
+    return settleBuy({ ...state, buy: { ...state.buy, picks } });
   }
 
   // ── Draw ──────────────────────────────────────────
@@ -988,13 +1051,13 @@ function G(state, action) {
     const board = state.board.some(g => g.att && g.att.by !== state.cur)
       ? state.board.map(({ att, ...g }) => att && att.by === state.cur ? { ...g, att } : g)
       : state.board;
-    return settleBuy({
+    return openBuy({
       ...state, board,
       discard: [...state.discard, card],
       players, cur: nextIdx, sel: [], staging: [],
       undoBefore: null, turnsPlayed, canLay, mustUseJoker: null, tookBeit: false, buyNote: null,
       log: [...state.log, `↓ ${p.name} זרק ${cTxt(card)}`],
-    }, { checker: nextIdx, origNext: nextIdx, prev: state.cur });
+    }, nextIdx, state.cur);
   }
 
   // ── Round controls ────────────────────────────────
@@ -1191,6 +1254,6 @@ export {
   uid, sortHand, moveCard, mkCard, makeDeck, shuffle, handScore,
   isSeq, isSet, isGroup, orderSeq, orderGroup, jokerValues, attachPos, canAttach, meetsReq,
   layoutStart, seqLayouts, extendSeq, layGroup,
-  startHand, initGame, endWin, endDeck, nextCk, roundRecord, retireSeat,
+  startHand, initGame, endWin, endDeck, nextCk, buyOrder, buyOffered, BUY_MS, roundRecord, retireSeat,
   G, aiWantCard, findAIGroups, aiDiscard,
 };

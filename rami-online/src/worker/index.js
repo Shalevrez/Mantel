@@ -9,7 +9,7 @@
 
 import {
   G, initGame, cSc, MK, aiLevel as normLevel, retireSeat, normFormat, normFormatMk,
-  aiWantCard, findAIGroups, meetsReq, attachPos, aiDiscard,
+  aiWantCard, findAIGroups, meetsReq, attachPos, aiDiscard, buyOffered, BUY_MS,
 } from '../game-core.js';
 import { normFee, normMode } from '../economy.js';
 
@@ -46,6 +46,8 @@ function makeCode() {
 // ── Redaction ────────────────────────────────────────
 // Build the view a specific seat is allowed to see: own hand
 // in full, everyone else's hand replaced by its length only.
+export { BUY_MS };
+
 export function viewFor(state, seat) {
   if (!state) return null;
   // `undoBefore` is the server's rollback snapshot of the acting player's turn. It
@@ -57,8 +59,23 @@ export function viewFor(state, seat) {
   // Selection and staging are the acting player's private working area: which cards
   // they picked up, and the groups they've built but not yet committed.
   const acting = seat === state.cur;
+  // The buying window: who wants the card stays secret until it's decided.
+  // Each seat sees its own answer, and only who is still to answer.
+  const b = state.buy;
+  const buy = b ? {
+    id: b.id, origNext: b.origNext, prev: b.prev, checker: b.checker,
+    offered: buyOffered(state),
+    waiting: buyOffered(state).filter(s => (b.picks || {})[s] === undefined),
+    mine: (b.picks || {})[seat],
+    // Relative, not a timestamp: the client's clock needn't match ours.
+    msLeft: b.deadline ? Math.max(0, b.deadline - Date.now()) : null,
+  } : null;
+  // Who else wanted a card someone took is private too: each seat only learns
+  // whether it was beaten to it (and, in a paid room, got its coins back).
+  const bn = state.buyNote;
+  const buyNote = bn ? { seat: bn.seat, paid: bn.paid, onTurn: bn.onTurn, outbidYou: (bn.outbid || []).includes(seat) } : null;
   return {
-    ...state,
+    ...state, buy, buyNote,
     // Never leak the deck contents. The beit card itself is public — it's shown
     // face up so everyone can see what's on offer.
     deck: undefined,
@@ -623,7 +640,38 @@ export class Room {
     try { s.ws.send(JSON.stringify({ t: 'state', state: viewFor(this.state, seat) })); } catch {}
   }
   broadcastState() {
+    this.buyClock();
     for (let i = 0; i < this.seats.length; i++) this.sendState(i);
+  }
+
+  // Start the clock on a buying window the first time it goes out, and close
+  // it when time is up. A window that is decided sooner leaves the timer to
+  // find nothing to do. The deadline is saved with the state, so after an
+  // eviction the timer is set again the next time the state goes out (and a
+  // window whose time ran out meanwhile closes at once).
+  buyClock() {
+    const st = this.state;
+    if (!st || st.phase !== 'buying' || !st.buy || this.closing) return;
+    const id = st.buy.id;
+    if (!st.buy.deadline) this.state = { ...st, buy: { ...st.buy, deadline: Date.now() + BUY_MS } };
+    // Window ids start over with every game.
+    const key = `${(st.room && st.room.gameId) || ''}:${id}`;
+    if (this.buyTimer === key) return;
+    this.buyTimer = key;
+    const t = setTimeout(() => this.closeBuy(id), Math.max(0, this.state.buy.deadline - Date.now()) + 50);
+    // Under node (the tests) a pending window must not keep the process alive.
+    if (t && typeof t.unref === 'function') t.unref();
+  }
+
+  async closeBuy(id) {
+    const st = this.state;
+    if (this.closing || !st || st.phase !== 'buying' || !st.buy || st.buy.id !== id) return;
+    this.state = G(st, { type: 'BUY_CLOSE', id });
+    this.touch();
+    await this.persist();
+    await this.armAlarm();
+    this.broadcastState();
+    this.maybeRunAI();
   }
 
   async onMessage(connId, evt) {
@@ -747,13 +795,18 @@ export class Room {
     // mid-turn, or two clients tapping "next" could skip a mishkakon between them.
     if (['NEW_HAND', 'NEXT_MK', 'GAME_END'].includes(action.type))
       return st.phase === 'round_end';
-    // Buying: only the current "checker" seat, and only while buying is actually open.
-    // Outside that window these are not merely pointless — SKIP dereferences st.buy and
-    // BUY indexes players by a client-supplied idx, so either one crashes the room.
+    // The buying window's timeout is the server's own (see buyClock).
+    if (action.type === 'BUY_CLOSE') return false;
+    // Buying: every seat that is offered the card answers for itself, at any time
+    // while the window is open — the player on turn with TAKE_FREE, anyone else
+    // with BUY. Outside that window these are not merely pointless — SKIP
+    // dereferences st.buy and BUY indexes players by a client-supplied idx.
     if (['TAKE_FREE', 'BUY', 'SKIP'].includes(action.type)) {
       if (st.phase !== 'buying' || !st.buy) return false;
-      if (action.type === 'BUY') return seat === st.buy.checker && action.idx === seat;
-      return seat === st.buy.checker;
+      if (!buyOffered(st).includes(seat)) return false;
+      if (action.type === 'TAKE_FREE') return seat === st.buy.origNext;
+      if (action.type === 'BUY') return action.idx === seat && seat !== st.buy.origNext;
+      return true;
     }
     // The draw decision — pull from the pile, or take the beit — is open only in the
     // 'draw' phase, and each player makes it once per turn. A double-tap on the pile
@@ -770,10 +823,9 @@ export class Room {
     if (!this.state || ['round_end', 'game_end'].includes(this.state.phase)) return;
     const st = this.state;
 
-    // Buying: AI checker
+    // Buying: every computer player that is offered the card answers at once.
     if (st.phase === 'buying' && st.buy) {
-      const checker = this.seats[st.buy.checker];
-      if (checker?.isAI) return this.scheduleAI(() => this.aiBuy());
+      if (this.aiBuyers(st).length) return this.scheduleAI(() => this.aiBuy());
       return;
     }
     const cur = this.seats[st.cur];
@@ -805,23 +857,34 @@ export class Room {
     return normLevel(this.seats[seat]?.ai || this.aiLevel);
   }
 
+  // The computer players offered the card that haven't answered yet.
+  aiBuyers(st) {
+    const picks = st.buy.picks || {};
+    return buyOffered(st).filter(s => this.seats[s]?.isAI && picks[s] === undefined);
+  }
+
   aiBuy() {
-    const st = this.state, buy = st.buy;
-    const lv = this.levelOf(buy.checker);
-    const checker = st.players[buy.checker];
-    const top = st.discard[st.discard.length - 1];
-    if (buy.checker === buy.origNext) {
-      // First refusal, and free: the only cost is picking up a card it doesn't
-      // need. A beginner still lets good cards go by now and then.
-      const want = !!top && aiWantCard(checker.hand, top, lv) &&
-                   (lv !== 'easy' || Math.random() > 0.25);
-      this.state = G(st, { type: want ? 'TAKE_FREE' : 'SKIP' });
-    } else {
-      // Buying out of turn costs a penalty card from the deck, so each level
-      // has its own appetite for it — and the beginner never pays at all.
-      const odds = lv === 'hard' ? 0.2 : lv === 'medium' ? 0.3 : 1;
-      const want = !!top && aiWantCard(checker.hand, top, lv, { costly: true }) && Math.random() > odds;
-      this.state = G(st, { type: want ? 'BUY' : 'SKIP', idx: buy.checker });
+    const first = this.state;
+    for (const seat of this.aiBuyers(first)) {
+      const st = this.state;
+      // An earlier answer may already have decided the window.
+      if (st.phase !== 'buying' || !st.buy || st.buy.id !== first.buy.id) return;
+      const lv = this.levelOf(seat);
+      const hand = st.players[seat].hand;
+      const top = st.discard[st.discard.length - 1];
+      if (seat === st.buy.origNext) {
+        // First refusal, and free: the only cost is picking up a card it doesn't
+        // need. A beginner still lets good cards go by now and then.
+        const want = !!top && aiWantCard(hand, top, lv) &&
+                     (lv !== 'easy' || Math.random() > 0.25);
+        this.state = G(st, want ? { type: 'TAKE_FREE' } : { type: 'SKIP', seat });
+      } else {
+        // Buying out of turn costs a penalty card from the deck, so each level
+        // has its own appetite for it — and the beginner never pays at all.
+        const odds = lv === 'hard' ? 0.2 : lv === 'medium' ? 0.3 : 1;
+        const want = !!top && aiWantCard(hand, top, lv, { costly: true }) && Math.random() > odds;
+        this.state = G(st, want ? { type: 'BUY', idx: seat } : { type: 'SKIP', seat });
+      }
     }
   }
 

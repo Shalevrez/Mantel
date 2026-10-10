@@ -10,7 +10,7 @@ import {
   SUITS, SYM, COL, VD, cSc, cTxt, MK, lastMk, FELT, FELTD, GOLD, CREAM,
   INK, GOLDD, CLOTH, CLOTH_BASE, playerColor,
   isSeq, isSet, isGroup, orderSeq, orderGroup, jokerValues, attachPos, canAttach, meetsReq,
-  seqLayouts, layGroup, sortHand, moveCard, handScore,
+  seqLayouts, layGroup, sortHand, moveCard, handScore, BUY_MS,
 } from "../game-core.js";
 import { Icon, IconLabel, IconText, RankBadge } from "./icons.jsx";
 
@@ -576,8 +576,11 @@ function RulesModal({ onClose }) {
           </Section>
 
           <Section title="🛒 קנייה">
-            כשמישהו זורק קלף, השחקן הבא בתור יכול לקחת אותו בחינם. אם הוא מוותר,
-            שחקנים אחרים יכולים "לקנות" אותו — ומקבלים יחד איתו קלף עונשין מהחבילה.
+            כשמישהו זורק קלף, הוא מוצע <b>לכולם בבת אחת</b>, וכל אחד מסמן "רוצה" או "לא רוצה"
+            (יש 10 שניות; מי שלא סימן — לא רוצה). הקלף הולך <b>לפי סדר התור</b>: השחקן הבא בתור
+            ראשון ומקבל אותו בחינם; אחריו השאר, שמקבלים יחד איתו קלף עונשין מהחבילה. הקלף
+            של הראשון לפי הסדר שרוצה — ברגע שכל מי שלפניו ויתר. אפשר לשנות את הבחירה עד שמוחלט.
+            מי שרצה אבל מישהו לפניו לקח — לא משלם כלום.
             אם אף אחד לא לקח — הקלף נשרף והשחקן הבא שולף מהחבילה.<br/>
             <b>הקלף הפתוח בתחילת הסיבוב</b> מתנהג כמו כל קלף שנזרק: הראשון בתור יכול לקחת אותו או לשלוף
             מהחבילה, ואם הוא מוותר — שאר השחקנים יכולים לקנות אותו עם קלף עונשין.
@@ -718,7 +721,7 @@ function ReleaseNotes({ onClose, current }) {
 
               {rel.changes.map((ch, i) => (
                 <div key={i} style={{ display: 'flex', gap: 10, marginBottom: 11 }}>
-                  <div style={{ fontSize: 19, lineHeight: 1.2, flexShrink: 0 }}>{ch.icon}</div>
+                  <div style={{ fontSize: 19, lineHeight: 1.2, flexShrink: 0 }}><IconText text={ch.icon} /></div>
                   <div>
                     <div style={{ fontWeight: 700, color: FELTD, fontSize: 14 }}>{ch.title}</div>
                     <div style={{ color: '#57534e', fontSize: 13, lineHeight: 1.65 }}>{ch.text}</div>
@@ -1213,6 +1216,61 @@ function KeysModal({ onClose }) {
 // `wallet` is the player's demo wallet in a paid room — { coins, buyPrice } —
 // or null. A buy with a penalty card costs buyPrice coins, and is locked when
 // the wallet can't cover it (skipping, and drawing on your turn, stay open).
+// How long the buying window has left — a bar that runs down, and the
+// seconds. The server sends the time left rather than a clock time, so the
+// countdown never depends on this device's clock being right.
+function BuyClock({ id, msLeft }) {
+  const end = useRef({ id: null, at: 0 });
+  if (end.current.id !== id && msLeft != null) end.current = { id, at: Date.now() + msLeft };
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const h = setInterval(() => tick(t => t + 1), 250);
+    return () => clearInterval(h);
+  }, []);
+  if (end.current.id !== id) return null;
+  const left = Math.max(0, end.current.at - Date.now());
+  return (
+    <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ flex: 1, height: 5, borderRadius: 3, background: 'rgba(255,255,255,.12)', overflow: 'hidden' }}>
+        <div style={{
+          height: '100%', width: `${(left / BUY_MS) * 100}%`, borderRadius: 3,
+          background: left < 3000 ? '#f87171' : GOLD, transition: 'width .25s linear',
+        }} />
+      </div>
+      <span style={{ fontSize: 11, color: 'rgba(255,255,255,.7)', fontVariantNumeric: 'tabular-nums', minWidth: 22 }}>
+        {Math.ceil(left / 1000)}
+      </span>
+    </div>
+  );
+}
+
+// The wallet in a paid room, always in view: what I have, and what this game
+// has cost me so far (the entry fee, every buy with a penalty card, and a buy
+// I've said I want, whose price is put aside until the card is decided).
+function CoinChip({ wallet, paidBuys, held }) {
+  const n = (x) => Number(x).toLocaleString('he-IL');
+  const balance = Math.max(0, wallet.coins - held);
+  const spent = wallet.fee + paidBuys * wallet.buyPrice + held;
+  const tip = `יתרה: ${n(balance)} מטבעות · במשחק הזה: כניסה ${n(wallet.fee)}` +
+    (paidBuys ? ` + ${paidBuys} קניות × ${wallet.buyPrice}` : '') +
+    (held ? ` + ${held} שמורים לקנייה` : '');
+  return (
+    <span className="tap-40" data-tip={tip} aria-label={tip} style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4,
+      background: 'rgba(251,191,36,.14)', color: GOLD,
+      border: `1px solid ${GOLD}55`, borderRadius: 8,
+      fontSize: 12, fontWeight: 700, padding: '5px 10px',
+      marginInlineEnd: 6, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
+    }}>
+      <Icon name="coins" /> {n(balance)}
+      <span style={{ color: 'rgba(255,255,255,.7)', fontWeight: 400 }}>
+        <span className="meta-word"> · הוצאת במשחק {n(spent)}</span>
+        <span className="meta-alt"> · <span dir="ltr">−{n(spent)}</span></span>
+      </span>
+    </span>
+  );
+}
+
 function Game({ state, dispatch, onLeave, wallet }) {
   // { opts, action }: a lay/attach waiting for the player to say where the joker goes.
   const [jokerPick, setJokerPick] = useState(null);
@@ -1277,18 +1335,32 @@ function Game({ state, dispatch, onLeave, wallet }) {
   const mk      = MK[state.mk];
   const buy     = state.buy;
 
-  const checker       = buy ? state.players[buy.checker] : null;
-  // I decide in the buying phase only when I'm the checker.
-  const humanDecides  = buy && buy.checker === mySeat;
-  const isFreeOffer   = buy && buy.checker === buy.origNext;
+  // The buying window (game-core settleBuy): everyone offered the discard
+  // answers at once, and it goes by turn order to the first who wants it.
+  const offered       = (buy && buy.offered) || [];
+  // I'm offered the card: I answer whenever I like while the window is open.
+  const humanDecides  = state.phase === 'buying' && offered.includes(mySeat);
+  // Mine is the free offer when I'm the player on turn.
+  const isFreeOffer   = !!buy && buy.origNext === mySeat;
+  const myPick        = buy ? buy.mine : undefined;   // true / false / not yet
+  // Who hasn't answered yet (never what anyone answered), and of them, who is
+  // ahead of me in line.
+  const waitingOn     = ((buy && buy.waiting) || []).filter(s => s !== mySeat);
+  const aheadOfMe     = waitingOn.filter(s => offered.indexOf(s) < offered.indexOf(mySeat));
+  const namesOf       = (seats) => seats.map(s => state.players[s]?.name).filter(Boolean).join(', ');
   // What this buy costs in coins: only a buy that brings a penalty card.
-  const buyCost       = buy && !isFreeOffer && wallet ? wallet.buyPrice : 0;
+  const buyCost       = humanDecides && !isFreeOffer && wallet ? wallet.buyPrice : 0;
   const cantAfford    = buyCost > 0 && wallet.coins < buyCost;
+  // A "want" puts the price aside at once; it comes back if someone ahead of
+  // me takes the card (or I change my mind).
+  const held          = myPick === true ? buyCost : 0;
   // Someone took the discard (bought it out of turn, or took it on their turn):
   // shown to everyone until the next discard. A draw from the deck shows nothing.
   const bn = state.buyNote;
   const bnName = bn && state.players[bn.seat] ? state.players[bn.seat].name : '';
   const buyNoteText = !bnName ? ''
+    : bn.outbidYou
+      ? `${bnName} לקח את הקלף לפניך${wallet ? ` — ${wallet.buyPrice} המטבעות חזרו אליך` : ''}`
     : bn.seat === mySeat
       ? (bn.onTurn ? '' : bn.paid ? '💰 קנית את הקלף עם הקנס' : '🎁 לקחת את הקלף בלי קנס')
       : bn.onTurn ? `↑ ${bnName} לקח מהאשפה`
@@ -1728,7 +1800,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
   const doDiscard = () => discardOk && dispatch({ type: 'DISCARD', cid: selCards[0].id });
   const doTake    = () => isFreeOffer
     ? dispatch({ type: 'TAKE_FREE' })
-    : !cantAfford && dispatch({ type: 'BUY', idx: buy.checker });
+    : !cantAfford && dispatch({ type: 'BUY', idx: mySeat });
 
   // Keyboard shortcuts (a mouse-and-keyboard player only). Matched on the
   // physical key, so they work whatever the keyboard layout.
@@ -1772,10 +1844,10 @@ function Game({ state, dispatch, onLeave, wallet }) {
   );
 
   const phaseLabel = () => {
-    // Buying phase: whoever is the checker decides
+    // Buying phase: my own question until I answer, then who we're waiting on
     if (state.phase === 'buying') {
-      if (humanDecides) return isFreeOffer ? `🎁 האם לקחת מהאשפה?` : `💰 האם לקנות?`;
-      return `⏳ ממתין ל${checker?.name || '...'}`;
+      if (humanDecides && myPick === undefined) return isFreeOffer ? `🎁 האם לקחת מהאשפה?` : `💰 האם לקנות?`;
+      return `⏳ ממתין ל${namesOf(waitingOn) || '...'}`;
     }
     // Not my turn → show who we're waiting on
     if (!isMyTurn) {
@@ -1896,7 +1968,9 @@ function Game({ state, dispatch, onLeave, wallet }) {
           .hand-meta button { margin-inline-end: 4px !important; padding-inline: 8px !important; }
           .hand-bar.has-actions .hand-phase { display: none; }
           .hand-bar .meta-word { display: none; }
+          .hand-bar .meta-alt { display: inline; }
         }
+        .meta-alt { display: none; }
 
         /* ── A landscape screen — laptop, desktop, a tablet or a phone on its
            side: the top bar is one thin row (title · opponents · tools), the
@@ -2215,18 +2289,35 @@ function Game({ state, dispatch, onLeave, wallet }) {
 
 
       {/* ── Buying prompt ─────────────────────────── */}
-      {state.phase === 'buying' && humanDecides && (
+      {/* Everyone offered the card sees it at once and answers when they like;
+          the answer can change until the card is decided. */}
+      {humanDecides && (() => {
+        const place = offered.indexOf(mySeat) + 1;
+        const queue = isFreeOffer
+          ? 'אתה ראשון בתור — אם תוותר, הקלף יוצע לשאר'
+          : aheadOfMe.length
+            ? `אתה ${place} בתור · ממתין ל${namesOf(aheadOfMe)}`
+            : `אתה ${place} בתור · כל מי שלפניך ויתר — אם תרצה, הקלף שלך`;
+        const choice = (on, bg) => ({
+          padding: '9px 22px', color: 'white', border: 'none', borderRadius: 9,
+          fontSize: 14, fontWeight: 700, fontFamily: 'inherit',
+          background: bg, cursor: 'pointer',
+          boxShadow: on ? `0 0 0 3px ${CREAM}` : 'none',
+          opacity: myPick === undefined || on ? 1 : 0.55,
+        });
+        return (
         <div className="ga-prompt" style={{
           background: '#1c2c3e', margin: '0 10px', borderRadius: 14,
           padding: '11px 14px', color: CREAM, textAlign: 'center',
           flexShrink: 0, border: '1px solid rgba(255,255,255,.12)',
         }}>
-          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8 }}>
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>
             {isFreeOffer
               ? `קח את ${discard ? cTxt(discard) : '?'} מהאשפה — בחינם?`
-              : `לקנות ${discard ? cTxt(discard) : '?'}? (+קלף קנס מהחבילה${buyCost ? ` · ${buyCost} מטבעות` : ''})`
+              : <>לקנות {discard ? cTxt(discard) : '?'}? (+קלף קנס מהחבילה{buyCost ? <> · <Icon name="coins" /> {buyCost}</> : null})</>
             }
           </div>
+          <div style={{ fontSize: 12, color: 'rgba(255,255,255,.7)', marginBottom: 8 }}>{queue}</div>
           {discard && (
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
               <CardView card={discard} />
@@ -2234,42 +2325,47 @@ function Game({ state, dispatch, onLeave, wallet }) {
           )}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
             <button
-              onClick={() => isFreeOffer
-                ? dispatch({ type: 'TAKE_FREE' })
-                : !cantAfford && dispatch({ type: 'BUY', idx: buy.checker })
-              }
+              onClick={doTake}
               disabled={cantAfford}
+              aria-pressed={myPick === true}
               className="tap-44"
-              style={{
-                padding: '9px 24px', background: cantAfford ? '#64748b' : '#16a34a', color: 'white',
-                border: 'none', borderRadius: 9, cursor: cantAfford ? 'not-allowed' : 'pointer',
-                opacity: cantAfford ? 0.6 : 1,
-                fontSize: 14, fontWeight: 700, fontFamily: 'inherit',
-              }}
+              style={cantAfford
+                ? { ...choice(false, '#64748b'), cursor: 'not-allowed', opacity: 0.6 }
+                : choice(myPick === true, '#16a34a')}
             >
-              <IconText text={isFreeOffer ? '✓ קח' : buyCost ? `💰 קנה · ${buyCost}` : '💰 קנה'} />
+              <Icon name="check" /> {isFreeOffer ? 'קח' : 'רוצה'}{buyCost ? <> · <Icon name="coins" /> {buyCost}</> : null}
               {keys.take && <Kbd code={keys.take} />}
             </button>
             <button
               onClick={() => dispatch({ type: 'SKIP' })}
+              aria-pressed={myPick === false}
               className="tap-44"
-              style={{
-                padding: '9px 24px', background: '#475569', color: 'white',
-                border: 'none', borderRadius: 9, cursor: 'pointer',
-                fontSize: 14, fontWeight: 700, fontFamily: 'inherit',
-              }}
+              style={choice(myPick === false, '#475569')}
             >
-              <Icon name="x" /> וותר
+              <Icon name="x" /> {isFreeOffer ? 'וותר' : 'לא רוצה'}
               {keys.skip && <Kbd code={keys.skip} />}
             </button>
           </div>
+          {myPick === true && (
+            <div style={{ fontSize: 12, color: '#86efac', marginTop: 7 }}>
+              <Icon name="check" /> סימנת שאתה רוצה
+              {held ? ` · ${held} מטבעות שמורים בצד — יחזרו אליך אם מישהו לפניך ייקח` : ' — הקלף שלך אם מי שלפניך יוותר'}
+            </div>
+          )}
+          {myPick === false && (
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,.65)', marginTop: 7 }}>
+              סימנת שלא — אפשר לשנות עד שמוחלט
+            </div>
+          )}
           {cantAfford && (
             <div style={{ fontSize: 12, color: '#fca5a5', marginTop: 7 }}>
               אין מספיק מטבעות לקנייה ({buyCost}) — אפשר לוותר ולשלוף בתורך
             </div>
           )}
+          <BuyClock id={buy.id} msLeft={buy.msLeft} />
         </div>
-      )}
+        );
+      })()}
 
       {/* ── Message bar ───────────────────────────── */}
       {state.msg ? (
@@ -2451,6 +2547,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
                 fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
               }}
             ><Icon name="hand" /> {myPts}<span className="meta-word"> נק׳ ביד</span></button>
+            {wallet && <CoinChip wallet={wallet} paidBuys={human.paidBuys || 0} held={held} />}
             <button
               onClick={() => { setPendingOrder(null); dispatch({ type: 'SORT' }); }}
               className="tap-40"

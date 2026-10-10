@@ -66,7 +66,7 @@ function table(deck, discard) {
   const top = discard[4];
   const st = {
     ...table([], discard), phase: 'buying',
-    buy: { checker: 2, origNext: 1, prev: 0 },
+    buy: { id: 1, checker: 2, origNext: 1, prev: 0, picks: { 1: false } },
   };
   const out = G(st, { type: 'BUY', idx: 2 });
   check('the buyer gets the top card and a penalty card', out.players[2].hand.length === 7 &&
