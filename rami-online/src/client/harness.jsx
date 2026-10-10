@@ -45,7 +45,7 @@ const screen = params.get('screen') || 'game';
 // The buying phase puts a decision panel on screen; it has its own grid area.
 const buying = viewFor({
   ...st, phase: 'buying', cur: 1,
-  buy: { checker: 0, origNext: 0, prev: -1 },
+  buy: { id: 1, checker: 0, origNext: 0, prev: -1, picks: {}, deadline: Date.now() + 9000 },
 }, 0);
 // A few rounds already in the books, so the leaderboard has columns to draw.
 // Totals are accumulated from the per-round scores, exactly as the server does
@@ -155,11 +155,27 @@ createRoot(document.getElementById('root')).render(
   screen === 'decks' ? <Decks />
   : screen === 'live' ? <Live />
   : screen === 'buying' ? <Game state={buying} dispatch={(a) => console.log('dispatch', a)} />
-  // ?screen=buypaid / buybroke — a buy with a penalty card in a 500-coin room,
-  // with enough coins for it, and without.
-  : screen === 'buypaid' || screen === 'buybroke' ? (
-      <Game state={viewFor({ ...st, phase: 'buying', cur: 1, buy: { checker: 0, origNext: 2 % n, prev: 1 } }, 0)}
-            wallet={{ coins: screen === 'buybroke' ? 5 : 1500, buyPrice: 10 }}
+  // ?screen=buypaid / buybroke / buywant — a buy with a penalty card in a
+  // 500-coin room, with enough coins for it, without, and after saying "want"
+  // while a seat ahead is still deciding. ?screen=outbid — someone ahead took
+  // the card, and the coins put aside for it came back.
+  : ['buypaid', 'buybroke', 'buywant'].includes(screen) ? (
+      <Game state={viewFor({
+              ...st, phase: 'buying', cur: 2 % n,
+              players: st.players.map((p, i) => i === 0 ? { ...p, paidBuys: 2 } : p),
+              buy: { id: 1, checker: 2 % n, origNext: 2 % n, prev: 1, deadline: Date.now() + 7000,
+                     picks: screen === 'buywant' ? { 0: true } : {} },
+            }, 0)}
+            wallet={{ coins: screen === 'buybroke' ? 5 : 1480, buyPrice: 10, fee: 500 }}
+            dispatch={(a) => console.log('dispatch', a)} onLeave={() => {}} />
+    )
+  : screen === 'outbid' ? (
+      <Game state={viewFor({
+              ...st, phase: 'draw', cur: 2 % n, buy: null,
+              players: st.players.map((p, i) => i === 0 ? { ...p, paidBuys: 2 } : p),
+              buyNote: { seat: 3 % n, paid: true, outbid: [0] },
+            }, 0)}
+            wallet={{ coins: 1480, buyPrice: 10, fee: 500 }}
             dispatch={(a) => console.log('dispatch', a)} onLeave={() => {}} />
     )
   : screen === 'round' ? <RoundEnd state={ended} dispatch={() => {}} onLeave={() => {}} />

@@ -36,8 +36,10 @@ for (const n of [2, 3]) {
     const deckLen = st.deck.length;
     st = G(st, { type: 'SKIP' });
     check(`${n} players: after the first player passes, seat 1 decides`, st.phase === 'buying' && st.buy.checker === 1);
-    st = G(st, { type: 'TAKE_FREE' });
-    check(`${n} players: seat 1 can't take it for free`, st.phase === 'buying' && st.players[1].hand.length === 14);
+    check(`${n} players: the first player can't buy it with a penalty card`,
+      G(st, { type: 'BUY', idx: 0 }) === st);
+    check(`${n} players: the first player may change their mind and take it`,
+      G(st, { type: 'TAKE_FREE' }).phase === 'action');
     st = G(st, { type: 'BUY', idx: 1 });
     check(`${n} players: seat 1 gets the opening card and a penalty card`, st.players[1].hand.length === 16 &&
       st.players[1].hand.some(c => c.id === top.id) && st.deck.length === deckLen - 1);

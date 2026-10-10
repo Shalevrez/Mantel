@@ -53,7 +53,7 @@ check('the opponent does not see it', other === '');
 check('the message owner is never sent out', me.last('state').state.msgSeat === undefined);
 
 // A paid buy is announced publicly and cleared on the next discard.
-let st = { ...room.state, sivuv: 2, phase: 'buying', cur: 1, buy: { checker: 0, origNext: 1, prev: 0 }, msg: '' };
+let st = { ...room.state, sivuv: 2, phase: 'buying', cur: 1, buy: { id: 99, checker: 0, origNext: 1, prev: -1, picks: { 1: false } }, msg: '' };
 st = G(st, { type: 'BUY', idx: 0 });
 check('buying records a public notice', st.buyNote && st.buyNote.seat === 0 && st.buyNote.paid);
 st = G(st, { type: 'DRAW' });
