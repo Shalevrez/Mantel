@@ -13,7 +13,6 @@ import { Icon } from "./icons.jsx";
 export const KEY_ACTIONS = [
   { id: 'draw',    label: 'שליפה מהחבילה' },
   { id: 'lay',     label: 'הורדה' },
-  { id: 'attach',  label: 'הצמדה' },
   { id: 'discard', label: 'זריקה' },
   { id: 'undo',    label: 'ביטול הורדה' },
   { id: 'sort',    label: 'מיון היד' },
@@ -22,7 +21,7 @@ export const KEY_ACTIONS = [
 ];
 
 export const DEFAULT_KEYS = {
-  draw: 'Space', lay: 'KeyD', attach: 'KeyA', discard: 'KeyX',
+  draw: 'Space', lay: 'KeyD', discard: 'KeyX',
   undo: 'KeyU', sort: 'KeyS', take: 'KeyB', skip: 'KeyN',
 };
 
@@ -32,7 +31,9 @@ const EVENT = 'mantel:keys';
 export function loadKeys() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORE) || 'null');
-    if (saved && typeof saved === 'object') return { ...DEFAULT_KEYS, ...saved };
+    // Only actions that still exist: attaching is a drag now, not a key.
+    if (saved && typeof saved === 'object')
+      return Object.fromEntries(Object.keys(DEFAULT_KEYS).map(id => [id, id in saved ? saved[id] : DEFAULT_KEYS[id]]));
   } catch { /* storage blocked or garbled — defaults */ }
   return { ...DEFAULT_KEYS };
 }
@@ -127,7 +128,7 @@ export function KeysEditor() {
         ))}
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, fontSize: 12, opacity: .75 }}>
-        <span>Esc מבטל · Esc במשחק מבטל גרירה והצמדה</span>
+        <span>Esc מבטל · Esc במשחק מבטל גרירה</span>
         <button onClick={() => { saveKeys({ ...DEFAULT_KEYS }); setWait(null); }} style={{
           background: 'none', border: 'none', color: 'inherit', cursor: 'pointer',
           fontFamily: 'inherit', fontSize: 12, textDecoration: 'underline', padding: 0,
