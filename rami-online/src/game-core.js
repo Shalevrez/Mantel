@@ -30,6 +30,29 @@ const MK = [
   { name:'שתי חמישיות',  seqs:2, min:5 },
 ];
 
+// ── Game format ──────────────────────────────────────
+// How much of the ladder above a room plays, picked by whoever creates it:
+//   mega   — the whole game, שלישייה through שתי חמישיות
+//   mini   — שלישייה through רביעייה (inclusive)
+//   single — one mishkakon of the host's choice (`mk`), and that's the game
+const FORMATS = ['mega', 'mini', 'single'];
+const FORMAT_NAMES = { mega: 'מגה טורניר', mini: 'מיני טורניר', single: 'משחקון בודד' };
+const normFormat = f => (FORMATS.includes(f) ? f : 'mega');
+const normFormatMk = mk => {
+  const n = Number(mk);
+  return Number.isInteger(n) && n >= 0 && n < MK.length ? n : 0;
+};
+// The first and last mishkakon a format plays, as indexes into MK.
+function formatRange(format, mk) {
+  const f = normFormat(format);
+  if (f === 'mini') return [0, 2];
+  if (f === 'single') { const m = normFormatMk(mk); return [m, m]; }
+  return [0, MK.length - 1];
+}
+// The mishkakon that ends this game. A game saved before formats existed has
+// no mkLast and plays the whole ladder.
+const lastMk = state => (Number.isInteger(state.mkLast) ? state.mkLast : MK.length - 1);
+
 const FELT  = '#1e3a5f';
 const FELTD = '#13284f';
 const GOLD  = '#c9973a';
@@ -330,7 +353,7 @@ function startHand(base) {
   // (clockwise — the turn order) for every mishkakon after it. A seat that walked
   // out of a paid game (see retireSeat) sits the rest out: no cards, and the
   // round opens with the next seat still playing.
-  const opener = ((base.starter || 0) + base.mk) % n;
+  const opener = ((base.starter || 0) + base.mk - (base.mkFirst || 0)) % n;
   let first = opener;
   for (let k = 0; k < n; k++) { const j = (opener + k) % n; if (!base.players[j].out) { first = j; break; } }
   const deck = shuffle(makeDeck(decksFor(n)));
@@ -365,7 +388,11 @@ function startHand(base) {
 }
 
 // `starter` is the seat that opens the first mishkakon; drawn at random unless given.
-function initGame(configs, starter = Math.floor(Math.random() * configs.length)) {
+// `game` is the room's format ({ format, mk } — see formatRange); the whole
+// ladder when left out.
+function initGame(configs, starter = Math.floor(Math.random() * configs.length), game = {}) {
+  const format = normFormat(game.format);
+  const [mkFirst, mkLast] = formatRange(format, game.mk);
   const colors = shuffle(PLAYER_COLORS);
   const players = configs.map((c, i) => ({
     id: i, name: c.name, isAI: c.isAI, ai: c.ai || 'medium',
@@ -376,7 +403,7 @@ function initGame(configs, starter = Math.floor(Math.random() * configs.length))
     paidBuys: 0,
   }));
   return startHand({
-    players, mk: 0, sivuv: 0, starter, history: [],
+    players, mk: mkFirst, mkFirst, mkLast, format, sivuv: 0, starter, history: [],
     log: ['🃏 המשחק התחיל!', `🎲 ${players[starter].name} פותח`],
   });
 }
@@ -978,7 +1005,7 @@ function G(state, action) {
   if (type === 'NEW_HAND' || type === 'NEXT_MK' || type === 'GAME_END') {
     if (state.phase !== 'round_end') return state;
     if (type === 'NEW_HAND') return startHand(state);
-    if (type === 'GAME_END' || state.mk >= 5) return { ...state, phase: 'game_end' };
+    if (type === 'GAME_END' || state.mk >= lastMk(state)) return { ...state, phase: 'game_end' };
     return startHand({ ...state, mk: state.mk + 1, sivuv: 0 });
   }
 
@@ -1158,7 +1185,7 @@ function aiDiscard(hand, level = 'medium', rnd = Math.random, board = []) {
 // ═══════════════════════════════════════════════════════
 
 export {
-  SUITS, SYM, COL, VD, cSc, cTxt, MK, FELT, FELTD, GOLD, CREAM,
+  SUITS, SYM, COL, VD, cSc, cTxt, MK, FORMATS, FORMAT_NAMES, normFormat, normFormatMk, formatRange, lastMk, FELT, FELTD, GOLD, CREAM,
   INK, GOLDD, CLOTH, CLOTH_BASE, TABLE, TABLE_BASE, PLAYER_COLORS, playerColor,
   AI_LEVELS, AI_LEVEL_NAMES, aiLevel, cardAffinity, decksFor,
   uid, sortHand, moveCard, mkCard, makeDeck, shuffle, handScore,

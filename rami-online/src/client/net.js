@@ -46,10 +46,11 @@ export function playerId() {
 }
 
 // Ask the server to mint a new room; returns its code. `terms` are the room's
-// { mode: 'practice'|'online', fee, seats } — all optional (a free 6-seat room).
+// { mode: 'practice'|'online', fee, seats, format, mk, touch } — all optional
+// (a free 6-seat room playing the whole game, touch-move on). `touch` is 1 or 0.
 export async function createRoom(terms = {}) {
   const q = new URLSearchParams();
-  for (const k of ['mode', 'fee', 'seats']) if (terms[k] != null) q.set(k, String(terms[k]));
+  for (const k of ['mode', 'fee', 'seats', 'format', 'mk', 'touch']) if (terms[k] != null) q.set(k, String(terms[k]));
   const qs = q.toString();
   const r = await fetch(`/api/new${qs ? `?${qs}` : ''}`);
   if (!r.ok) throw new Error('failed to create room');
@@ -142,10 +143,6 @@ export function joinRoom({ code, name, host = false, resume = false }, callbacks
     },
     setAILevel(level) {
       if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ t: 'aiLevel', level }));
-    },
-    // Host: the room's touch-move rule (נגעת נסעת), on or off.
-    setTouchMove(on) {
-      if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ t: 'touchMove', on: !!on }));
     },
     // Give up the seat for good (see leaveSeat on the server), then hang up.
     // Resolves once the server has hung up on us (or after a short wait), so a

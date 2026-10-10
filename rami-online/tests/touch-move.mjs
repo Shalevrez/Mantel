@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════
-// TOUCH-MOVE (נגעת נסעת) — a room rule the host sets in the lobby
+// TOUCH-MOVE (נגעת נסעת) — a room rule picked when the room is created
 // Run with: npm test
 //
 // On (the default): what went down on the table stays there — "undo" is
@@ -92,30 +92,25 @@ class FakeWS {
   last(t) { return [...this.sent].reverse().find(m => m.t === t); }
 }
 const tick = () => new Promise(r => setTimeout(r, 0));
-{
+for (const [q, want] of [['', true], ['&touch=1', true], ['&touch=0', false]]) {
   const store = new Map();
   const room = new Room({ storage: fakeStorage(store) }, {});
-  await room.fetch(new Request('https://do/create?code=ABCD&mode=online&fee=0&seats=3'));
+  await room.fetch(new Request(`https://do/create?code=ABCD&mode=online&fee=0&seats=3${q}`));
   const host = new FakeWS();
   room.handleSocket(host, 'שלו', 'ABCD', true, 'p1', false);
   const guest = new FakeWS();
   room.handleSocket(guest, 'דנה', 'ABCD', false, 'p2', false);
-  check('on by default', host.last('lobby').touchMove === true);
-  guest.msg({ t: 'touchMove', on: false });
+  const tag = q || '(not given)';
+  check(`created with ${tag}: everyone sees ${want}`, guest.last('lobby').touchMove === want);
+  host.msg({ t: 'touchMove', on: !want });
   await tick();
-  check('a guest cannot change it', room.touchMove === true);
-  host.msg({ t: 'touchMove', on: false });
-  await tick();
-  check('the host turns it off, everyone sees it', guest.last('lobby').touchMove === false);
+  check(`${tag}: the lobby can no longer change it`, room.touchMove === want);
   const again = new Room({ storage: fakeStorage(store) }, {});
   await again.load();
-  check('the setting is persisted', again.touchMove === false);
+  check(`${tag}: the setting is persisted`, again.touchMove === want);
   host.msg({ t: 'start' });
   await tick();
-  check('the game carries it', host.last('state').state.touchMove === false);
-  host.msg({ t: 'touchMove', on: true });
-  await tick();
-  check('it cannot change once the game started', room.touchMove === false && room.state.touchMove === false);
+  check(`${tag}: the game carries it`, host.last('state').state.touchMove === want);
 }
 
 if (failures) { console.log(`\n${failures} failing`); process.exit(1); }

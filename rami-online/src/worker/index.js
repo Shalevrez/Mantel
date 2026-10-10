@@ -8,7 +8,7 @@
 // ═══════════════════════════════════════════════════════
 
 import {
-  G, initGame, cSc, MK, aiLevel as normLevel, retireSeat,
+  G, initGame, cSc, MK, aiLevel as normLevel, retireSeat, normFormat, normFormatMk,
   aiWantCard, findAIGroups, meetsReq, attachPos, aiDiscard,
 } from '../game-core.js';
 import { normFee, normMode } from '../economy.js';
@@ -122,8 +122,13 @@ export class Room {
     this.started = false;
     this.aiLevel = 'medium';       // difficulty the host picked, for every bot in the room
     // "Touch-move" (נגעת נסעת): once laid, a group can't be taken back to the
-    // hand. On unless the host turns it off in the lobby (see game-core UNDO).
+    // hand. On unless the room was created with it off (see game-core UNDO).
     this.touchMove = true;
+    // How much of the game the room plays (see game-core formatRange): the
+    // whole ladder, the mini tournament, or one mishkakon (`formatMk`). Set
+    // with touchMove when the room is created, and fixed from then on.
+    this.format = 'mega';
+    this.formatMk = 0;
     // What kind of room this is, set when it is created (see /create): a free
     // practice table, or an online room with an entry fee (0 = a free friendly
     // game). `cap` is the table size the creator picked. The wallet itself is
@@ -157,6 +162,8 @@ export class Room {
       this.started = saved.started;
       this.aiLevel = normLevel(saved.aiLevel);
       this.touchMove = saved.touchMove !== false;
+      this.format = normFormat(saved.format);
+      this.formatMk = normFormatMk(saved.formatMk);
       this.mode = normMode(saved.mode);
       this.fee = saved.fee || 0;
       this.cap = saved.cap || MAX_SEATS;
@@ -183,6 +190,8 @@ export class Room {
       started: this.started,
       aiLevel: this.aiLevel,
       touchMove: this.touchMove,
+      format: this.format,
+      formatMk: this.formatMk,
       mode: this.mode,
       fee: this.fee,
       cap: this.cap,
@@ -269,6 +278,9 @@ export class Room {
     this.mode = 'online';
     this.fee = 0;
     this.cap = MAX_SEATS;
+    this.touchMove = true;
+    this.format = 'mega';
+    this.formatMk = 0;
     this.endedAt = null;
     this.emptySince = null;
     this.lastSeen = Date.now();
@@ -306,6 +318,11 @@ export class Room {
         this.fee = this.mode === 'online' && Number(q.get('fee')) > 0 ? normFee(q.get('fee')) : 0;
         const seats = q.has('seats') ? Number(q.get('seats')) : NaN;
         this.cap = Number.isInteger(seats) ? Math.min(Math.max(seats, 2), MAX_SEATS) : MAX_SEATS;
+        // The game's rules, chosen on the create screen. Touch-move is on
+        // unless asked off in so many words.
+        this.format = normFormat(q.get('format'));
+        this.formatMk = this.format === 'single' ? normFormatMk(q.get('mk')) : 0;
+        this.touchMove = q.get('touch') !== '0';
       }
       this.touch();
       await this.persist();
@@ -578,6 +595,8 @@ export class Room {
       aiLevel: this.aiLevel,
       aiCount: this.aiCount(),
       touchMove: this.touchMove,
+      format: this.format,
+      formatMk: this.formatMk,
       players: this.seats.map((s, i) => ({
         seat: i, name: s.name, connected: s.connected, isAI: s.isAI, left: !!s.left,
         ai: s.isAI ? normLevel(s.ai) : null,
@@ -615,15 +634,14 @@ export class Room {
     this.touch();
 
     // ── Host sets up the room (lobby only) ──
-    // Adding, removing and the difficulty of computer players, and the
-    // touch-move rule, are all the host's call, and all are refused once the
-    // game is under way — the seats are dealt in and the rules set by then.
-    if (msg.t === 'addAI' || msg.t === 'removeAI' || msg.t === 'aiLevel' || msg.t === 'touchMove') {
+    // Adding, removing and the difficulty of computer players are all the
+    // host's call, and all are refused once the game is under way — the seats
+    // are dealt in by then. The game's rules (format, touch-move) aren't here:
+    // they are fixed when the room is created.
+    if (msg.t === 'addAI' || msg.t === 'removeAI' || msg.t === 'aiLevel') {
       if (seat !== this.hostSeat()) return;
       if (this.started) return;
-      if (msg.t === 'touchMove') {
-        this.touchMove = !!msg.on;
-      } else if (msg.t === 'addAI') {
+      if (msg.t === 'addAI') {
         const why = this.addAISeat();
         if (why) { this.sendError(seat, why); return; }
       } else if (msg.t === 'removeAI') {
@@ -669,7 +687,7 @@ export class Room {
       // every seat settles it the same way (economy.settle). `gameId` is what
       // keeps a wallet from being charged or paid twice for one game.
       this.state = {
-        ...initGame(configs),
+        ...initGame(configs, undefined, { format: this.format, mk: this.formatMk }),
         room: { mode: this.mode, fee: this.fee, gameId: crypto.randomUUID() },
         touchMove: this.touchMove,
       };
@@ -898,9 +916,9 @@ export default {
         const code = makeCode();
         const id = env.ROOMS.idFromName(code);
         const stub = env.ROOMS.get(id);
-        // The room's terms: ?mode=practice|online&fee=…&seats=…
+        // The room's terms: ?mode=practice|online&fee=…&seats=…&format=…&mk=…&touch=0|1
         const q = new URLSearchParams({ code });
-        for (const k of ['mode', 'fee', 'seats']) {
+        for (const k of ['mode', 'fee', 'seats', 'format', 'mk', 'touch']) {
           const v = url.searchParams.get(k);
           if (v != null) q.set(k, v);
         }

@@ -14,3 +14,9 @@ bundled and imported in `src/client/main.jsx` and `src/client/harness.jsx`).
 - Don't add another font family, a font CDN link, or a hard-coded font name in
   new code. New buttons/inputs inherit (`fontFamily: 'inherit'`).
 - Assistant's weights run 200–800; don't use 900.
+
+## Icons: vectors, never emoji
+
+Don't put emoji in new UI. Use the app's vector icons (`Icon` / `IconLabel`
+from `src/client/icons.jsx`; add a new one there if none fits), or no icon at
+all.
