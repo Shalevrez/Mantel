@@ -7,7 +7,7 @@
 
 import { useState, useReducer, useEffect, useLayoutEffect, useRef } from "react";
 import {
-  SUITS, SYM, COL, VD, cSc, cTxt, MK, FELT, FELTD, GOLD, CREAM,
+  SUITS, SYM, COL, VD, cSc, cTxt, MK, lastMk, FELT, FELTD, GOLD, CREAM,
   INK, GOLDD, CLOTH, CLOTH_BASE, playerColor,
   isSeq, isSet, isGroup, orderSeq, orderGroup, jokerValues, attachPos, canAttach, meetsReq,
   seqLayouts, layGroup, sortHand, moveCard, handScore,
@@ -528,6 +528,9 @@ function RulesModal({ onClose }) {
             המשחק מורכב מ־6 משחקונים. בכל משחקון מנסים להוריד את כל הקלפים מהיד.
             בסיום כל משחקון צוברים נקודות לפי הקלפים שנשארו ביד. <b>המנצח הוא בעל
             מספר הנקודות הנמוך ביותר</b> בסוף ששת המשחקונים.
+            <br />
+            מי שיוצר את החדר יכול לבחור גם משחק קצר יותר: <b>מיני טורניר</b> (משלישייה ועד
+            רביעייה) או <b>משחקון בודד</b> לבחירתו.
           </Section>
 
           <Section title="🃏 הקלפים">
@@ -988,14 +991,14 @@ function RoundEnd({ state, dispatch, onLeave }) {
 
         <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
           <button
-            onClick={() => mk >= 5 ? dispatch({ type: 'GAME_END' }) : dispatch({ type: 'NEXT_MK' })}
+            onClick={() => mk >= lastMk(state) ? dispatch({ type: 'GAME_END' }) : dispatch({ type: 'NEXT_MK' })}
             style={{
               flex: 1, padding: '11px 0', background: FELT, color: GOLD,
               border: `2px solid ${GOLD}88`, borderRadius: 11,
               fontSize: 14, cursor: 'pointer', fontWeight: 700,
             }}
           >
-            {mk >= 5
+            {mk >= lastMk(state)
               ? <IconLabel name="trophy">סיום</IconLabel>
               : <IconLabel name="arrowRight">{MK[mk + 1]?.name}</IconLabel>}
           </button>

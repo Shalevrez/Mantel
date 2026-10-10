@@ -10,7 +10,7 @@ import { createRoom, joinRoom } from "./net.js";
 import { settle, buyPrice } from "../economy.js";
 import * as P from "./profile.js";
 import { useProfile, LoginScreen, Hub, MenuCards, ProfileSheet, SettingsSheet, RewardStrip } from "./account.jsx";
-import { PracticeSetup, OnlineSetup, ModeSwitch, JoinDialog, RoomTerms } from "./rooms.jsx";
+import { PracticeSetup, OnlineSetup, ModeSwitch, JoinDialog, RoomTerms, rulesLine } from "./rooms.jsx";
 import { StoreStall } from "./store.jsx";
 import { LeaderboardStall } from "./leaderboard.jsx";
 import { Tutorial } from "./tutorial.jsx";
@@ -238,9 +238,9 @@ function App() {
     }
   }
 
-  function handlePractice({ seats, level }) {
+  function handlePractice({ seats, level, ...rules }) {
     practiceRef.current = { seats, level };
-    handleCreate({ mode: 'practice', seats });
+    handleCreate({ mode: 'practice', seats, ...rules });
   }
 
   function handleJoin() {
@@ -350,7 +350,7 @@ function App() {
           ? <PracticeSetup busy={connecting} error={error} onPlay={handlePractice} />
           : <OnlineSetup coins={profile.coins} busy={connecting} error={error}
                          onGetCoins={() => setShowStore(true)}
-                         onPlay={({ seats, fee }) => handleCreate({ mode: 'online', seats, fee })} />}
+                         onPlay={(terms) => handleCreate({ mode: 'online', ...terms })} />}
       </>);
     }
 
@@ -363,7 +363,6 @@ function App() {
                     onAddAI={() => connRef.current?.addAI()}
                     onRemoveAI={(seat) => connRef.current?.removeAI(seat)}
                     onAILevel={(lv) => connRef.current?.setAILevel(lv)}
-                    onTouchMove={(on) => connRef.current?.setTouchMove(on)}
                     onLeave={handleLeave}
                     onShowNotes={() => setNotes(true)} />;
     }
@@ -418,7 +417,7 @@ const hubLink = {
 // Height of one row in the lobby's player list (border included).
 const LOBBY_ROW_H = 44;
 
-function Lobby({ lobby, code, error, coins, onStart, onAddAI, onRemoveAI, onAILevel, onTouchMove, onLeave, onShowNotes }) {
+function Lobby({ lobby, code, error, coins, onStart, onAddAI, onRemoveAI, onAILevel, onLeave, onShowNotes }) {
   const [copied, setCopied] = useState(false);
   const [showLeave, setShowLeave] = useState(false);
   if (!lobby) return <Splash text="מתחבר לחדר..." />;
@@ -543,9 +542,14 @@ function Lobby({ lobby, code, error, coins, onStart, onAddAI, onRemoveAI, onAILe
         </div>
       </div>
 
-      {/* Room rules: everyone sees them, only the host changes them. An old
-          server sends no touchMove — it has no such rule, so it reads as off. */}
-      <TouchMoveRule on={!!lobby.touchMove} canEdit={!!lobby.youHost} onChange={onTouchMove} />
+      {/* The game's rules were set when the room was created; here they are
+          only shown, so everyone knows what they're sitting down to. */}
+      <div style={{
+        marginBottom: 12, padding: '8px 12px', borderRadius: 11, textAlign: 'center',
+        background: '#fafaf9', border: '2px solid #e7e5e4', color: FELTD, fontSize: 13, fontWeight: 700,
+      }}>
+        {rulesLine(lobby)}
+      </div>
 
       {lobby.youHost ? (
         <>
@@ -635,48 +639,6 @@ function Lobby({ lobby, code, error, coins, onStart, onAddAI, onRemoveAI, onAILe
       </button>
       {showLeave && <LeaveConfirm started={false} onConfirm={onLeave} onClose={() => setShowLeave(false)} />}
     </Shell>
-  );
-}
-
-// The room's touch-move rule (נגעת נסעת): a yes/no pair for the host, a plain
-// line for everyone else.
-function TouchMoveRule({ on, canEdit, onChange }) {
-  const opt = (val, label) => {
-    const picked = on === val;
-    return (
-      <button key={label} onClick={() => !picked && onChange(val)}
-              style={{
-                flex: 1, padding: '8px 0', borderRadius: 10, cursor: 'pointer',
-                fontFamily: 'inherit', fontSize: 13, fontWeight: 700,
-                border: `2px solid ${picked ? FELT : '#e7e5e4'}`,
-                background: picked ? FELT : '#fff',
-                color: picked ? CREAM : '#57534e',
-              }}>
-        {label}
-      </button>
-    );
-  };
-  return (
-    <div style={{ border: '2px solid #e7e5e4', borderRadius: 13, padding: '12px 14px', marginBottom: 12 }}>
-      <div style={{
-        display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8,
-        marginBottom: canEdit ? 8 : 4,
-      }}>
-        <span style={{ fontWeight: 700, color: FELTD, fontSize: 14 }}>👆 נגעת נסעת</span>
-        {!canEdit && <span style={{ fontWeight: 700, color: on ? FELT : '#78716c', fontSize: 13 }}>{on ? 'כן' : 'לא'}</span>}
-      </div>
-      {canEdit && (
-        <div style={{ display: 'flex', gap: 6 }}>
-          {opt(true, 'כן')}
-          {opt(false, 'לא')}
-        </div>
-      )}
-      <div style={{ color: '#a8a29e', fontSize: 11, marginTop: canEdit ? 6 : 0, lineHeight: 1.5 }}>
-        {on
-          ? 'מה שהורדת לשולחן נשאר שם — אי אפשר להחזיר אותו ליד.'
-          : 'אפשר לבטל הורדות והצמדות באותו תור ולהחזיר את הקלפים ליד.'}
-      </div>
-    </div>
   );
 }
 

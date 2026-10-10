@@ -1,12 +1,13 @@
 // ═══════════════════════════════════════════════════════
 // ROOM SETUP — the practice table and the online room
 // Pick the table size and either the bots' level (practice) or
-// the entry fee (online), then start. The prize maths comes from
-// economy.js, the same code that settles the game at the end.
+// the entry fee (online), and the game's rules (format, touch-move),
+// then start. The prize maths comes from economy.js, the same code
+// that settles the game at the end.
 // ═══════════════════════════════════════════════════════
 
 import { useState } from "react";
-import { GOLD, GOLDD, FELTD, CREAM, AI_LEVELS, AI_LEVEL_NAMES } from "../game-core.js";
+import { GOLD, GOLDD, FELTD, CREAM, AI_LEVELS, AI_LEVEL_NAMES, MK, FORMATS, FORMAT_NAMES } from "../game-core.js";
 import { ENTRY_FEES, DEFAULT_FEE, prizeShares, shortNum, buyPrice } from "../economy.js";
 import { Icon, IconLabel } from "./icons.jsx";
 import { LINE, SOFT, CARD, CARD_LINE, MUTED, hubBtn, hubInput, hubError, Modal, DemoTag } from "./account.jsx";
@@ -59,6 +60,88 @@ const Row = ({ children }) => (
 );
 
 // ═══════════════════════════════════════════════════════
+// GAME RULES — what the room plays, set before it's created
+// The format (the whole ladder, up to רביעייה, or one mishkakon)
+// and touch-move. Fixed once the room exists; the waiting room
+// only shows them.
+// ═══════════════════════════════════════════════════════
+
+const DEFAULT_RULES = { format: 'mega', mk: 0, touch: true };
+
+const FORMAT_SUB = {
+  mega:   'כל 6 המשחקונים',
+  mini:   'משלישייה עד רביעייה',
+  single: 'משחקון אחד לבחירה',
+};
+
+// A row of choices, one of them picked: the format, the mishkakon, yes/no.
+function Choice({ options, value, onPick, cols }) {
+  return (
+    <div style={{
+      display: 'grid', gap: 6,
+      gridTemplateColumns: `repeat(${cols || options.length}, minmax(0, 1fr))`,
+    }}>
+      {options.map(o => {
+        const on = o.value === value;
+        return (
+          <button key={String(o.value)} onClick={() => onPick(o.value)} aria-pressed={on} style={{
+            minWidth: 0, padding: o.sub ? '8px 4px' : '9px 4px', borderRadius: 11, cursor: 'pointer',
+            fontFamily: 'inherit', textAlign: 'center',
+            border: `2px solid ${on ? GOLD : '#e7e5e4'}`,
+            background: on ? FELTD : '#fff',
+            color: on ? CREAM : FELTD,
+          }}>
+            <div style={{ fontSize: 14, fontWeight: 800 }}>{o.label}</div>
+            {o.sub && <div style={{ fontSize: 11, fontWeight: 600, marginTop: 2, color: on ? '#f3d48c' : MUTED }}>{o.sub}</div>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function RulesCard({ rules, onChange }) {
+  const set = (k) => (v) => onChange({ ...rules, [k]: v });
+  const label = { color: GOLDD, fontSize: 15, fontWeight: 700, margin: '0 0 8px' };
+  return (
+    <div style={{
+      maxWidth: 640, margin: '22px auto 0', padding: '16px 16px 14px', borderRadius: 20,
+      background: CARD, border: `2px solid ${CARD_LINE}`, boxShadow: '0 8px 24px rgba(19, 40, 79, .12)',
+    }}>
+      <div style={label}>סוג משחק</div>
+      <Choice value={rules.format} onPick={set('format')}
+              options={FORMATS.map(f => ({ value: f, label: FORMAT_NAMES[f], sub: FORMAT_SUB[f] }))} />
+      {rules.format === 'single' && (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ color: MUTED, fontSize: 12.5, marginBottom: 6 }}>איזה משחקון?</div>
+          <Choice value={rules.mk} onPick={set('mk')} cols={3}
+                  options={MK.map((m, i) => ({ value: i, label: m.name }))} />
+        </div>
+      )}
+      <div style={{ height: 1, background: `linear-gradient(90deg, transparent, ${FELTD}33, transparent)`, margin: '14px 0 12px' }} />
+      <div style={label}>נגעת נסעת</div>
+      <Choice value={rules.touch} onPick={set('touch')}
+              options={[{ value: true, label: 'כן' }, { value: false, label: 'לא' }]} />
+      <div style={{ color: MUTED, fontSize: 12, marginTop: 6, lineHeight: 1.5, textAlign: 'center' }}>
+        {rules.touch
+          ? 'מה שהורדת לשולחן נשאר שם — אי אפשר להחזיר אותו ליד.'
+          : 'אפשר לבטל הורדות והצמדות באותו תור ולהחזיר את הקלפים ליד.'}
+      </div>
+    </div>
+  );
+}
+
+// The rules as the server takes them (see createRoom in net.js).
+const ruleTerms = (r) => ({ format: r.format, mk: r.format === 'single' ? r.mk : 0, touch: r.touch ? 1 : 0 });
+
+// One line naming a room's rules, for the waiting room.
+export function rulesLine({ format, formatMk, touchMove }) {
+  const f = FORMAT_NAMES[format] || FORMAT_NAMES.mega;
+  const game = format === 'single' && MK[formatMk] ? `${f}: ${MK[formatMk].name}` : f;
+  return `${game} · נגעת נסעת: ${touchMove ? 'כן' : 'לא'}`;
+}
+
+// ═══════════════════════════════════════════════════════
 // MODE — the first choice when creating a room: a table online
 // with friends, or practice against the computer
 // ═══════════════════════════════════════════════════════
@@ -100,6 +183,7 @@ export function ModeSwitch({ mode, onMode }) {
 export function PracticeSetup({ busy, error, onPlay }) {
   const [players, setPlayers] = useState(4);
   const [li, setLi] = useState(0);   // index into AI_LEVELS
+  const [rules, setRules] = useState(DEFAULT_RULES);
   return (
     <>
       <Row>
@@ -118,7 +202,8 @@ export function PracticeSetup({ busy, error, onPlay }) {
           </div>
         </Side>
       </Row>
-      <PlayBar busy={busy} error={error} onPlay={() => onPlay({ seats: players, level: AI_LEVELS[li] })} />
+      <RulesCard rules={rules} onChange={setRules} />
+      <PlayBar busy={busy} error={error} onPlay={() => onPlay({ seats: players, level: AI_LEVELS[li], ...ruleTerms(rules) })} />
     </>
   );
 }
@@ -134,6 +219,7 @@ const ROOM_FEES = [0, ...ENTRY_FEES];
 export function OnlineSetup({ coins, busy, error, onPlay, onGetCoins }) {
   const [players, setPlayers] = useState(3);
   const [fi, setFi] = useState(Math.max(0, ROOM_FEES.indexOf(DEFAULT_FEE)));
+  const [rules, setRules] = useState(DEFAULT_RULES);
   const fee = ROOM_FEES[fi];
   const free = fee === 0;
   const pot = fee * players;
@@ -182,6 +268,7 @@ export function OnlineSetup({ coins, busy, error, onPlay, onGetCoins }) {
         </Side>
         )}
       </Row>
+      <RulesCard rules={rules} onChange={setRules} />
       {short && (
         <div style={{ ...hubError, maxWidth: 420, margin: '14px auto 0' }}>
           אין מספיק מטבעות לדמי הכניסה ({fee.toLocaleString('en-US')}).{' '}
@@ -191,7 +278,7 @@ export function OnlineSetup({ coins, busy, error, onPlay, onGetCoins }) {
         </div>
       )}
       <PlayBar busy={busy} error={error} disabled={short} label="צור חדר"
-               onPlay={() => onPlay({ seats: players, fee })} />
+               onPlay={() => onPlay({ seats: players, fee, ...ruleTerms(rules) })} />
     </>
   );
 }
