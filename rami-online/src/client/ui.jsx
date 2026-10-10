@@ -25,6 +25,7 @@ import { RELEASES } from "../releases.js";
 import "./table.css";
 import { useKeys, hasMouse, keyLabel, Kbd, KeysEditor } from "./keys.jsx";
 import { Flyer, TurnBanner, Confetti, Fireworks, reducedMotion } from "./anim.jsx";
+import { buzz } from "./vibrate.js";
 
 // Phases during which the seat in `cur` is playing its turn.
 const TURN_PHASES = new Set(['buying', 'draw', 'action']);
@@ -1619,6 +1620,13 @@ function Game({ state, dispatch, onLeave, wallet }) {
       && ps.phase === 'buying' && ps.buy && ps.buy.checker !== mySeat;
     if ((onTurn(state) && !onTurn(ps)) || backToMe) setBanner(b => b + 1);
     else if (!onTurn(state)) setBanner(0);   // the turn is over — the notice goes too
+
+    // The phone buzzes when the game waits on me: I'm offered the discard
+    // (free, or to buy with a penalty — on my turn or not), or it's my turn
+    // to draw. Once each time it starts waiting.
+    const waitsOnMe = (s) => s.phase === 'buying' ? !!s.buy && s.buy.checker === mySeat
+      : s.phase === 'draw' && s.cur === mySeat;
+    if (waitsOnMe(state) && !waitsOnMe(ps)) buzz();
 
     if (reducedMotion()) return;
     const box = (sel) => document.querySelector(sel)?.getBoundingClientRect();
