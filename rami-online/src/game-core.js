@@ -289,6 +289,19 @@ function attachPos(gCards, card) {
   return null;
 }
 
+// Whether ATTACH would take `cards` onto board group `grp`: a single real card
+// swapping out a joker it stands for, or the group staying valid with them added.
+// The same tests the ATTACH action makes, so the table can light up only the
+// groups a dragged card actually fits.
+function canAttach(grp, cards) {
+  if (!grp || !cards.length) return false;
+  if (cards.length === 1 && grp.type === 'seq' && !cards[0].j &&
+      jokerValues(grp.cards).some(jv => jv.suit === cards[0].suit && jv.v === cards[0].v))
+    return true;
+  return !!((isSeq(grp.cards) && extendSeq(grp.cards, cards))
+    || (isSet(grp.cards) && isSet([...grp.cards, ...cards])));
+}
+
 function meetsReq(groups, mIdx) {
   const { seqs, min } = MK[mIdx];
   return groups.filter(g => isSeq(g.cards) && g.cards.length >= min).length >= seqs;
@@ -1149,7 +1162,7 @@ export {
   INK, GOLDD, CLOTH, CLOTH_BASE, TABLE, TABLE_BASE, PLAYER_COLORS, playerColor,
   AI_LEVELS, AI_LEVEL_NAMES, aiLevel, cardAffinity, decksFor,
   uid, sortHand, moveCard, mkCard, makeDeck, shuffle, handScore,
-  isSeq, isSet, isGroup, orderSeq, orderGroup, jokerValues, attachPos, meetsReq,
+  isSeq, isSet, isGroup, orderSeq, orderGroup, jokerValues, attachPos, canAttach, meetsReq,
   layoutStart, seqLayouts, extendSeq, layGroup,
   startHand, initGame, endWin, endDeck, nextCk, roundRecord, retireSeat,
   G, aiWantCard, findAIGroups, aiDiscard,

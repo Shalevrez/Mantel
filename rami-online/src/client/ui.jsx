@@ -9,7 +9,7 @@ import { useState, useReducer, useEffect, useLayoutEffect, useRef } from "react"
 import {
   SUITS, SYM, COL, VD, cSc, cTxt, MK, FELT, FELTD, GOLD, CREAM,
   INK, GOLDD, CLOTH, CLOTH_BASE, playerColor,
-  isSeq, isSet, isGroup, orderSeq, orderGroup, jokerValues, attachPos, meetsReq,
+  isSeq, isSet, isGroup, orderSeq, orderGroup, jokerValues, attachPos, canAttach, meetsReq,
   seqLayouts, layGroup, sortHand, moveCard, handScore,
 } from "../game-core.js";
 import { Icon, IconLabel, IconText, RankBadge } from "./icons.jsx";
@@ -56,6 +56,9 @@ const TOUCH_LIFT = 0.85;
 // How far above the hand a drop still counts as "in the hand" rather than
 // on the board — a forgiving strip, so a drop that's a bit high still sorts.
 const HAND_ZONE_SLACK = 28;
+// A card dropped near a group it fits — not quite on it — still attaches there:
+// the nearest fitting group within this many pixels of the drop point catches it.
+const ATTACH_SNAP = 64;
 
 // Wipe any text selection the browser started on its own. Called when a press
 // turns into a card drag, and again when the drag ends.
@@ -142,10 +145,12 @@ function CardView({ card, sel, onClick, sm, back, glow, faded, newCard, attached
 // ═══════════════════════════════════════════════════════
 
 // `hot`: a card is being dragged over this group and will attach on release.
+// `canAttach`: the selected or dragged cards fit here — outlined, and a tap attaches.
+// `dim`: a card is in the air and doesn't fit this group, so it steps back.
 // `attBy`: name of the player who just attached to this group (group.att), shown as
 // a tag above it, with the attached cards themselves glowing.
 // `color`: the color of the player who laid the group; its mat is tinted with it.
-function GroupView({ group, onAttach, canAttach, hot, attBy, color }) {
+function GroupView({ group, onAttach, canAttach, hot, dim, attBy, color }) {
   const seq = group.type === 'seq';
   const att = group.att;
   const attIds = att ? new Set(att.ids) : null;
@@ -164,7 +169,8 @@ function GroupView({ group, onAttach, canAttach, hot, attBy, color }) {
         : att ? `0 0 12px ${ATT}66, inset 0 2px 8px rgba(0,0,0,.35)`
         : 'inset 0 2px 8px rgba(0,0,0,.40), 0 1px 0 rgba(255,255,255,.06)',
       transform: hot ? 'scale(1.04)' : 'none',
-      transition: 'box-shadow .1s, transform .1s, background .1s',
+      opacity: dim ? .5 : 1,
+      transition: 'box-shadow .1s, transform .1s, background .1s, opacity .15s',
     }}>
       {att && (
         <div title={attBy ? `${attBy} הצמיד/ה לקבוצה הזו` : 'הוצמד לקבוצה הזו'} style={{
@@ -1205,7 +1211,6 @@ function KeysModal({ onClose }) {
 // or null. A buy with a penalty card costs buyPrice coins, and is locked when
 // the wallet can't cover it (skipping, and drawing on your turn, stay open).
 function Game({ state, dispatch, onLeave, wallet }) {
-  const [attachMode, setAttachMode] = useState(false);
   // { opts, action }: a lay/attach waiting for the player to say where the joker goes.
   const [jokerPick, setJokerPick] = useState(null);
   const [showRules, setShowRules] = useState(false);
@@ -1238,7 +1243,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
   const dragRef = useRef({
     card: null, active: false, pointerId: null, touch: false,
     startX: 0, startY: 0, x: 0, y: 0, lift: 0, slop: DRAG_SLOP_MOUSE,
-    slot: null, gid: null, discard: false,
+    slot: null, gid: null, discard: false, fit: null,
   });
   const ghostRef  = useRef(null);
   const markerRef = useRef(null);
@@ -1322,6 +1327,15 @@ function Game({ state, dispatch, onLeave, wallet }) {
     const action = cid ? { type: 'ATTACH', gid, cid } : { type: 'ATTACH', gid };
     sendWithJokerPick(action, grp && isSeq(grp.cards) && cards.some(c => c.j) ? seqLayouts(cards, grp.cards) : []);
   };
+
+  // What a drag carries: the whole selection when the card is part of one,
+  // otherwise just the card itself.
+  const dragCards = (card) =>
+    state.sel.length > 1 && state.sel.includes(card.id) ? selCards : [card];
+  // The board groups these cards fit — the only ones a drop or a tap attaches to.
+  const fitGids = (cards) => new Set(
+    !(isMyTurn && state.phase === 'action' && human.hasLaid) || !cards.length ? []
+      : state.board.filter(g => canAttach(g, cards)).map(g => g.id));
 
   // ── Card drag: reorder within hand, or attach to a board group ──
   // Rearranging your own hand is allowed at ANY time — also while you're waiting
@@ -1416,12 +1430,25 @@ function Game({ state, dispatch, onLeave, wallet }) {
              bar: { x: rtl ? r.left - 1 : r.right + 1, top: r0.top, h: r.height } };
   }
 
-  // The board group under (x, y), if dropping there is an attach we may try.
-  function groupAt(x, y) {
-    if (!isMyTurn || state.phase !== 'action') return null;
+  // The group a drop at (x, y) attaches to: one of `fit` (the groups the
+  // dragged cards fit) under the point, else the nearest within ATTACH_SNAP.
+  // A group they don't fit never catches the drop — the card goes back.
+  function groupAt(x, y, fit) {
+    if (!fit || !fit.size) return null;
     const el = document.elementFromPoint(x, y);
     const g = el && el.closest('[data-gid]');
-    return g ? g.getAttribute('data-gid') : null;
+    if (g && fit.has(g.getAttribute('data-gid'))) return g.getAttribute('data-gid');
+    let best = null, bestD = ATTACH_SNAP;
+    for (const gel of document.querySelectorAll('[data-gid]')) {
+      const id = gel.getAttribute('data-gid');
+      if (!fit.has(id)) continue;
+      const r = gel.getBoundingClientRect();
+      const dx = Math.max(r.left - x, 0, x - r.right);
+      const dy = Math.max(r.top - y, 0, y - r.bottom);
+      const dist = Math.hypot(dx, dy);
+      if (dist <= bestD) { best = id; bestD = dist; }
+    }
+    return best;
   }
 
   // Over the discard pile, on my turn to act: releasing throws the card.
@@ -1453,7 +1480,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
     const hx = x, hy = y - d.lift;
     d.slot = slotAt(hx, hy, d.card.id);
     d.discard = !d.slot && discardAt(hx, hy);
-    d.gid = d.slot || d.discard ? null : groupAt(hx, hy);
+    d.gid = d.slot || d.discard ? null : groupAt(hx, hy, d.fit);
     setHotGid(g => g === d.gid ? g : d.gid);
     setHotDiscard(d.discard);
     paintDrag();
@@ -1470,7 +1497,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
       startX: e.clientX, startY: e.clientY, x: e.clientX, y: e.clientY,
       slop: touch ? DRAG_SLOP_TOUCH : DRAG_SLOP_MOUSE,
       lift: touch ? h * TOUCH_LIFT : 0,
-      slot: null, gid: null, discard: false,
+      slot: null, gid: null, discard: false, fit: null,
     });
   }
   function movePress(e) {
@@ -1485,7 +1512,9 @@ function Game({ state, dispatch, onLeave, wallet }) {
       // drag, drop it — otherwise the highlight stays on screen for the whole
       // drag and the card looks like selected text.
       clearSelection();
-      setDrag({ card: d.card, touch: d.touch });
+      const cards = dragCards(d.card);
+      d.fit = fitGids(cards);
+      setDrag({ card: d.card, touch: d.touch, n: cards.length, fit: d.fit });
     }
     if (e.cancelable) e.preventDefault(); // block scroll while dragging
     track(e.clientX, e.clientY);
@@ -1500,12 +1529,9 @@ function Game({ state, dispatch, onLeave, wallet }) {
         dropFrom.current = { id: d.card.id, rect: ghostRef.current?.getBoundingClientRect() };
         dispatch({ type: 'DISCARD', cid: d.card.id });
       } else if (drop && d.gid) {
-        // If the dragged card is part of a current multi-card selection, attach the
-        // whole selection at once; otherwise attach just the dragged card.
-        if (state.sel.length > 1 && state.sel.includes(d.card.id))
-          attach(d.gid);
-        else
-          attach(d.gid, d.card.id);
+        // A card from a multi-card selection carries the whole selection along.
+        if (dragCards(d.card).length > 1) attach(d.gid);
+        else attach(d.gid, d.card.id);
       } else if (drop && d.slot) {
         const { targetId, after } = d.slot;
         const next = moveCard(hand, d.card.id, targetId, after);
@@ -1515,7 +1541,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
         }
       }
     }
-    Object.assign(d, { card: null, active: false, pointerId: null, slot: null, gid: null, discard: false });
+    Object.assign(d, { card: null, active: false, pointerId: null, slot: null, gid: null, discard: false, fit: null });
     clearSelection();
     setDrag(null);
     setHotGid(null);
@@ -1535,9 +1561,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
     const up = (e) => endPress(e);
     // Esc drops a card back where it came from.
     const key = (e) => {
-      if (e.key !== 'Escape') return;
-      if (dragRef.current.active) finish(false);
-      else setAttachMode(false);
+      if (e.key === 'Escape' && dragRef.current.active) finish(false);
     };
     const click = (e) => {
       if (!swallowClick.current) return;
@@ -1685,6 +1709,8 @@ function Game({ state, dispatch, onLeave, wallet }) {
   const acting    = isMyTurn && state.phase === 'action';
   const layOk     = acting && state.canLay && selCards.length >= (state.mustUseJoker ? 2 : 3);
   const attachOk  = acting && human.hasLaid;
+  // The groups the selected cards fit: a tap on one attaches them.
+  const tapFit    = fitGids(selCards);
   // Under touch-move (נגעת נסעת) laid groups stay on the table; only a taken
   // beit can still be given back.
   const undoShown = acting && !!state.undoBefore &&
@@ -1695,7 +1721,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
   const discardOk = acting && selCards.length === 1;
   const drawOk    = isMyTurn && state.phase === 'draw';
   const deciding  = state.phase === 'buying' && humanDecides;
-  const doUndo    = () => { dispatch({ type: 'UNDO' }); setAttachMode(false); };
+  const doUndo    = () => dispatch({ type: 'UNDO' });
   const doDiscard = () => discardOk && dispatch({ type: 'DISCARD', cid: selCards[0].id });
   const doTake    = () => isFreeOffer
     ? dispatch({ type: 'TAKE_FREE' })
@@ -1716,7 +1742,6 @@ function Game({ state, dispatch, onLeave, wallet }) {
       const run = {
         draw:    () => drawOk && drawOnce({ type: 'DRAW' }),
         lay:     () => layOk && lay(),
-        attach:  () => attachOk && setAttachMode(m => !m),
         discard: () => doDiscard(),
         undo:    () => undoShown && doUndo(),
         sort:    () => { setPendingOrder(null); dispatch({ type: 'SORT' }); },
@@ -1989,7 +2014,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
           50%     { box-shadow: 0 0 0 2px ${GOLD}aa; }
         }
         .deal-card { animation: dealIn .18s cubic-bezier(.34,1.4,.64,1) both; }
-        .group-pop { animation: popIn .2s cubic-bezier(.34,1.56,.64,1) both; }
+        .group-pop { animation: popIn .2s cubic-bezier(.34,1.56,.64,1) backwards; }
         .discard-card { animation: discardDrop .18s ease-out both; }
       `}</style>
 
@@ -2323,26 +2348,20 @@ function Game({ state, dispatch, onLeave, wallet }) {
         {/* Board groups */}
         {state.board.length > 0 ? (
           <div className="board-groups" style={{ display: 'flex', flexWrap: 'wrap' }}>
-            {state.board.map(g => {
-              const normalAttach = attachMode && selCards.length >= 1 && human.hasLaid;
-              return (
+            {state.board.map(g => (
                 <GroupView
                   key={g.id} group={g}
                   attBy={g.att ? state.players[g.att.by]?.name : null}
                   color={ownerColor(state.players, g)}
-                  // While a card is in the air, every group it could land on
-                  // is outlined, so the drop targets are visible up front.
-                  canAttach={normalAttach || (!!drag && attachOk)}
+                  // While a card is in the air, the groups it fits are outlined
+                  // and the rest step back; with cards selected, the groups
+                  // they fit are outlined and a tap attaches them.
+                  canAttach={drag ? drag.fit.has(g.id) : tapFit.has(g.id)}
+                  dim={!!drag && attachOk && !drag.fit.has(g.id)}
                   hot={hotGid === g.id}
-                  onAttach={() => {
-                    if (normalAttach) {
-                      attach(g.id);
-                      setAttachMode(false);
-                    }
-                  }}
+                  onAttach={() => { if (!drag && tapFit.has(g.id)) attach(g.id); }}
                 />
-              );
-            })}
+            ))}
           </div>
         ) : (
           <div style={{
@@ -2376,14 +2395,6 @@ function Game({ state, dispatch, onLeave, wallet }) {
                 onClick={lay}
                 k={keys.lay}
                 tip={state.canLay ? 'בחרו 3 קלפים ומעלה שיוצרים קבוצה' : 'בסבב הראשון עוד אי אפשר להוריד'}
-              />
-              <Btn
-                label={attachMode ? '❌ בטל' : '📌 הצמד'}
-                disabled={!attachOk}
-                bg={attachMode ? GOLD : FELT} col={attachMode ? FELTD : GOLD}
-                onClick={() => setAttachMode(m => !m)}
-                k={keys.attach}
-                tip={human.hasLaid ? 'בחרו קלפים ואז קבוצה על הלוח — או גררו קלף אל הקבוצה' : 'אפשר להצמיד רק אחרי שהורדת'}
               />
               {undoShown && (
                 <Btn
@@ -2532,6 +2543,16 @@ function Game({ state, dispatch, onLeave, wallet }) {
           willChange: 'transform',
         }}>
           <CardView card={drag.card} />
+          {/* Carrying a whole selection: how many cards go with it. */}
+          {drag.n > 1 && (
+            <div style={{
+              position: 'absolute', top: -8, insetInlineEnd: -8,
+              minWidth: 22, height: 22, padding: '0 5px', borderRadius: 11,
+              background: GOLD, color: FELTD, fontSize: 12, fontWeight: 800,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 1px 4px rgba(0,0,0,.5)',
+            }}>{drag.n}</div>
+          )}
         </div>
       )}
       {/* Where the card will go when it's let go — drawn over the ghost, which
