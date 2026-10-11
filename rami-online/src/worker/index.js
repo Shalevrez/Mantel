@@ -131,6 +131,9 @@ export class Room {
     this.ctx = ctx;
     this.env = env;
     this.state = null;              // authoritative game state (or null pre-start)
+    // The game that just ended, kept while the room waits for the next one so
+    // a player still on its scoreboard can reload back to it (see 'rematch').
+    this.finalState = null;
     this.seats = [];               // { name, uid, ws, connId, connected, isAI } by seat index
     // The host is identified by `uid` — the player's own id, which survives a
     // reconnect — and never by connId, which is minted fresh for every socket.
@@ -171,6 +174,7 @@ export class Room {
     const saved = await this.ctx.storage.get('room');
     if (saved) {
       this.state = saved.state;
+      this.finalState = saved.finalState || null;
       // Nobody is connected right after an eviction, but the seats themselves
       // (and who owns them) are exactly as they were — so a returning player,
       // host included, is recognised rather than seated as someone new. They all
@@ -203,9 +207,11 @@ export class Room {
     if (this.closing) return;   // never write the room back after it was wiped
     await this.ctx.storage.put('room', {
       state: this.state,
+      finalState: this.finalState,
       seats: this.seats.map(s => ({
         name: s.name, uid: s.uid, connId: s.connId,
         isAI: s.isAI, ai: s.ai, botNum: s.botNum, downAt: s.downAt || 0, left: !!s.left,
+        pending: !!s.pending,
       })),
       hostUid: this.hostUid,
       code: this.code,
@@ -295,6 +301,7 @@ export class Room {
     this.sockets.clear();
     this.seats = [];
     this.state = null;
+    this.finalState = null;
     this.started = false;
     this.hostUid = null;
     this.code = null;
@@ -443,6 +450,9 @@ export class Room {
     this.armAlarm();
     this.broadcastLobby();
     if (this.started) this.sendState(seat);
+    else if (this.seats[seat].pending && this.finalState) {
+      try { ws.send(JSON.stringify({ t: 'state', state: viewFor(this.finalState, seat) })); } catch {}
+    }
   }
 
   // Close a socket we're replacing, without letting its close event tear down
@@ -596,11 +606,13 @@ export class Room {
     if (owner !== -1) {
       const s = this.seats[owner];
       // Still here, or still within the grace period after dropping: theirs.
-      if (s.connected || !s.downAt || Date.now() - s.downAt < HOST_GRACE_MS) return owner;
+      if (!s.pending && (s.connected || !s.downAt || Date.now() - s.downAt < HOST_GRACE_MS)) return owner;
     }
     // Host gone for good: the longest-seated human still in the room takes over,
     // so a room is never left with nobody able to start it.
-    const alt = this.seats.findIndex(s => s.connected && !s.isAI);
+    // A player still on the last game's scoreboard isn't in the room's next
+    // game yet, so the crown waits with whoever already is.
+    const alt = this.seats.findIndex(s => s.connected && !s.isAI && !s.pending);
     return alt !== -1 ? alt : owner;
   }
 
@@ -625,13 +637,19 @@ export class Room {
       buySecs: this.buySecs,
       players: this.seats.map((s, i) => ({
         seat: i, name: s.name, connected: s.connected, isAI: s.isAI, left: !!s.left,
+        pending: !!s.pending,
         ai: s.isAI ? normLevel(s.ai) : null,
         host: i === hostSeat,
       })),
     };
     for (const [connId, ws] of this.sockets) {
       const seat = this.seats.findIndex(s => s.connId === connId);
-      try { ws.send(JSON.stringify({ ...lobby, youSeat: seat, youHost: seat !== -1 && seat === hostSeat })); } catch {}
+      try {
+        ws.send(JSON.stringify({
+          ...lobby, youSeat: seat, youHost: seat !== -1 && seat === hostSeat,
+          youPending: seat !== -1 && !!this.seats[seat].pending,
+        }));
+      } catch {}
     }
   }
 
@@ -736,27 +754,46 @@ export class Room {
         const want = Math.min(Math.max(msg.minPlayers || 2, 2), this.cap);
         while (this.seats.length < want && !this.addAISeat()) { /* addAISeat stops at the caps */ }
       }
-      if (this.seats.length < 2) {
+      if (this.seats.filter(s => !s.pending).length < 2) {
         this.sendError(seat, 'צריך לפחות 2 שחקנים');
         return;
       }
-      const configs = this.seats.map(s => ({
-        name: s.name, isAI: s.isAI, ai: s.isAI ? normLevel(s.ai || this.aiLevel) : 'medium',
-      }));
-      // The room's terms ride along with the game, so the game-over screen of
-      // every seat settles it the same way (economy.settle). `gameId` is what
-      // keeps a wallet from being charged or paid twice for one game.
-      this.state = {
-        ...initGame(configs, undefined, { format: this.format, mk: this.formatMk }),
-        room: { mode: this.mode, fee: this.fee, gameId: crypto.randomUUID() },
-        touchMove: this.touchMove,
-        buyTimer: this.buySecs,
-      };
-      this.started = true;
+      await this.startGame();
+      return;
+    }
+
+    // ── Another game, same room ──
+    // Once a game is over any player at the table may open another one under
+    // the same code. Only they go back to the lobby. Everyone else still at the
+    // table stays on the final scoreboard, "pending": not in or out yet. Each
+    // of them either joins (the same message) or leaves, and whoever hasn't
+    // answered when the host deals is left out of the new game. Seats that are
+    // gone for good — walked out of a paid game, or no longer connected — are
+    // cleared. A practice table has no one to wait for, so it deals at once.
+    if (msg.t === 'rematch') {
+      const me = this.seats[seat];
+      if (me.isAI) return;
+      if (!this.started && me.pending) {
+        me.pending = false;
+        this.touch();
+        this.broadcastLobby();
+        await this.persist();
+        return;
+      }
+      if (!this.started || !this.state || this.state.phase !== 'game_end') return;
+      this.finalState = this.state;
+      this.seats = this.seats.filter(x => x.isAI || (!x.left && x.connected));
+      for (const x of this.seats) if (!x.isAI) x.pending = x !== me;
+      this.state = null;
+      this.started = false;
+      this.touch();
+      if (this.mode === 'practice' && this.seats.length >= 2) {
+        await this.startGame();
+        return;
+      }
       await this.persist();
+      await this.armAlarm();
       this.broadcastLobby();
-      this.broadcastState();
-      this.maybeRunAI();
       return;
     }
 
@@ -789,6 +826,43 @@ export class Room {
       this.maybeRunAI();
       return;
     }
+  }
+
+  // Deal a new game to everyone seated now. The opener is drawn at random
+  // (initGame), so every game in the room starts from a fresh seat.
+  async startGame() {
+    // Players still on the last game's scoreboard who never said they're in
+    // sit this one out. Their screen keeps the final table; being told the
+    // room moved on stops it reconnecting into a game that isn't theirs.
+    const missed = this.seats.filter(s => s.pending);
+    this.seats = this.seats.filter(s => !s.pending);
+    for (const s of missed) {
+      const ws = s.connId && this.sockets.get(s.connId);
+      if (!ws) continue;
+      this.sockets.delete(s.connId);
+      try { ws.send(JSON.stringify({ t: 'closed', reason: 'missed' })); } catch {}
+      try { ws.close(1000, 'next game started'); } catch {}
+    }
+    this.finalState = null;
+    const configs = this.seats.map(s => ({
+      name: s.name, isAI: s.isAI, ai: s.isAI ? normLevel(s.ai || this.aiLevel) : 'medium',
+    }));
+    // The room's terms ride along with the game, so the game-over screen of
+    // every seat settles it the same way (economy.settle). `gameId` is what
+    // keeps a wallet from being charged or paid twice for one game.
+    this.state = {
+      ...initGame(configs, undefined, { format: this.format, mk: this.formatMk }),
+      room: { mode: this.mode, fee: this.fee, gameId: crypto.randomUUID() },
+      touchMove: this.touchMove,
+      buyTimer: this.buySecs,
+    };
+    this.started = true;
+    this.touch();
+    await this.persist();
+    await this.armAlarm();
+    this.broadcastLobby();
+    this.broadcastState();
+    this.maybeRunAI();
   }
 
   // ── Authorization: is this seat allowed to take this action now? ──

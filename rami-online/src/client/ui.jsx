@@ -1027,7 +1027,7 @@ function RoundEnd({ state, dispatch, onLeave }) {
 
 // `extra` is drawn under the winner's name — the account's rewards for this
 // game (see RewardStrip in account.jsx).
-function GameEnd({ state, onRestart, onExit, extra }) {
+function GameEnd({ state, onRematch, nextOpen, missed, onRestart, onExit, extra }) {
   const sorted = [...state.players].sort((a, b) => (a.out ? 1 : 0) - (b.out ? 1 : 0) || a.totalScore - b.totalScore);
   // The final table is the point of this screen, so it opens on the standings;
   // the round-by-round grid and the last board are behind the other two tabs.
@@ -1097,12 +1097,27 @@ function GameEnd({ state, onRestart, onExit, extra }) {
           )}
         </div>
 
-        <button onClick={onRestart} style={{
+        {/* Another game at this table, same code — or, once the room has
+            closed, a new game in a new room. When another player has already
+            opened the next game, this is how you say you're in. */}
+        {(nextOpen || missed) && (
+          <div style={{ textAlign: 'center', color: '#57534e', fontSize: 13, marginTop: 12, flexShrink: 0 }}>
+            {nextOpen
+              ? <IconLabel name="hourglass">שחקנים כבר מחכים למשחק הבא בחדר</IconLabel>
+              : 'המשחק הבא בחדר כבר התחיל בלעדיך'}
+          </div>
+        )}
+        <button onClick={onRematch || onRestart} style={{
           width: '100%', padding: '14px 0', background: FELT, color: GOLD,
           border: `2px solid ${GOLD}`, borderRadius: 13,
           fontSize: 17, fontWeight: 700, cursor: 'pointer', marginTop: 12, flexShrink: 0,
+          fontFamily: 'inherit',
         }}>
-          <IconLabel name="play">משחק חדש</IconLabel>
+          {!onRematch
+            ? <IconLabel name="play">משחק חדש</IconLabel>
+            : nextOpen
+              ? <IconLabel name="play">המשך למשחק הבא</IconLabel>
+              : <IconLabel name="refresh">משחק חדש באותו חדר</IconLabel>}
         </button>
         {onExit && (
           <button onClick={onExit} style={{

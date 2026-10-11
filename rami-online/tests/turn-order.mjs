@@ -31,6 +31,16 @@ const openers = [st.cur];
 for (let mk = 1; mk < 6; mk++) { st = nextMk(st); openers.push(st.cur); }
 check('openers go 2,3,0,1,2,3', openers.join() === '2,3,0,1,2,3');
 
+// The opener moves on per mishkakon, not per round: a replayed round of the
+// same mishkakon is opened by the same seat.
+st = initGame(seats(3), 1);
+const roundOpeners = [st.cur];
+st = G({ ...st, phase: 'round_end' }, { type: 'NEW_HAND' }); roundOpeners.push(st.cur);
+st = nextMk(st); roundOpeners.push(st.cur);
+st = G({ ...st, phase: 'round_end' }, { type: 'NEW_HAND' }); roundOpeners.push(st.cur);
+st = nextMk(st); roundOpeners.push(st.cur);
+check('openers by mishkakon go 1,1,2,2,0', roundOpeners.join() === '1,1,2,2,0');
+
 // After a discard the next seat plays, and the buy offer goes on from there.
 st = initGame(seats(3), 1);
 st = G(st, { type: 'SKIP' });                    // seat 1 passes the opening card
