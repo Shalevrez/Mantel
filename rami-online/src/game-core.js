@@ -513,10 +513,17 @@ const activeCount = state => state.players.filter(p => !p.out).length;
 // further down simply waits. If nobody wants it, the player on turn draws.
 // A seat may change its answer until the card is decided.
 
-// How long a window stays open. Whoever hasn't answered by then doesn't want
-// the card (BUY_CLOSE, sent by the server), so one slow or absent player never
-// holds up the table.
+// How long a window stays open, if the room has a buy timer. Whoever hasn't
+// answered by then doesn't want the card (BUY_CLOSE, sent by the server), so
+// one slow or absent player never holds up the table. Without a timer the
+// window waits for every answer it needs.
+// The room picks the timer when it's created, in seconds; 0 is no timer.
+const BUY_TIMERS = [0, 10, 20];
+const normBuyTimer = (v) => BUY_TIMERS.includes(Number(v)) ? Number(v) : 0;
+// A game saved before rooms chose had the 10-second window.
 const BUY_MS = 10000;
+const buyWindowMs = (state) =>
+  !state || state.buyTimer === undefined ? BUY_MS : normBuyTimer(state.buyTimer) * 1000;
 
 // Every seat in the order the discard is offered, from the player on turn on.
 function buyOrder(buy, n) {
@@ -1254,6 +1261,6 @@ export {
   uid, sortHand, moveCard, mkCard, makeDeck, shuffle, handScore,
   isSeq, isSet, isGroup, orderSeq, orderGroup, jokerValues, attachPos, canAttach, meetsReq,
   layoutStart, seqLayouts, extendSeq, layGroup,
-  startHand, initGame, endWin, endDeck, nextCk, buyOrder, buyOffered, BUY_MS, roundRecord, retireSeat,
+  startHand, initGame, endWin, endDeck, nextCk, buyOrder, buyOffered, BUY_MS, BUY_TIMERS, normBuyTimer, buyWindowMs, roundRecord, retireSeat,
   G, aiWantCard, findAIGroups, aiDiscard,
 };

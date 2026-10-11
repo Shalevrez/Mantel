@@ -7,7 +7,7 @@
 // ═══════════════════════════════════════════════════════
 
 import { useState } from "react";
-import { GOLD, GOLDD, FELTD, CREAM, AI_LEVELS, AI_LEVEL_NAMES, MK, FORMATS, FORMAT_NAMES } from "../game-core.js";
+import { GOLD, GOLDD, FELTD, CREAM, AI_LEVELS, AI_LEVEL_NAMES, MK, FORMATS, FORMAT_NAMES, BUY_TIMERS } from "../game-core.js";
 import { ENTRY_FEES, DEFAULT_FEE, prizeShares, shortNum, buyPrice } from "../economy.js";
 import { Icon, IconLabel } from "./icons.jsx";
 import { LINE, SOFT, CARD, CARD_LINE, MUTED, hubBtn, hubInput, hubError, Modal, DemoTag } from "./account.jsx";
@@ -61,12 +61,14 @@ const Row = ({ children }) => (
 
 // ═══════════════════════════════════════════════════════
 // GAME RULES — what the room plays, set before it's created
-// The format (the whole ladder, up to רביעייה, or one mishkakon)
-// and touch-move. Fixed once the room exists; the waiting room
-// only shows them.
+// The format (the whole ladder, up to רביעייה, or one mishkakon),
+// touch-move and the buy timer. Fixed once the room exists; the
+// waiting room only shows them.
 // ═══════════════════════════════════════════════════════
 
-const DEFAULT_RULES = { format: 'mega', mk: 0, touch: true };
+const DEFAULT_RULES = { format: 'mega', mk: 0, touch: true, buy: 0 };
+
+const buyTimerName = (s) => s ? `${s} שניות` : 'בלי';
 
 const FORMAT_SUB = {
   mega:   'כל 6 המשחקונים',
@@ -127,18 +129,27 @@ function RulesCard({ rules, onChange }) {
           ? 'מה שהורדת לשולחן נשאר שם — אי אפשר להחזיר אותו ליד.'
           : 'אפשר לבטל הורדות והצמדות באותו תור ולהחזיר את הקלפים ליד.'}
       </div>
+      <div style={{ height: 1, background: `linear-gradient(90deg, transparent, ${FELTD}33, transparent)`, margin: '14px 0 12px' }} />
+      <div style={label}>טיימר לקנייה</div>
+      <Choice value={rules.buy} onPick={set('buy')}
+              options={BUY_TIMERS.map(s => ({ value: s, label: buyTimerName(s) }))} />
+      <div style={{ color: MUTED, fontSize: 12, marginTop: 6, lineHeight: 1.5, textAlign: 'center' }}>
+        {rules.buy
+          ? `קלף שנזרק מוצע לקנייה ${rules.buy} שניות — מי שלא סימן עד אז, לא רוצה.`
+          : 'מחכים שכל מי שצריך יחליט אם הוא רוצה את הקלף.'}
+      </div>
     </div>
   );
 }
 
 // The rules as the server takes them (see createRoom in net.js).
-const ruleTerms = (r) => ({ format: r.format, mk: r.format === 'single' ? r.mk : 0, touch: r.touch ? 1 : 0 });
+const ruleTerms = (r) => ({ format: r.format, mk: r.format === 'single' ? r.mk : 0, touch: r.touch ? 1 : 0, buy: r.buy || 0 });
 
 // One line naming a room's rules, for the waiting room.
-export function rulesLine({ format, formatMk, touchMove }) {
+export function rulesLine({ format, formatMk, touchMove, buySecs }) {
   const f = FORMAT_NAMES[format] || FORMAT_NAMES.mega;
   const game = format === 'single' && MK[formatMk] ? `${f}: ${MK[formatMk].name}` : f;
-  return `${game} · נגעת נסעת: ${touchMove ? 'כן' : 'לא'}`;
+  return `${game} · נגעת נסעת: ${touchMove ? 'כן' : 'לא'} · טיימר לקנייה: ${buyTimerName(buySecs || 0)}`;
 }
 
 // ═══════════════════════════════════════════════════════

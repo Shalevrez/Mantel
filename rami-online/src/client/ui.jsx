@@ -10,7 +10,7 @@ import {
   SUITS, SYM, COL, VD, cSc, cTxt, MK, lastMk, FELT, FELTD, GOLD, CREAM,
   INK, GOLDD, CLOTH, CLOTH_BASE, playerColor,
   isSeq, isSet, isGroup, orderSeq, orderGroup, jokerValues, attachPos, canAttach, meetsReq,
-  seqLayouts, layGroup, sortHand, moveCard, handScore, BUY_MS,
+  seqLayouts, layGroup, sortHand, moveCard, handScore, buyWindowMs,
 } from "../game-core.js";
 import { Icon, IconLabel, IconText, RankBadge } from "./icons.jsx";
 
@@ -578,7 +578,7 @@ function RulesModal({ onClose }) {
 
           <Section title="🛒 קנייה">
             כשמישהו זורק קלף, הוא מוצע <b>לכולם בבת אחת</b>, וכל אחד מסמן "רוצה" או "לא רוצה"
-            (יש 10 שניות; מי שלא סימן — לא רוצה). הקלף הולך <b>לפי סדר התור</b>: השחקן הבא בתור
+            (בחדר עם טיימר לקנייה, מי שלא סימן בזמן — לא רוצה). הקלף הולך <b>לפי סדר התור</b>: השחקן הבא בתור
             ראשון ומקבל אותו בחינם; אחריו השאר, שמקבלים יחד איתו קלף עונשין מהחבילה. הקלף
             של הראשון לפי הסדר שרוצה — ברגע שכל מי שלפניו ויתר. אפשר לשנות את הבחירה עד שמוחלט.
             מי שרצה אבל מישהו לפניו לקח — לא משלם כלום.
@@ -1220,7 +1220,7 @@ function KeysModal({ onClose }) {
 // How long the buying window has left — a bar that runs down, and the
 // seconds. The server sends the time left rather than a clock time, so the
 // countdown never depends on this device's clock being right.
-function BuyClock({ id, msLeft }) {
+function BuyClock({ id, msLeft, total }) {
   const end = useRef({ id: null, at: 0 });
   if (end.current.id !== id && msLeft != null) end.current = { id, at: Date.now() + msLeft };
   const [, tick] = useState(0);
@@ -1234,7 +1234,7 @@ function BuyClock({ id, msLeft }) {
     <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
       <div style={{ flex: 1, height: 5, borderRadius: 3, background: 'rgba(255,255,255,.12)', overflow: 'hidden' }}>
         <div style={{
-          height: '100%', width: `${(left / BUY_MS) * 100}%`, borderRadius: 3,
+          height: '100%', width: `${Math.min(1, left / total) * 100}%`, borderRadius: 3,
           background: left < 3000 ? '#f87171' : GOLD, transition: 'width .25s linear',
         }} />
       </div>
@@ -2373,7 +2373,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
               אין מספיק מטבעות לקנייה ({buyCost}) — אפשר לוותר ולשלוף בתורך
             </div>
           )}
-          <BuyClock id={buy.id} msLeft={buy.msLeft} />
+          {buy.msLeft != null && <BuyClock id={buy.id} msLeft={buy.msLeft} total={buyWindowMs(state)} />}
         </div>
         );
       })()}
