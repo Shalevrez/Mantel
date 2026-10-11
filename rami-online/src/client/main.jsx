@@ -10,7 +10,7 @@ import { createRoom, joinRoom } from "./net.js";
 import { settle, buyPrice } from "../economy.js";
 import * as P from "./profile.js";
 import { useProfile, LoginScreen, Hub, MenuCards, ProfileSheet, SettingsSheet, RewardStrip } from "./account.jsx";
-import { PracticeSetup, OnlineSetup, ModeSwitch, JoinDialog, RoomTerms, rulesLine } from "./rooms.jsx";
+import { PracticeSetup, OnlineSetup, CreateStall, JoinDialog, RoomTerms, rulesLine } from "./rooms.jsx";
 import { StoreStall } from "./store.jsx";
 import { LeaderboardStall } from "./leaderboard.jsx";
 import { Tutorial } from "./tutorial.jsx";
@@ -96,7 +96,8 @@ function App() {
   const profile = useProfile();
   const [resumeCode] = useState(roomToResume);
   // home | practice | online | resume | lobby | game
-  // (practice and online are the two sides of the create-room screen)
+  // (practice and online are the create-room sheet's two tabs, open over
+  // the home screen)
   const [screen, setScreen] = useState(() => resumeCode ? 'resume' : startScreen());
   const [code, setCode] = useState(() => urlCode() || lastRoom());
   const [lobby, setLobby] = useState(null);
@@ -304,15 +305,11 @@ function App() {
       { key: 'set',    label: 'הגדרות',       icon: 'gear',     onClick: () => setShowSettings(true) },
     ];
 
-    const hub = (title, body, back = () => go('home')) => (
-      <Hub profile={profile} title={title} onBack={back} onSettings={() => setShowSettings(true)}
-           onProfile={() => setShowProfile(true)} onCoins={() => setShowStore(true)}
-           onTrophies={() => setShowBoard(true)} nav={nav}>
-        {body}
-      </Hub>
-    );
+    // The create-room sheet opens over the home screen; closing it is going home.
+    const creating = screen === 'practice' || screen === 'online';
+    const pickMode = (m) => { writeStore(CREATE_MODE_KEY, m); go(m); };
 
-    if (screen === 'home') return (
+    if (onHome || creating) return (
       <Hub profile={profile} onProfile={() => setShowProfile(true)} onCoins={() => setShowStore(true)}
            onTrophies={() => setShowBoard(true)} onSettings={() => setShowSettings(true)} nav={nav}
            footer={<>
@@ -339,20 +336,17 @@ function App() {
         {showJoin && <JoinDialog code={code} setCode={setCode} busy={connecting} error={error}
                                  onJoin={handleJoin} onClose={() => setShowJoin(false)} />}
         {showRules && <RulesModal onClose={() => setShowRules(false)} />}
+        {creating && (
+          <CreateStall mode={screen} onMode={pickMode} onClose={() => go('home')}>
+            {screen === 'practice'
+              ? <PracticeSetup busy={connecting} error={error} onPlay={handlePractice} />
+              : <OnlineSetup coins={profile.coins} busy={connecting} error={error}
+                             onGetCoins={() => setShowStore(true)}
+                             onPlay={(terms) => handleCreate({ mode: 'online', ...terms })} />}
+          </CreateStall>
+        )}
       </Hub>
     );
-
-    if (screen === 'practice' || screen === 'online') {
-      const pickMode = (m) => { writeStore(CREATE_MODE_KEY, m); go(m); };
-      return hub('צור חדר', <>
-        <ModeSwitch mode={screen} onMode={pickMode} />
-        {screen === 'practice'
-          ? <PracticeSetup busy={connecting} error={error} onPlay={handlePractice} />
-          : <OnlineSetup coins={profile.coins} busy={connecting} error={error}
-                         onGetCoins={() => setShowStore(true)}
-                         onPlay={(terms) => handleCreate({ mode: 'online', ...terms })} />}
-      </>);
-    }
 
     if (screen === 'lobby') {
       // A practice table deals itself; there is no one to wait for.

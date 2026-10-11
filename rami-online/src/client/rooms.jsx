@@ -1,9 +1,10 @@
 // ═══════════════════════════════════════════════════════
 // ROOM SETUP — the practice table and the online room
-// Pick the table size and either the bots' level (practice) or
-// the entry fee (online), and the game's rules (format, touch-move),
-// then start. The prize maths comes from economy.js, the same code
-// that settles the game at the end.
+// A sheet over the home screen, like the store's: online or
+// practice are its two tabs. Pick the table size and either the
+// bots' level (practice) or the entry fee (online), and the game's
+// rules (format, touch-move), then start. The prize maths comes
+// from economy.js, the same code that settles the game at the end.
 // ═══════════════════════════════════════════════════════
 
 import { useRef, useState } from "react";
@@ -11,6 +12,7 @@ import { GOLD, GOLDD, FELTD, CREAM, AI_LEVELS, AI_LEVEL_NAMES, MK, FORMATS, FORM
 import { ENTRY_FEES, DEFAULT_FEE, prizeShares, shortNum, buyPrice } from "../economy.js";
 import { Icon, IconLabel } from "./icons.jsx";
 import { LINE, SOFT, CARD, CARD_LINE, MUTED, hubBtn, hubInput, hubError, Modal, DemoTag } from "./account.jsx";
+import { Stall } from "./store.jsx";
 
 // ── One setting: a big value over its name, with − / + under it ──
 function Stepper({ value, unit, label, onMinus, onPlus, canMinus, canPlus }) {
@@ -162,28 +164,19 @@ const MODES = [
   { key: 'practice', icon: 'bot',   title: 'אימון',   sub: 'מול המחשב · חינם' },
 ];
 
-export function ModeSwitch({ mode, onMode }) {
+// The create-room sheet. `mode` is the open tab; the setup for it is the
+// children.
+export function CreateStall({ mode, onMode, onClose, children }) {
+  const m = MODES.find(x => x.key === mode) || MODES[0];
   return (
-    <div role="tablist" style={{
-      display: 'flex', gap: 6, maxWidth: 440, margin: '0 auto 10px', padding: 5,
-      borderRadius: 16, background: FELTD, border: `2px solid ${GOLD}`,
-      boxShadow: '0 6px 18px rgba(19, 40, 79, .25)',
-    }}>
-      {MODES.map(m => {
-        const on = m.key === mode;
-        return (
-          <button key={m.key} role="tab" aria-selected={on} onClick={() => onMode(m.key)} style={{
-            flex: 1, minWidth: 0, padding: '9px 6px', borderRadius: 11, cursor: 'pointer',
-            border: 'none', textAlign: 'center',
-            background: on ? `linear-gradient(${GOLD}, #a37624)` : 'transparent',
-            color: on ? FELTD : SOFT,
-          }}>
-            <div style={{ fontSize: 17, fontWeight: 800 }}><IconLabel name={m.icon}>{m.title}</IconLabel></div>
-            <div style={{ fontSize: 11.5, fontWeight: 600, marginTop: 2, opacity: on ? 0.85 : 1 }}>{m.sub}</div>
-          </button>
-        );
-      })}
-    </div>
+    <Stall title="צור חדר" icon="plus" onClose={onClose} demo={false}
+           tab={mode} setTab={onMode}
+           tabs={MODES.map(x => ({ key: x.key, icon: x.icon, label: x.title }))}>
+      <div style={{ textAlign: 'center', color: MUTED, fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
+        <IconLabel name={m.icon}>{m.title}</IconLabel> · {m.sub}
+      </div>
+      {children}
+    </Stall>
   );
 }
 
@@ -294,14 +287,21 @@ export function OnlineSetup({ coins, busy, error, onPlay, onGetCoins }) {
   );
 }
 
+// The start button stays at the foot of the sheet while the settings
+// scroll under it. The negative margins cover the counter's padding.
 function PlayBar({ busy, error, disabled, onPlay, label = 'התחל' }) {
   return (
-    <div style={{ maxWidth: 440, margin: '26px auto 0' }}>
-      <button onClick={onPlay} disabled={busy || disabled}
-              style={{ ...hubBtn, fontSize: 26, padding: '14px 0', opacity: busy || disabled ? 0.55 : 1 }}>
-        {busy ? '...' : label}
-      </button>
-      {error && <div style={hubError}>{error}</div>}
+    <div style={{
+      position: 'sticky', bottom: -20, zIndex: 2, margin: '22px -14px -20px', padding: '12px 14px 14px',
+      background: `linear-gradient(${CREAM}00, ${CREAM}f2 30%)`,
+    }}>
+      <div style={{ maxWidth: 440, margin: '0 auto' }}>
+        <button onClick={onPlay} disabled={busy || disabled}
+                style={{ ...hubBtn, fontSize: 24, padding: '12px 0', opacity: busy || disabled ? 0.55 : 1 }}>
+          {busy ? '...' : label}
+        </button>
+        {error && <div style={hubError}>{error}</div>}
+      </div>
     </div>
   );
 }
