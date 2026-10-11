@@ -740,23 +740,30 @@ export class Room {
         this.sendError(seat, 'צריך לפחות 2 שחקנים');
         return;
       }
-      const configs = this.seats.map(s => ({
-        name: s.name, isAI: s.isAI, ai: s.isAI ? normLevel(s.ai || this.aiLevel) : 'medium',
-      }));
-      // The room's terms ride along with the game, so the game-over screen of
-      // every seat settles it the same way (economy.settle). `gameId` is what
-      // keeps a wallet from being charged or paid twice for one game.
-      this.state = {
-        ...initGame(configs, undefined, { format: this.format, mk: this.formatMk }),
-        room: { mode: this.mode, fee: this.fee, gameId: crypto.randomUUID() },
-        touchMove: this.touchMove,
-        buyTimer: this.buySecs,
-      };
-      this.started = true;
+      await this.startGame();
+      return;
+    }
+
+    // ── Another game, same room ──
+    // Once a game is over any player at the table may ask for another one under
+    // the same code. Seats that are gone for good — walked out of a paid game,
+    // or no longer connected — are cleared, and the room goes back to the
+    // lobby: the host deals the next game as before (and may add or remove
+    // bots first). A practice table has no one to wait for, so it deals at once.
+    if (msg.t === 'rematch') {
+      if (!this.started || !this.state || this.state.phase !== 'game_end') return;
+      if (this.seats[seat].isAI) return;
+      this.seats = this.seats.filter(s => s.isAI || (!s.left && s.connected));
+      this.state = null;
+      this.started = false;
+      this.touch();
+      if (this.mode === 'practice' && this.seats.length >= 2) {
+        await this.startGame();
+        return;
+      }
       await this.persist();
+      await this.armAlarm();
       this.broadcastLobby();
-      this.broadcastState();
-      this.maybeRunAI();
       return;
     }
 
@@ -789,6 +796,30 @@ export class Room {
       this.maybeRunAI();
       return;
     }
+  }
+
+  // Deal a new game to everyone seated now. The opener is drawn at random
+  // (initGame), so every game in the room starts from a fresh seat.
+  async startGame() {
+    const configs = this.seats.map(s => ({
+      name: s.name, isAI: s.isAI, ai: s.isAI ? normLevel(s.ai || this.aiLevel) : 'medium',
+    }));
+    // The room's terms ride along with the game, so the game-over screen of
+    // every seat settles it the same way (economy.settle). `gameId` is what
+    // keeps a wallet from being charged or paid twice for one game.
+    this.state = {
+      ...initGame(configs, undefined, { format: this.format, mk: this.formatMk }),
+      room: { mode: this.mode, fee: this.fee, gameId: crypto.randomUUID() },
+      touchMove: this.touchMove,
+      buyTimer: this.buySecs,
+    };
+    this.started = true;
+    this.touch();
+    await this.persist();
+    await this.armAlarm();
+    this.broadcastLobby();
+    this.broadcastState();
+    this.maybeRunAI();
   }
 
   // ── Authorization: is this seat allowed to take this action now? ──

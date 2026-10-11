@@ -132,6 +132,11 @@ export function joinRoom({ code, name, host = false, resume = false }, callbacks
       if (ws && ws.readyState === WebSocket.OPEN)
         ws.send(JSON.stringify({ t: 'start', ...opts }));
     },
+    // After the game: another one in the same room, under the same code. The
+    // server answers with a fresh lobby (or, at a practice table, the new deal).
+    rematch() {
+      if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ t: 'rematch' }));
+    },
     // Host: seat one more computer player, free a chair, or set the difficulty
     // every computer player in the room plays at. The server answers with a
     // fresh lobby (or an 'error' when a limit is hit), so there is no local

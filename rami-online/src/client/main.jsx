@@ -373,7 +373,11 @@ function App() {
               {state.room.mode === 'practice' ? 'משחק אימון' : 'משחק חינמי'} — בלי XP, גביעים או מטבעות
             </div>
           : null;
-      return <GameEnd state={state} onRestart={() => leaveGame(state.room && state.room.mode)}
+      // Another game in this room while it is still open; once the server has
+      // retired it, a new game needs a new room.
+      const rematch = !closed && connRef.current ? () => connRef.current.rematch() : null;
+      return <GameEnd state={state} onRematch={rematch}
+                      onRestart={() => leaveGame(state.room && state.room.mode)}
                       onExit={() => leaveGame()} extra={extra} />;
     }
     if (state.phase === 'round_end') return <RoundEnd state={state} dispatch={dispatch} onLeave={handleLeave} />;
