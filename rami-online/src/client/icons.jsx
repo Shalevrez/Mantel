@@ -4,7 +4,8 @@
 // box instead), so the game draws its icons itself: thin-line SVGs
 // on a 24×24 grid that take their colour from the surrounding text
 // and their size from the font, like a letter would.
-// The home screen and the release notes keep their emoji on purpose.
+// No emoji anywhere in the UI: tests/no-emoji.mjs fails `npm test` on an
+// emoji that would reach the screen without an icon in its place.
 // ═══════════════════════════════════════════════════════
 
 import { Fragment } from 'react';
@@ -70,6 +71,23 @@ const ICONS = {
   xCircle:    [C(12, 12, 10), P('M15 9l-6 6'), P('M9 9l6 6')],
   checkCircle:[C(12, 12, 10), P('M8 12l3 3 5-6')],
   trash:      [P('M3 6h18'), P('M8 6V4h8v2'), P('M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6')],
+  dice:       [<rect x="3" y="3" width="18" height="18" rx="2.5" />, C(8, 8, 1.2, true), C(16, 8, 1.2, true), C(12, 12, 1.2, true), C(8, 16, 1.2, true), C(16, 16, 1.2, true)],
+  pointer:    [P('M22 14a8 8 0 0 1-8 8'), P('M18 11v-1a2 2 0 0 0-4 0'), P('M14 10V9a2 2 0 0 0-4 0v1'), P('M10 9.5V4a2 2 0 0 0-4 0v10'), P('M18 11a2 2 0 1 1 4 0v3a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15')],
+  phone:      [<rect x="5" y="2" width="14" height="20" rx="2.5" />, P('M12 18h.01')],
+  vibrate:    [<rect x="8" y="4" width="8" height="16" rx="1.5" />, P('M2 8l2 2-2 2 2 2-2 2'), P('M22 8l-2 2 2 2-2 2 2 2')],
+  bell:       [P('M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9'), P('M10.3 21a1.94 1.94 0 0 0 3.4 0')],
+  graduation: [P('M2 10l10-5 10 5-10 5z'), P('M22 10v6'), P('M6 12v5c3 3 9 3 12 0v-5')],
+  type:       [P('M4 7V4h16v3'), P('M9 20h6'), P('M12 4v16')],
+  lock:       [<rect x="3" y="11" width="18" height="11" rx="2" />, P('M7 11V7a5 5 0 0 1 10 0v4')],
+  compass:    [C(12, 12, 10), P('M16.24 7.76l-2.12 6.36-6.36 2.12 2.12-6.36z')],
+  palette:    [P('M12 22a10 10 0 1 1 10-10c0 2.5-2 3.5-4 3.5h-2a2 2 0 0 0-1.5 3.3A2 2 0 0 1 12 22z'), C(7.5, 11, 1.1, true), C(10.5, 7, 1.1, true), C(15.5, 8, 1.1, true)],
+  monitor:    [<rect x="2" y="3" width="20" height="14" rx="2" />, P('M8 21h8'), P('M12 17v4')],
+  pencil:     [P('M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z'), P('M15 5l4 4')],
+  tag:        [P('M12.59 2.59A2 2 0 0 0 11.17 2H4a2 2 0 0 0-2 2v7.17a2 2 0 0 0 .59 1.42l8.7 8.7a2.43 2.43 0 0 0 3.42 0l6.58-6.58a2.43 2.43 0 0 0 0-3.42z'), C(7.5, 7.5, 1.2, true)],
+  zap:        [P('M13 2 3 14h9l-1 8 10-12h-9l1-8z')],
+  mouse:      [<rect x="5" y="2" width="14" height="20" rx="7" />, P('M12 6v4')],
+  sliders:    [P('M4 21v-7'), P('M4 10V3'), P('M12 21v-9'), P('M12 8V3'), P('M20 21v-5'), P('M20 12V3'), P('M1 14h6'), P('M9 8h6'), P('M17 16h6')],
+  shield:     [P('M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z')],
 };
 
 // One icon. `size` defaults to the text size around it; `color` to its colour.
@@ -130,6 +148,8 @@ const TEXT_ICONS = [
   ['🔀', 'sort'], ['⭐', 'star'], ['📖', 'book'], ['🆕', 'sparkles'],
   ['🎮', 'play'], ['😊', 'smile'], ['🔥', 'flame'], ['👤', 'user'],
   ['👥', 'users'], ['→', 'arrowRight'], ['↓', 'arrowDown'], ['↑', 'arrowUp'],
+  ['☝️', 'pointer'], ['☝', 'pointer'], ['➕', 'plus'], ['🎲', 'dice'],
+  ['👆', 'pointer'], ['▶', 'play'],
 ];
 const TEXT_RE = new RegExp(`(${TEXT_ICONS.map(([e]) => e.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'u');
 const TEXT_MAP = Object.fromEntries(TEXT_ICONS);

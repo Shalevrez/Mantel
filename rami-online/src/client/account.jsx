@@ -265,7 +265,7 @@ export function LoginScreen() {
         boxShadow: `0 24px 72px rgba(0,0,0,.35), 0 0 0 3px ${GOLD}55`,
       }}>
         <div style={{ textAlign: 'center', marginBottom: 18 }}>
-          <div style={{ fontSize: 50, marginBottom: 2 }}>🃏</div>
+          <div style={{ marginBottom: 2, color: FELT }}><Icon name="cards" size={50} strokeWidth={1.6} /></div>
           <h1 style={{ margin: 0, fontSize: 32, color: FELTD, letterSpacing: 2 }}>מנטל</h1>
           <div style={{ width: 50, height: 2, background: GOLD, margin: '8px auto' }} />
           <div style={{ color: MUTED, fontSize: 13, marginTop: 4 }}>התחברו כדי לשמור מטבעות, רמה ודירוג</div>
