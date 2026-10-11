@@ -6,7 +6,7 @@
 // chose (4♥,5♥,6♥+JK → the 3♥ or the 7♥), and it stays there: later attaches
 // and a joker swap read its spot from the group's card order.
 // ═══════════════════════════════════════════════════════
-import { initGame, G, seqLayouts, jokerValues } from '../src/game-core.js';
+import { initGame, G, seqLayouts, jokerValues, orderSeq, layoutStart } from '../src/game-core.js';
 
 let failures = 0;
 function check(label, cond) {
@@ -55,6 +55,14 @@ const g = { id: 'g', type: 'seq', cards: [card('4h', 'h', 4), card('5h', 'h', 5)
 let st2 = { ...st, board: [g], players: st.players.map((p, i) => i === 0 ? { ...p, hasLaid: true } : p) };
 check('attach a joker below', jv(G({ ...st2, sel: ['jk'] }, { type: 'ATTACH', gid: 'g', start: 3 }).board[0].cards) === '3');
 check('attach a joker above by default', jv(G({ ...st2, sel: ['jk'] }, { type: 'ATTACH', gid: 'g' }).board[0].cards) === '7');
+
+// Ace high when only the jokers reach it: 10,JK,JK,JK,A is 10-J-Q-K-A
+const tenToAce = orderSeq([card('ah', 'h', 1), joker('j1'), joker('j2'), joker('j3'), card('th', 'h', 10)]);
+check('A+10+3 jokers lays as 10-J-Q-K-A', layoutStart(tenToAce) === 10 && tenToAce[4].id === 'ah' && jv(tenToAce) === '11,12,13');
+const st3 = { ...st, board: [{ id: 'ta', type: 'seq', cards: tenToAce }],
+  players: st.players.map((p, i) => i === 0 ? { ...p, hasLaid: true, hand: [...p.hand, card('jh', 'h', 11)] } : p) };
+check('the J♥ swaps a joker in 10-JK-JK-JK-A', G({ ...st3, sel: ['jh'] }, { type: 'ATTACH', gid: 'ta' }).mustUseJoker === 'j1');
+check('A-2+JK stays ace low', jv(orderSeq([card('ah', 'h', 1), card('2h', 'h', 2), joker('jk')])) === '3');
 
 if (failures) { console.log(`\n${failures} failure(s)`); process.exit(1); }
 console.log('\nall joker-position checks passed');
