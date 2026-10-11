@@ -37,9 +37,10 @@ export function StoreStall({ onClose }) {
 }
 
 // The stall itself, for any sheet that opens over the screen the same way
-// (the store, the leaderboard): the awning with its sign, the tablecloth
-// counter that scrolls, and a row of tabs at the bottom.
-export function Stall({ title, icon, label, onClose, tabs, tab, setTab, children }) {
+// (the store, the leaderboard, creating a room): the awning with its sign,
+// the tablecloth counter that scrolls, and a row of tabs at the bottom.
+// `demo` marks the sign as a demo, as the store and the leaderboard are.
+export function Stall({ title, icon, label, onClose, tabs, tab, setTab, demo = true, children }) {
   // Escape closes the stall, as a tap outside it does.
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -59,7 +60,7 @@ export function Stall({ title, icon, label, onClose, tabs, tab, setTab, children
         height: 'min(86dvh, 820px)', display: 'flex', flexDirection: 'column',
         animation: 'stallUp .28s cubic-bezier(.2, .8, .3, 1)',
       }}>
-        <Awning title={title} icon={icon} />
+        <Awning title={title} icon={icon} demo={demo} />
         <button onClick={onClose} title="סגור" style={{
           position: 'absolute', top: 30, left: 14, zIndex: 3, width: 44, height: 44, borderRadius: '50%',
           background: `radial-gradient(circle at 35% 30%, #e7c27a, ${GOLD} 60%, #8a6418)`,
@@ -103,7 +104,7 @@ export function Stall({ title, icon, label, onClose, tabs, tab, setTab, children
 
 // The stall's striped awning: a navy valance with the sign, and scalloped
 // stripes of navy and cream under it, edged in gold.
-function Awning({ title, icon }) {
+function Awning({ title, icon, demo }) {
   const n = 7;
   return (
     <div style={{ position: 'relative', flexShrink: 0, pointerEvents: 'none' }}>
@@ -113,7 +114,7 @@ function Awning({ title, icon }) {
         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
         color: GOLD, fontWeight: 800, fontSize: 14, letterSpacing: 1,
       }}>
-        <Icon name={icon} size={16} /> {title} <DemoTag style={{ fontSize: 9.5, padding: '1px 6px' }} />
+        <Icon name={icon} size={16} /> {title} {demo && <DemoTag style={{ fontSize: 9.5, padding: '1px 6px' }} />}
       </div>
       <div style={{ display: 'flex', height: 46, borderInline: `3px solid ${GOLD}`, background: GOLD }}>
         {Array.from({ length: n }, (_, i) => (
