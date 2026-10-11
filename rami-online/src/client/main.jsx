@@ -191,7 +191,9 @@ function App() {
             conn.setAILevel(pr.level);
             conn.start({ fillAI: true, minPlayers: pr.seats });
           }
-          if (!l.started) setScreen('lobby');
+          // Someone else opened the next game while we're still on the final
+          // scoreboard: it stays on screen until we join or leave (see GameEnd).
+          if (!l.started && !l.youPending) setScreen('lobby');
         },
         onState: (s) => { onGameState(s); setState(s); setScreen('game'); },
         onError: (m) => { setError(m); setConnecting(false); },
@@ -263,10 +265,14 @@ function App() {
   // leaving a finished paid game would mark the player as walked out on
   // everyone else's final table (see leaveSeat on the server). The room closes
   // on its own a few minutes later.
-  const leaveGame = useCallback((next) => {
+  //
+  // Except once someone has opened the next game here: then the room is back
+  // in its lobby, and walking away gives up the chair (nothing is lost — the
+  // game it was for is settled).
+  const leaveGame = useCallback(async (next, giveUp = false) => {
     const conn = connRef.current;
     connRef.current = null;
-    if (conn) conn.close();
+    if (conn) { if (giveUp) await conn.leave(); else conn.close(); }
     leaveRoom(next);
   }, []);
 
@@ -374,11 +380,14 @@ function App() {
             </div>
           : null;
       // Another game in this room while it is still open; once the server has
-      // retired it, a new game needs a new room.
+      // retired it (or dealt the next game without us), a new game needs a new
+      // room. `waiting` — somebody already opened the next game here.
       const rematch = !closed && connRef.current ? () => connRef.current.rematch() : null;
-      return <GameEnd state={state} onRematch={rematch}
+      const waiting = !closed && !!(lobby && lobby.youPending && !lobby.started);
+      return <GameEnd state={state} onRematch={rematch} nextOpen={waiting}
+                      missed={closed === 'missed'}
                       onRestart={() => leaveGame(state.room && state.room.mode)}
-                      onExit={() => leaveGame()} extra={extra} />;
+                      onExit={() => leaveGame(undefined, waiting)} extra={extra} />;
     }
     if (state.phase === 'round_end') return <RoundEnd state={state} dispatch={dispatch} onLeave={handleLeave} />;
     const wallet = state.room && state.room.mode === 'online' && state.room.fee > 0
@@ -432,7 +441,10 @@ function Lobby({ lobby, code, error, coins, onStart, onAddAI, onRemoveAI, onAILe
   // A paid room: the host's own wallet has to cover the fee. (Demo — each
   // player's wallet is in their own browser, so the others check their own.)
   const short = lobby.mode === 'online' && lobby.fee > 0 && coins < lobby.fee;
-  const canStart = lobby.youHost && players.length >= 2 && !short;
+  // Players still on the last game's scoreboard (pending) haven't said they're
+  // in yet; the game is dealt to the others, so only those count.
+  const ready = players.filter(p => !p.pending).length;
+  const canStart = lobby.youHost && ready >= 2 && !short;
 
   const copy = async () => {
     try { await navigator.clipboard.writeText(shareLink); setCopied(true); setTimeout(() => setCopied(false), 1500); }
@@ -505,8 +517,13 @@ function Lobby({ lobby, code, error, coins, onStart, onAddAI, onRemoveAI, onAILe
             <span style={{ fontWeight: 700, color: FELTD, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {p.isAI
                 ? <Icon name="bot" color={FELT} />
-                : <Icon name="dot" color={p.connected ? '#22c55e' : '#d6d3d1'} />} {p.name}
+                : p.pending
+                  ? <Icon name="hourglass" color="#a8a29e" />
+                  : <Icon name="dot" color={p.connected ? '#22c55e' : '#d6d3d1'} />} {p.name}
               {p.seat === lobby.youSeat && <span style={{ color: '#78716c', fontWeight: 400 }}> (אתה)</span>}
+              {p.pending && (
+                <span style={{ color: '#78716c', fontWeight: 400, fontSize: 12 }}>{' · '}עוד לא אישר</span>
+              )}
               {p.isAI && (
                 <span style={{ color: '#78716c', fontWeight: 400, fontSize: 12 }}>
                   {' · '}{AI_LEVEL_NAMES[p.ai || level] || ''}
