@@ -364,14 +364,11 @@ function layGroup(state) {
 
 function startHand(base) {
   const n = base.players.length;
-  // Who opens: the seat drawn at random for the first round, then one seat on
-  // (clockwise — the turn order) for every round after it, a replayed round of
-  // the same mishkakon included. A seat that walked out of a paid game (see
-  // retireSeat) sits the rest out: no cards, and the round opens with the next
-  // seat still playing. Games saved before `dealt` was counted fall back to one
-  // seat per mishkakon.
-  const dealt = base.dealt ?? (base.mk - (base.mkFirst || 0));
-  const opener = ((base.starter || 0) + dealt) % n;
+  // Who opens: the seat drawn at random for the first mishkakon, then one seat on
+  // (clockwise — the turn order) for every mishkakon after it. A seat that walked
+  // out of a paid game (see retireSeat) sits the rest out: no cards, and the
+  // round opens with the next seat still playing.
+  const opener = ((base.starter || 0) + base.mk - (base.mkFirst || 0)) % n;
   let first = opener;
   for (let k = 0; k < n; k++) { const j = (opener + k) % n; if (!base.players[j].out) { first = j; break; } }
   const deck = shuffle(makeDeck(decksFor(n)));
@@ -386,7 +383,7 @@ function startHand(base) {
   const sivuv = (base.sivuv || 0) + 1;
 
   return {
-    ...base, sivuv, deck, dealt: dealt + 1,
+    ...base, sivuv, deck,
     discard: [firstDiscard], beit, board: [],
     canLay: sivuv > 1,        // sivuv 2+: lay immediately; sivuv 1: opens after first go-around
     turnsPlayed: 0,
@@ -422,7 +419,7 @@ function initGame(configs, starter = Math.floor(Math.random() * configs.length),
     paidBuys: 0,
   }));
   return startHand({
-    players, mk: mkFirst, mkFirst, mkLast, format, sivuv: 0, starter, dealt: 0, history: [],
+    players, mk: mkFirst, mkFirst, mkLast, format, sivuv: 0, starter, history: [],
     log: ['🃏 המשחק התחיל!', `🎲 ${players[starter].name} פותח`],
   });
 }

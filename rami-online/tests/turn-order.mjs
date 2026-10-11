@@ -3,7 +3,7 @@
 // Run with: npm test
 //
 // The seat that opens the game is drawn at random. Turns and the buying offer
-// go around in seat order (clockwise), and each new round is opened by the
+// go around in seat order (clockwise), and each new mishkakon is opened by the
 // seat after the one that opened the last.
 // ═══════════════════════════════════════════════════════
 import { initGame, retireSeat, G } from '../src/game-core.js';
@@ -31,14 +31,15 @@ const openers = [st.cur];
 for (let mk = 1; mk < 6; mk++) { st = nextMk(st); openers.push(st.cur); }
 check('openers go 2,3,0,1,2,3', openers.join() === '2,3,0,1,2,3');
 
-// A replayed round of the same mishkakon moves the opener on too: every round
-// is opened by the next seat, whichever button ended the last one.
+// The opener moves on per mishkakon, not per round: a replayed round of the
+// same mishkakon is opened by the same seat.
 st = initGame(seats(3), 1);
 const roundOpeners = [st.cur];
 st = G({ ...st, phase: 'round_end' }, { type: 'NEW_HAND' }); roundOpeners.push(st.cur);
 st = nextMk(st); roundOpeners.push(st.cur);
 st = G({ ...st, phase: 'round_end' }, { type: 'NEW_HAND' }); roundOpeners.push(st.cur);
-check('round openers go 1,2,0,1', roundOpeners.join() === '1,2,0,1');
+st = nextMk(st); roundOpeners.push(st.cur);
+check('openers by mishkakon go 1,1,2,2,0', roundOpeners.join() === '1,1,2,2,0');
 
 // After a discard the next seat plays, and the buy offer goes on from there.
 st = initGame(seats(3), 1);
