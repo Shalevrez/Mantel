@@ -722,10 +722,10 @@ function ReleaseNotes({ onClose, current }) {
 
               {rel.changes.map((ch, i) => (
                 <div key={i} style={{ display: 'flex', gap: 10, marginBottom: 11 }}>
-                  <div style={{ fontSize: 19, lineHeight: 1.2, flexShrink: 0 }}><IconText text={ch.icon} /></div>
+                  <div style={{ fontSize: 19, lineHeight: 1.2, flexShrink: 0, color: FELT }}><Icon name={ch.icon} /></div>
                   <div>
                     <div style={{ fontWeight: 700, color: FELTD, fontSize: 14 }}>{ch.title}</div>
-                    <div style={{ color: '#57534e', fontSize: 13, lineHeight: 1.65 }}>{ch.text}</div>
+                    <div style={{ color: '#57534e', fontSize: 13, lineHeight: 1.65 }}><IconText text={ch.text} /></div>
                   </div>
                 </div>
               ))}
@@ -741,7 +741,7 @@ function ReleaseNotes({ onClose, current }) {
                 fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
               }}
             >
-              ↓ גרסאות קודמות ({RELEASES.length - 1})
+              <IconLabel name="arrowDown">גרסאות קודמות ({RELEASES.length - 1})</IconLabel>
             </button>
           )}
         </div>
@@ -2199,7 +2199,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
           return (
             <div key={i} data-seat={i} className={'opp-chip' + (active ? ' on' : '')}
                  title={active ? `${p.name} — ${state.phase === 'draw' ? 'שולף' : state.phase === 'action' ? 'פועל' : 'בתור'}` : p.name}>
-              <div className="opp-name">{active ? '▶ ' : ''}<NameTag p={p} i={i}>{p.name}</NameTag></div>
+              <div className="opp-name">{active && <><Icon name="play" size=".8em" />{' '}</>}<NameTag p={p} i={i}>{p.name}</NameTag></div>
               <div className="opp-meta">
                 {p.out
                   ? <span style={{ color: '#fca5a5' }}>יצא מהמשחק</span>
