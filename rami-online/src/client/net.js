@@ -46,11 +46,12 @@ export function playerId() {
 }
 
 // Ask the server to mint a new room; returns its code. `terms` are the room's
-// { mode: 'practice'|'online', fee, seats, format, mk, touch } — all optional
-// (a free 6-seat room playing the whole game, touch-move on). `touch` is 1 or 0.
+// { mode: 'practice'|'online', fee, seats, format, mk, touch, buy } — all optional
+// (a free 6-seat room playing the whole game, touch-move on, no buy timer).
+// `touch` is 1 or 0; `buy` is the buy timer in seconds (0 = none).
 export async function createRoom(terms = {}) {
   const q = new URLSearchParams();
-  for (const k of ['mode', 'fee', 'seats', 'format', 'mk', 'touch']) if (terms[k] != null) q.set(k, String(terms[k]));
+  for (const k of ['mode', 'fee', 'seats', 'format', 'mk', 'touch', 'buy']) if (terms[k] != null) q.set(k, String(terms[k]));
   const qs = q.toString();
   const r = await fetch(`/api/new${qs ? `?${qs}` : ''}`);
   if (!r.ok) throw new Error('failed to create room');

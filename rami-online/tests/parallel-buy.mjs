@@ -130,7 +130,7 @@ class FakeWS {
 const tick = () => new Promise(r => setTimeout(r, 0));
 {
   const room = new Room({ storage: fakeStorage() }, {});
-  await room.fetch(new Request('https://do/create?code=PBUY&mode=online&fee=500&seats=3'));
+  await room.fetch(new Request('https://do/create?code=PBUY&mode=online&fee=500&seats=3&buy=10'));
   const ws = [new FakeWS(), new FakeWS(), new FakeWS()];
   ws.forEach((w, i) => room.handleSocket(w, 'p' + i, 'PBUY', i === 0, 'u' + i, false));
   ws[0].msg({ t: 'start' });
@@ -168,6 +168,50 @@ const tick = () => new Promise(r => setTimeout(r, 0));
   room.aiBuy();
   check('every bot answered in one go while the person decides', room.state.phase === 'buying' &&
     [1, 2, 3].every(s => room.state.buy.picks[s] !== undefined) && room.state.buy.picks[0] === undefined);
+}
+
+// ── 10. The buy timer is the room's choice: none, 10 or 20 seconds ──
+async function timedRoom(q) {
+  const room = new Room({ storage: fakeStorage() }, {});
+  await room.fetch(new Request(`https://do/create?code=TIME&mode=practice&seats=2${q}`));
+  const ws = [new FakeWS(), new FakeWS()];
+  ws.forEach((w, i) => room.handleSocket(w, 'p' + i, 'TIME', i === 0, 't' + i, false));
+  ws[0].msg({ t: 'start' });
+  await tick();
+  return { room, ws };
+}
+{
+  const { room, ws } = await timedRoom('');
+  check('a room asks for no timer unless one is chosen', room.buySecs === 0 && room.state.buyTimer === 0);
+  check('without a timer the window has no deadline', room.state.phase === 'buying' && !room.state.buy.deadline &&
+    ws[0].last('state').state.buy.msLeft === null);
+  check('and the waiting room says so', ws[0].last('lobby').buySecs === 0);
+}
+{
+  const { room } = await timedRoom('&buy=20');
+  const left = room.state.buy.deadline - Date.now();
+  check('a 20-second room gives the window 20 seconds', room.buySecs === 20 && left > 19000 && left <= 20000);
+}
+{
+  const { room } = await timedRoom('&buy=7');
+  check('an unlisted timer falls back to none', room.buySecs === 0);
+}
+{
+  // A game saved before the choice existed keeps the 10-second window.
+  const room = new Room({ storage: fakeStorage() }, {});
+  await room.fetch(new Request('https://do/create?code=OLD1&mode=practice&seats=2'));
+  const saved = await room.ctx.storage.get('room');
+  delete saved.buySecs;
+  await room.ctx.storage.put('room', saved);
+  const again = new Room({ storage: room.ctx.storage }, {});
+  await again.load();
+  check('a room saved before the choice keeps the 10-second timer', again.buySecs === 10);
+  const st = initGame(['א', 'ב'].map(name => ({ name, isAI: false })), 0);
+  again.state = st;
+  again.started = true;
+  again.buyClock();
+  const left = again.state.buy.deadline - Date.now();
+  check('so does a game saved before it', left > 9000 && left <= 10000);
 }
 
 if (failures) { console.error(`\n${failures} check(s) failed`); process.exit(1); }

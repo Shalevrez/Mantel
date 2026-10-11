@@ -9,7 +9,7 @@
 
 import {
   G, initGame, cSc, MK, aiLevel as normLevel, retireSeat, normFormat, normFormatMk,
-  aiWantCard, findAIGroups, meetsReq, attachPos, aiDiscard, buyOffered, BUY_MS,
+  aiWantCard, findAIGroups, meetsReq, attachPos, aiDiscard, buyOffered, BUY_MS, normBuyTimer, buyWindowMs,
 } from '../game-core.js';
 import { normFee, normMode } from '../economy.js';
 
@@ -146,6 +146,9 @@ export class Room {
     // with touchMove when the room is created, and fixed from then on.
     this.format = 'mega';
     this.formatMk = 0;
+    // The buy timer (seconds a discard stays on offer; 0 = none), set with
+    // the other rules when the room is created.
+    this.buySecs = 0;
     // What kind of room this is, set when it is created (see /create): a free
     // practice table, or an online room with an entry fee (0 = a free friendly
     // game). `cap` is the table size the creator picked. The wallet itself is
@@ -181,6 +184,8 @@ export class Room {
       this.touchMove = saved.touchMove !== false;
       this.format = normFormat(saved.format);
       this.formatMk = normFormatMk(saved.formatMk);
+      // Rooms saved before the timer was a choice had the 10-second one.
+      this.buySecs = saved.buySecs === undefined ? 10 : normBuyTimer(saved.buySecs);
       this.mode = normMode(saved.mode);
       this.fee = saved.fee || 0;
       this.cap = saved.cap || MAX_SEATS;
@@ -209,6 +214,7 @@ export class Room {
       touchMove: this.touchMove,
       format: this.format,
       formatMk: this.formatMk,
+      buySecs: this.buySecs,
       mode: this.mode,
       fee: this.fee,
       cap: this.cap,
@@ -298,6 +304,7 @@ export class Room {
     this.touchMove = true;
     this.format = 'mega';
     this.formatMk = 0;
+    this.buySecs = 0;
     this.endedAt = null;
     this.emptySince = null;
     this.lastSeen = Date.now();
@@ -340,6 +347,7 @@ export class Room {
         this.format = normFormat(q.get('format'));
         this.formatMk = this.format === 'single' ? normFormatMk(q.get('mk')) : 0;
         this.touchMove = q.get('touch') !== '0';
+        this.buySecs = normBuyTimer(q.get('buy'));
       }
       this.touch();
       await this.persist();
@@ -614,6 +622,7 @@ export class Room {
       touchMove: this.touchMove,
       format: this.format,
       formatMk: this.formatMk,
+      buySecs: this.buySecs,
       players: this.seats.map((s, i) => ({
         seat: i, name: s.name, connected: s.connected, isAI: s.isAI, left: !!s.left,
         ai: s.isAI ? normLevel(s.ai) : null,
@@ -645,19 +654,22 @@ export class Room {
   }
 
   // Start the clock on a buying window the first time it goes out, and close
-  // it when time is up. A window that is decided sooner leaves the timer to
+  // it when time is up — in a room with a buy timer; without one the window
+  // waits for its answers. A window that is decided sooner leaves the timer to
   // find nothing to do. The deadline is saved with the state, so after an
   // eviction the timer is set again the next time the state goes out (and a
   // window whose time ran out meanwhile closes at once).
   buyClock() {
     const st = this.state;
     if (!st || st.phase !== 'buying' || !st.buy || this.closing) return;
+    const ms = buyWindowMs(st);
+    if (!ms) return;
     const id = st.buy.id;
-    if (!st.buy.deadline) this.state = { ...st, buy: { ...st.buy, deadline: Date.now() + BUY_MS } };
+    if (!st.buy.deadline) this.state = { ...st, buy: { ...st.buy, deadline: Date.now() + ms } };
     // Window ids start over with every game.
     const key = `${(st.room && st.room.gameId) || ''}:${id}`;
-    if (this.buyTimer === key) return;
-    this.buyTimer = key;
+    if (this.buyClockKey === key) return;
+    this.buyClockKey = key;
     const t = setTimeout(() => this.closeBuy(id), Math.max(0, this.state.buy.deadline - Date.now()) + 50);
     // Under node (the tests) a pending window must not keep the process alive.
     if (t && typeof t.unref === 'function') t.unref();
@@ -738,6 +750,7 @@ export class Room {
         ...initGame(configs, undefined, { format: this.format, mk: this.formatMk }),
         room: { mode: this.mode, fee: this.fee, gameId: crypto.randomUUID() },
         touchMove: this.touchMove,
+        buyTimer: this.buySecs,
       };
       this.started = true;
       await this.persist();
