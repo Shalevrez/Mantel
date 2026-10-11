@@ -7,7 +7,7 @@
 // welcome page.
 // ═══════════════════════════════════════════════════════
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { FELT, FELTD, GOLD, CREAM, isSeq, isSet } from "../game-core.js";
 import { START_COINS } from "../economy.js";
 import { CardView } from "./ui.jsx";
@@ -328,6 +328,24 @@ export function Tutorial({ name, welcome, onClose, onPractice }) {
   const next = () => setI(n => Math.min(n + 1, pages.length - 1));
   const back = () => setI(n => Math.max(n - 1, 0));
 
+  // Swipe between pages. The walk reads right to left, so a swipe to the
+  // left turns forward, like the "הבא" arrow. Only a clearly sideways swipe
+  // counts — a scroll of the page body or a tap on a card doesn't.
+  const swipe = useRef(null);
+  const onTouchStart = (e) => {
+    const t = e.touches[0];
+    swipe.current = e.touches.length === 1 ? { x: t.clientX, y: t.clientY } : null;
+  };
+  const onTouchEnd = (e) => {
+    const s = swipe.current;
+    swipe.current = null;
+    if (!s) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - s.x, dy = t.clientY - s.y;
+    if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    if (dx < 0) next(); else back();
+  };
+
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 1000,
@@ -339,8 +357,8 @@ export function Tutorial({ name, welcome, onClose, onPractice }) {
         background: CREAM, borderRadius: 20, maxWidth: 440, width: '100%',
         display: 'flex', flexDirection: 'column',
         border: `2px solid ${GOLD}88`, boxShadow: '0 24px 72px rgba(0,0,0,.6)',
-        overflow: 'hidden',
-      }}>
+        overflow: 'hidden', touchAction: 'pan-y',
+      }} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} onTouchCancel={() => { swipe.current = null; }}>
         {/* Header: the page's name, where we are, and a way out */}
         <div style={{
           background: FELT, padding: '14px 18px', display: 'flex', gap: 10,
