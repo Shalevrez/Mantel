@@ -6,7 +6,7 @@
 // that settles the game at the end.
 // ═══════════════════════════════════════════════════════
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { GOLD, GOLDD, FELTD, CREAM, AI_LEVELS, AI_LEVEL_NAMES, MK, FORMATS, FORMAT_NAMES, BUY_TIMERS } from "../game-core.js";
 import { ENTRY_FEES, DEFAULT_FEE, prizeShares, shortNum, buyPrice } from "../economy.js";
 import { Icon, IconLabel } from "./icons.jsx";
@@ -311,6 +311,21 @@ function PlayBar({ busy, error, disabled, onPlay, label = 'התחל' }) {
 // ═══════════════════════════════════════════════════════
 
 export function JoinDialog({ code, setCode, busy, error, onJoin, onClose }) {
+  // The code arrives prefilled (last room / invite link). Until the player
+  // edits it, the first keystroke replaces the whole code instead of being
+  // blocked by maxLength or appended to it.
+  const pristine = useRef(!!code);
+  const onChange = e => {
+    let v = e.target.value;
+    if (pristine.current) {
+      pristine.current = false;
+      const { inputType = '', data } = e.nativeEvent;
+      if (inputType.startsWith('delete')) v = '';
+      else if (inputType === 'insertText' && data) v = data;
+      else if (v.startsWith(code)) v = v.slice(code.length);   // e.g. a paste after the old code
+    }
+    setCode(v.toUpperCase().slice(0, 4));
+  };
   return (
     <Modal onClose={onClose} width={340}>
       <div style={{ textAlign: 'center', marginBottom: 12 }}>
@@ -319,8 +334,8 @@ export function JoinDialog({ code, setCode, busy, error, onJoin, onClose }) {
         <div style={{ color: SOFT, fontSize: 12.5 }}>הקלידו את קוד החדר שקיבלתם</div>
       </div>
       <form onSubmit={e => { e.preventDefault(); onJoin(); }}>
-        <input value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="ABCD" maxLength={4}
-               autoFocus
+        <input value={code} onChange={onChange} placeholder="ABCD"
+               autoFocus onFocus={e => { if (pristine.current) e.target.select(); }}
                style={{ ...hubInput, letterSpacing: 8, textAlign: 'center', fontSize: 26, fontWeight: 800 }} />
         <button type="submit" disabled={busy} style={{ ...hubBtn, fontSize: 18 }}>
           {busy ? '...' : <IconLabel name="play">הצטרף</IconLabel>}
