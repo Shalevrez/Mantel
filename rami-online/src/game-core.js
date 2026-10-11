@@ -260,7 +260,11 @@ function orderSeq(cards) {
   if (real.length < 1) return cards;
 
   const vals = real.map(c => c.v);
-  const aceHigh = vals.includes(1) && vals.some(v => v >= 11);
+  // Ace low unless a face card asks for it high, or the jokers can't bridge it to
+  // the others as a 1 (10,JK,JK,JK,A is 10-J-Q-K-A, not A-2-3-4…10).
+  const low = [...vals].sort((a, b) => a - b);
+  const lowGaps = low.reduce((g, v, i) => i ? g + v - low[i - 1] - 1 : 0, 0);
+  const aceHigh = vals.includes(1) && (vals.some(v => v >= 11) || lowGaps > jokers.length);
   const sv = c => (aceHigh && c.v === 1) ? 14 : c.v;
   real = [...real].sort((a, b) => sv(a) - sv(b));
 
