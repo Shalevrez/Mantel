@@ -22,6 +22,7 @@ const BOARD = [
   { id: 'jrun', type: 'seq', cards: [card('9s', 's', 9), card('jk1', 'j', 0), card('js', 's', 11)] },
   { id: 'top',  type: 'seq', cards: [card('js2', 's', 11), card('qs', 's', 12), card('ks', 's', 13)] },
   { id: 'jset', type: 'set', cards: [card('4c', 'c', 4), card('4d', 'd', 4), card('jk2', 'j', 0)] },
+  { id: 'fset', type: 'set', cards: [card('Jc', 'c', 11), card('jk3', 'j', 0), card('Js', 's', 11), card('Jd', 'd', 11)] },
 ];
 
 // Every card there is, plus a joker; and a spare card so the hand never empties.
@@ -56,6 +57,20 @@ check('4♥ and 8♥ fit the 5–7♥ run', canAttach(BOARD[0], [mkCard('h', 4)]
 check('9♥ does not', !canAttach(BOARD[0], [mkCard('h', 9)]));
 check('10♠ swaps out the joker in 9♠ JK J♠', canAttach(BOARD[2], [mkCard('s', 10)]));
 check('8♥ joins the set of eights', canAttach(BOARD[1], [mkCard('h', 8)]));
+check('J♥ swaps out the joker in the full set J♣ JK J♠ J♦', canAttach(BOARD[5], [mkCard('h', 11)]));
+check('J♠ does not (its suit is already there)', !canAttach(BOARD[5], [mkCard('s', 11)]));
+check('4♥ joins 4♣ 4♦ JK rather than swapping', (() => {
+  const c = card('4h', 'h', 4), st = stateWith([c, spare]);
+  const after = G(st, { type: 'ATTACH', gid: 'jset', cid: c.id });
+  return after.board.find(g => g.id === 'jset').cards.length === 4 && !after.mustUseJoker;
+})());
+check('the swap hands the joker back, to be used this turn', (() => {
+  const c = card('Jh', 'h', 11), st = stateWith([c, spare]);
+  const after = G(st, { type: 'ATTACH', gid: 'fset', cid: c.id });
+  const set = after.board.find(g => g.id === 'fset').cards;
+  return set.length === 4 && set.every(x => !x.j) && set.some(x => x.id === 'Jh')
+    && after.players[0].hand.some(x => x.id === 'jk3') && after.mustUseJoker === 'jk3';
+})());
 
 // ── 2. A selection of two cards, as a drag of a selected card carries ──
 let pairs = 0, pairAgree = 0;

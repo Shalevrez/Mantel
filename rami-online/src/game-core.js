@@ -305,6 +305,23 @@ function jokerValues(cards) {
   return out;
 }
 
+// The joker on board group `grp` that real card `card` can swap out, or null.
+// In a sequence: the joker standing exactly for that card. In a full set (4
+// cards): the joker standing for the one missing suit. A set with room left takes
+// the card as a plain attach instead, so its joker isn't swappable.
+function swapJoker(grp, card) {
+  if (!grp || !card || card.j) return null;
+  if (grp.type === 'seq') {
+    const jv = jokerValues(grp.cards).find(x => x.suit === card.suit && x.v === card.v);
+    return jv ? grp.cards.find(c => c.id === jv.jokerId) : null;
+  }
+  const real = grp.cards.filter(c => !c.j);
+  const joker = grp.cards.find(c => c.j);
+  if (!joker || grp.cards.length < 4 || !isSet(grp.cards)) return null;
+  if (card.v !== real[0].v || real.some(c => c.suit === card.suit)) return null;
+  return joker;
+}
+
 function attachPos(gCards, card) {
   const combined = [...gCards, card];
   if (isSeq(gCards) ? extendSeq(gCards, [card]) : isSeq(combined)) return 'seq';
@@ -318,9 +335,7 @@ function attachPos(gCards, card) {
 // groups a dragged card actually fits.
 function canAttach(grp, cards) {
   if (!grp || !cards.length) return false;
-  if (cards.length === 1 && grp.type === 'seq' && !cards[0].j &&
-      jokerValues(grp.cards).some(jv => jv.suit === cards[0].suit && jv.v === cards[0].v))
-    return true;
+  if (cards.length === 1 && swapJoker(grp, cards[0])) return true;
   return !!((isSeq(grp.cards) && extendSeq(grp.cards, cards))
     || (isSet(grp.cards) && isSet([...grp.cards, ...cards])));
 }
@@ -915,14 +930,14 @@ function G(state, action) {
     const grp = state.board.find(g => g.id === action.gid);
     if (!grp) return state;
 
-    // Joker swap: only for a single real card that matches a joker's spot in a sequence.
+    // Joker swap: only for a single real card that matches a joker's spot in a
+    // sequence or full set (see swapJoker).
     // The freed joker returns to the hand and MUST be used this turn.
-    if (cards.length === 1 && grp.type === 'seq' && !cards[0].j) {
+    if (cards.length === 1) {
       const card = cards[0];
-      const match = jokerValues(grp.cards).find(jv => jv.suit === card.suit && jv.v === card.v);
-      if (match) {
-        const joker = grp.cards.find(c => c.id === match.jokerId);
-        const swapped = orderGroup(grp.cards.map(c => c.id === match.jokerId ? card : c));
+      const joker = swapJoker(grp, card);
+      if (joker) {
+        const swapped = orderGroup(grp.cards.map(c => c.id === joker.id ? card : c));
         const board = state.board.map(g => g.id === grp.id
           ? markAttach({ ...g, cards: swapped }, state.cur, [card.id]) : g);
         const newHand = [...p.hand.filter(c => c.id !== card.id), joker];
