@@ -314,37 +314,111 @@ const PAGES = [
   },
 ];
 
+// Pages that aren't on screen are still laid out, so the walk keeps the size
+// of its biggest page, but nobody can see, read out or tab into them.
+const away = (on) => on ? {} : { 'aria-hidden': true, inert: '' };
+
+// Several layers in one grid cell: the cell takes the size of the biggest,
+// and only the `on` one shows.
+function Stack({ on, children, align = 'stretch' }) {
+  return (
+    <div style={{ display: 'grid', alignItems: align }}>
+      {children.map((child, k) => (
+        <div key={k} {...away(k === on)} style={{ gridArea: '1 / 1', minWidth: 0, visibility: k === on ? 'visible' : 'hidden' }}>
+          {child}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const reducedMotion = () => {
+  try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; }
+};
+
 export function Tutorial({ name, welcome, onClose, onPractice }) {
   const pages = welcome ? PAGES : PAGES.filter(p => !p.welcomeOnly);
   const [i, setI] = useState(0);
   // Which kinds of group the exercise has found so far: 'seq', 'set'.
   const [found, setFound] = useState([]);
-  const page = pages[i];
-  const last = i === pages.length - 1;
+  const last = pages.length - 1;
   const ctx = {
     name: name || 'שחקן', found,
     onSolved: (kind) => setFound(f => f.includes(kind) ? f : [...f, kind]),
   };
-  const next = () => setI(n => Math.min(n + 1, pages.length - 1));
+  const next = () => setI(n => Math.min(n + 1, last));
   const back = () => setI(n => Math.max(n - 1, 0));
 
-  // Swipe between pages. The walk reads right to left, so a swipe to the
-  // left turns forward, like the "הבא" arrow. Only a clearly sideways swipe
-  // counts — a scroll of the page body or a tap on a card doesn't.
+  // The pages sit side by side on a strip, the first on the right, and the
+  // strip slides to the page on screen. A swipe drags it under the finger:
+  // to the right brings the next page in from the left, to the left goes
+  // back. Only a clearly sideways drag moves it — scrolling the page or
+  // tapping a card in the exercise doesn't.
   const swipe = useRef(null);
+  const [drag, setDrag] = useState(0); // px the strip is dragged right of its page
   const onTouchStart = (e) => {
     const t = e.touches[0];
-    swipe.current = e.touches.length === 1 ? { x: t.clientX, y: t.clientY } : null;
+    swipe.current = e.touches.length === 1 ? { x: t.clientX, y: t.clientY, w: e.currentTarget.offsetWidth, side: null } : null;
   };
-  const onTouchEnd = (e) => {
+  const onTouchMove = (e) => {
+    const s = swipe.current;
+    if (!s) return;
+    const t = e.touches[0];
+    const dx = t.clientX - s.x, dy = t.clientY - s.y;
+    if (!s.side) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      s.side = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+    }
+    if (s.side !== 'x') return;
+    // Past the first or the last page the strip only gives a little.
+    const edge = (dx > 0 && i === last) || (dx < 0 && i === 0);
+    setDrag(edge ? dx / 4 : dx);
+  };
+  const endSwipe = (e) => {
     const s = swipe.current;
     swipe.current = null;
-    if (!s) return;
-    const t = e.changedTouches[0];
-    const dx = t.clientX - s.x, dy = t.clientY - s.y;
-    if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
-    if (dx < 0) next(); else back();
+    if (!s || s.side !== 'x') return;
+    const dx = e.changedTouches[0].clientX - s.x;
+    if (Math.abs(dx) > Math.min(60, s.w / 5)) { if (dx > 0) next(); else back(); }
+    setDrag(0);
   };
+  const cancelSwipe = () => { swipe.current = null; setDrag(0); };
+
+  const footer = (k) => {
+    const page = pages[k];
+    if (k === last) return (
+      <>
+        <button onClick={onPractice} style={primary}>
+          <IconLabel name="bot">משחק אימון מול המחשב</IconLabel>
+        </button>
+        <button onClick={onClose} style={{ ...ghost, width: '100%', marginTop: 8 }}>
+          למסך הבית
+        </button>
+      </>
+    );
+    return (
+      <>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {k > 0 && (
+            <button onClick={back} style={ghost} title="הקודם">
+              <Icon name="arrowRight" size={18} />
+            </button>
+          )}
+          <button onClick={next} style={{ ...primary, flex: 1 }}>
+            {page.welcomeOnly ? 'הראו לי איך משחקים' : 'הבא'}
+            {' '}<Icon name="arrowLeft" size={16} />
+          </button>
+        </div>
+        {page.welcomeOnly && (
+          <button onClick={onClose} style={{ ...ghost, width: '100%', marginTop: 8, border: 'none' }}>
+            אני כבר יודע לשחק — דלג
+          </button>
+        )}
+      </>
+    );
+  };
+
+  const slide = drag || reducedMotion() ? 'none' : 'transform .32s cubic-bezier(.2, .8, .3, 1)';
 
   return (
     <div style={{
@@ -354,19 +428,21 @@ export function Tutorial({ name, welcome, onClose, onPractice }) {
       direction: 'rtl', padding: 14,
     }}>
       <div role="dialog" aria-modal="true" aria-label="הדרכה" className="rules-card" style={{
-        background: CREAM, borderRadius: 20, maxWidth: 440, width: '100%',
+        background: CREAM, borderRadius: 20, maxWidth: 440, width: '100%', maxHeight: '100%',
         display: 'flex', flexDirection: 'column',
         border: `2px solid ${GOLD}88`, boxShadow: '0 24px 72px rgba(0,0,0,.6)',
         overflow: 'hidden', touchAction: 'pan-y',
-      }} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} onTouchCancel={() => { swipe.current = null; }}>
+      }} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={endSwipe} onTouchCancel={cancelSwipe}>
         {/* Header: the page's name, where we are, and a way out */}
         <div style={{
           background: FELT, padding: '14px 18px', display: 'flex', gap: 10,
           alignItems: 'center', justifyContent: 'space-between', flexShrink: 0,
         }}>
-          <span style={{ color: GOLD, fontSize: 19, fontWeight: 700, minWidth: 0 }}>
-            <IconLabel name={page.icon}>{page.title(ctx)}</IconLabel>
-          </span>
+          <div style={{ color: GOLD, fontSize: 19, fontWeight: 700, minWidth: 0, flex: 1 }}>
+            <Stack on={i} align="center">
+              {pages.map(p => <IconLabel key={p.key} name={p.icon}>{p.title(ctx)}</IconLabel>)}
+            </Stack>
+          </div>
           <button onClick={onClose} title="דלג על ההדרכה" style={{
             background: 'rgba(255,255,255,.15)', color: CREAM, border: 'none', flexShrink: 0,
             borderRadius: 8, padding: '0 10px', height: 30, fontSize: 13, cursor: 'pointer',
@@ -375,7 +451,7 @@ export function Tutorial({ name, welcome, onClose, onPractice }) {
         </div>
 
         {/* Progress */}
-        <div style={{ display: 'flex', gap: 5, justifyContent: 'center', padding: '12px 0 0' }}>
+        <div style={{ display: 'flex', gap: 5, justifyContent: 'center', padding: '12px 0 0', flexShrink: 0 }}>
           {pages.map((p, k) => (
             <button key={p.key} onClick={() => setI(k)} aria-label={`עמוד ${k + 1}`} style={{
               width: k === i ? 22 : 8, height: 8, borderRadius: 99, border: 'none', padding: 0,
@@ -385,40 +461,20 @@ export function Tutorial({ name, welcome, onClose, onPractice }) {
           ))}
         </div>
 
-        {/* Body */}
-        <div key={page.key} style={{ padding: '14px 20px 16px', overflowY: 'auto' }}>
-          {page.body(ctx)}
+        {/* Body: the strip of pages, as tall as the tallest */}
+        <div style={{ flex: '1 1 auto', minHeight: 0, overflowY: 'auto', overflowX: 'hidden' }}>
+          <div style={{ display: 'flex', transform: `translateX(calc(${i * 100}% + ${drag}px))`, transition: slide }}>
+            {pages.map((p, k) => (
+              <div key={p.key} {...away(k === i)} style={{ flex: '0 0 100%', minWidth: 0, boxSizing: 'border-box', padding: '14px 20px 16px' }}>
+                {p.body(ctx)}
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Footer */}
         <div style={{ padding: 14, flexShrink: 0, borderTop: '1px solid #e7e5e4' }}>
-          {last ? (
-            <>
-              <button onClick={onPractice} style={primary}>
-                <IconLabel name="bot">משחק אימון מול המחשב</IconLabel>
-              </button>
-              <button onClick={onClose} style={{ ...ghost, width: '100%', marginTop: 8 }}>
-                למסך הבית
-              </button>
-            </>
-          ) : (
-            <div style={{ display: 'flex', gap: 8 }}>
-              {i > 0 && (
-                <button onClick={back} style={ghost} title="הקודם">
-                  <Icon name="arrowRight" size={18} />
-                </button>
-              )}
-              <button onClick={next} style={{ ...primary, flex: 1 }}>
-                {page.welcomeOnly ? 'הראו לי איך משחקים' : 'הבא'}
-                {' '}<Icon name="arrowLeft" size={16} />
-              </button>
-            </div>
-          )}
-          {page.welcomeOnly && (
-            <button onClick={onClose} style={{ ...ghost, width: '100%', marginTop: 8, border: 'none' }}>
-              אני כבר יודע לשחק — דלג
-            </button>
-          )}
+          <Stack on={i} align="start">{pages.map((p, k) => <div key={p.key}>{footer(k)}</div>)}</Stack>
         </div>
       </div>
     </div>
