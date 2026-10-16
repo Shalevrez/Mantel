@@ -59,8 +59,7 @@ export function viewFor(state, seat) {
   // Selection and staging are the acting player's private working area: which cards
   // they picked up, and the groups they've built but not yet committed.
   const acting = seat === state.cur;
-  // The buying window: who wants the card stays secret until it's decided.
-  // Each seat sees its own answer, and only who is still to answer.
+  // The buying window: who is being asked (checker), and who is still to be.
   const b = state.buy;
   const buy = b ? {
     id: b.id, origNext: b.origNext, prev: b.prev, checker: b.checker,
@@ -699,32 +698,33 @@ export class Room {
     for (let i = 0; i < this.seats.length; i++) this.sendState(i);
   }
 
-  // Start the clock on a buying window the first time it goes out, and close
-  // it when time is up — in a room with a buy timer; without one the window
-  // waits for its answers. A window that is decided sooner leaves the timer to
-  // find nothing to do. The deadline is saved with the state, so after an
-  // eviction the timer is set again the next time the state goes out (and a
-  // window whose time ran out meanwhile closes at once).
+  // Start the clock for the seat being asked the first time the question goes
+  // out to it, and pass it on when that seat's time is up — in a room with a
+  // buy timer; without one the window waits for each answer. Every seat gets
+  // its own full time. An answer that comes sooner leaves the timer to find
+  // nothing to do. The deadline is saved with the state, so after an eviction
+  // the timer is set again the next time the state goes out (and a seat whose
+  // time ran out meanwhile is passed over at once).
   buyClock() {
     const st = this.state;
     if (!st || st.phase !== 'buying' || !st.buy || this.closing) return;
     const ms = buyWindowMs(st);
     if (!ms) return;
-    const id = st.buy.id;
+    const { id, checker } = st.buy;
     if (!st.buy.deadline) this.state = { ...st, buy: { ...st.buy, deadline: Date.now() + ms } };
     // Window ids start over with every game.
-    const key = `${(st.room && st.room.gameId) || ''}:${id}`;
+    const key = `${(st.room && st.room.gameId) || ''}:${id}:${checker}`;
     if (this.buyClockKey === key) return;
     this.buyClockKey = key;
-    const t = setTimeout(() => this.closeBuy(id), Math.max(0, this.state.buy.deadline - Date.now()) + 50);
+    const t = setTimeout(() => this.closeBuy(id, checker), Math.max(0, this.state.buy.deadline - Date.now()) + 50);
     // Under node (the tests) a pending window must not keep the process alive.
     if (t && typeof t.unref === 'function') t.unref();
   }
 
-  async closeBuy(id) {
+  async closeBuy(id, checker) {
     const st = this.state;
-    if (this.closing || !st || st.phase !== 'buying' || !st.buy || st.buy.id !== id) return;
-    this.state = G(st, { type: 'BUY_CLOSE', id });
+    if (this.closing || !st || st.phase !== 'buying' || !st.buy || st.buy.id !== id || st.buy.checker !== checker) return;
+    this.state = G(st, { type: 'BUY_CLOSE', id, checker });
     this.touch();
     await this.persist();
     await this.armAlarm();
@@ -925,13 +925,13 @@ export class Room {
       return st.phase === 'round_end';
     // The buying window's timeout is the server's own (see buyClock).
     if (action.type === 'BUY_CLOSE') return false;
-    // Buying: every seat that is offered the card answers for itself, at any time
-    // while the window is open — the player on turn with TAKE_FREE, anyone else
-    // with BUY. Outside that window these are not merely pointless — SKIP
-    // dereferences st.buy and BUY indexes players by a client-supplied idx.
+    // Buying: only the seat being asked answers, for itself — the player on
+    // turn with TAKE_FREE, anyone else with BUY. Outside that window these are
+    // not merely pointless — SKIP dereferences st.buy and BUY indexes players
+    // by a client-supplied idx.
     if (['TAKE_FREE', 'BUY', 'SKIP'].includes(action.type)) {
       if (st.phase !== 'buying' || !st.buy) return false;
-      if (!buyOffered(st).includes(seat)) return false;
+      if (seat !== st.buy.checker || !buyOffered(st).includes(seat)) return false;
       if (action.type === 'TAKE_FREE') return seat === st.buy.origNext;
       if (action.type === 'BUY') return action.idx === seat && seat !== st.buy.origNext;
       return true;
@@ -957,7 +957,7 @@ export class Room {
     if (!this.state || ['round_end', 'game_end'].includes(this.state.phase)) return;
     const st = this.state;
 
-    // Buying: every computer player that is offered the card answers at once.
+    // Buying: a computer player answers when the question reaches it.
     if (st.phase === 'buying' && st.buy) {
       if (this.aiBuyers(st).length) return this.scheduleAI(() => this.aiBuy());
       return;
@@ -999,12 +999,12 @@ export class Room {
     return normLevel(this.seats[seat]?.ai || this.aiLevel);
   }
 
-  // The computer players offered the card that haven't answered yet.
+  // The computer player being asked, if the seat being asked is one.
   aiBuyers(st) {
     // A scheduled answer can arrive after the window was already decided.
     if (!st.buy) return [];
     const picks = st.buy.picks || {};
-    return buyOffered(st).filter(s => this.seats[s]?.isAI && picks[s] === undefined);
+    return buyOffered(st).filter(s => s === st.buy.checker && this.seats[s]?.isAI && picks[s] === undefined);
   }
 
   aiBuy() {

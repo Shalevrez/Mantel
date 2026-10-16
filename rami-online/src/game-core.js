@@ -527,19 +527,18 @@ function prevActive(state, i) {
 const activeCount = state => state.players.filter(p => !p.out).length;
 
 // ── The buying window ────────────────────────────────
-// A discard is offered to everyone who may take it at once, and each of them
-// answers "want" or "don't want" (buy.picks, by seat) whenever they like —
-// nobody waits for their turn to be asked. Who gets the card is still decided
-// by turn order: the player on turn first (for free), then the seats after
-// them, never the one who threw it. The card goes to the first seat in that
-// order that wants it, as soon as everyone before it has said no; a "want"
-// further down simply waits. If nobody wants it, the player on turn draws.
-// A seat may change its answer until the card is decided.
+// A discard is offered one seat at a time, in turn order: the player on turn
+// first (for free), then the seats after them (with a penalty card), never the
+// one who threw it. Only the seat being asked (`buy.checker`) may answer; its
+// "want" or "don't want" is final (buy.picks, by seat). The card goes to the
+// first seat that wants it; a "don't want" passes the question to the next
+// seat. If nobody wants it, the player on turn draws.
 
-// How long a window stays open, if the room has a buy timer. Whoever hasn't
-// answered by then doesn't want the card (BUY_CLOSE, sent by the server), so
-// one slow or absent player never holds up the table. Without a timer the
-// window waits for every answer it needs.
+// How long each seat has to answer, if the room has a buy timer. Whoever hasn't
+// answered by then doesn't want the card (BUY_CLOSE, sent by the server) and
+// the question moves on, so one slow or absent player never holds up the
+// table. Every seat gets the whole time when its turn to answer comes. Without
+// a timer the window waits for each answer.
 // The room picks the timer when it's created, in seconds; 0 is no timer.
 const BUY_TIMERS = [0, 10, 20, 30];
 const normBuyTimer = (v) => BUY_TIMERS.includes(Number(v)) ? Number(v) : 0;
@@ -573,12 +572,17 @@ function openBuy(state, origNext, prev) {
 
 // Decide the window if its answers already decide it, else keep it open.
 // `checker` is the seat the decision waits on: the first one, in order, that
-// hasn't answered yet.
+// hasn't answered yet. A new checker starts with a fresh clock (no deadline:
+// the server sets one when the state goes out).
 function settleBuy(state) {
   const buy = state.buy;
   const picks = buy.picks || {};
   for (const s of buyOffered(state)) {
-    if (picks[s] === undefined) return { ...state, phase: 'buying', buy: { ...buy, checker: s } };
+    if (picks[s] === undefined) {
+      const b = { ...buy, checker: s };
+      if (s !== buy.checker) delete b.deadline;
+      return { ...state, phase: 'buying', buy: b };
+    }
     if (!picks[s]) continue;
     const won = s === buy.origNext ? takeFree(state) : buyPaid(state, s);
     if (won) return won;
@@ -639,11 +643,11 @@ function buyPaid(state, seat) {
   });
 }
 
-// One seat answers. Refused (state unchanged) for a seat that isn't offered
-// the card.
+// The seat being asked answers. Refused (state unchanged) for any other seat:
+// one further down the line waits until the question reaches it.
 function pickBuy(state, seat, want) {
   if (state.phase !== 'buying' || !state.buy) return state;
-  if (!buyOffered(state).includes(seat)) return state;
+  if (seat !== state.buy.checker || !buyOffered(state).includes(seat)) return state;
   return settleBuy({ ...state, buy: { ...state.buy, picks: { ...(state.buy.picks || {}), [seat]: want } } });
 }
 
@@ -710,9 +714,9 @@ function G(state, action) {
   if (type === '__INIT__') return initGame(action.players);
 
   // ── Buying phase ──────────────────────────────────
-  // Every offered seat answers on its own (see settleBuy): TAKE_FREE is the
-  // player on turn's "want", BUY {idx} anyone else's, SKIP {seat} a "don't
-  // want" from either (the seat the window waits on when no seat is given).
+  // The seat being asked answers (see settleBuy): TAKE_FREE is the player on
+  // turn's "want", BUY {idx} anyone else's, SKIP {seat} a "don't want" from
+  // either (the seat being asked when no seat is given).
   if (type === 'TAKE_FREE') {
     if (state.phase !== 'buying' || !state.buy) return state;
     if (onLastCard(state.players[state.buy.origNext]))
@@ -734,13 +738,14 @@ function G(state, action) {
     return pickBuy(state, action.seat ?? state.buy.checker, false);
   }
 
-  // Server-internal: the window's time is up, and whoever hasn't answered
-  // doesn't want the card. Only for the window it was set for (`id`).
+  // Server-internal: the seat being asked ran out of time, and doesn't want
+  // the card — the question moves on. Only for the window (`id`) and the seat
+  // (`checker`) the clock was set for.
   if (type === 'BUY_CLOSE') {
     if (state.phase !== 'buying' || !state.buy || state.buy.id !== action.id) return state;
-    const picks = { ...(state.buy.picks || {}) };
-    for (const s of buyOffered(state)) if (picks[s] === undefined) picks[s] = false;
-    return settleBuy({ ...state, buy: { ...state.buy, picks } });
+    const seat = action.checker ?? state.buy.checker;
+    if (seat !== state.buy.checker) return state;
+    return settleBuy({ ...state, buy: { ...state.buy, picks: { ...(state.buy.picks || {}), [seat]: false } } });
   }
 
   // ── Draw ──────────────────────────────────────────

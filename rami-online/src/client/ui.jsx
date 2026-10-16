@@ -581,11 +581,10 @@ function RulesModal({ onClose, focus }) {
           </Section>
 
           <Section title="🛒 קנייה" id="buy">
-            כשמישהו זורק קלף, הוא מוצע <b>לכולם בבת אחת</b>, וכל אחד מסמן "רוצה" או "לא רוצה"
-            (בחדר עם טיימר לקנייה, מי שלא סימן בזמן — לא רוצה). הקלף הולך <b>לפי סדר התור</b>: השחקן הבא בתור
-            ראשון ומקבל אותו בחינם; אחריו השאר, שמקבלים יחד איתו קלף עונשין מהחבילה. הקלף
-            של הראשון לפי הסדר שרוצה — ברגע שכל מי שלפניו ויתר. אפשר לשנות את הבחירה עד שמוחלט.
-            מי שרצה אבל מישהו לפניו לקח — לא משלם כלום.
+            כשמישהו זורק קלף, הוא מוצע <b>לפי סדר התור, שחקן אחרי שחקן</b>. קודם <b>השחקן הבא בתור</b>,
+            שיכול לקחת אותו בחינם. אם הוא מוותר, הקלף מוצע לבא אחריו, שיכול לקנות אותו ומקבל יחד איתו
+            קלף עונשין מהחבילה — וכן הלאה. הראשון שרוצה לוקח את הקלף.
+            (בחדר עם טיימר לקנייה, לכל שחקן יש את הזמן כולו כשמגיע תורו להחליט, ומי שלא ענה בזמן — ויתר.)
             אם אף אחד לא לקח — הקלף נשרף והשחקן הבא שולף מהחבילה.<br/>
             <b>הקלף הפתוח בתחילת הסיבוב</b> מתנהג כמו כל קלף שנזרק: הראשון בתור יכול לקחת אותו או לשלוף
             מהחבילה, ואם הוא מוותר — שאר השחקנים יכולים לקנות אותו עם קלף עונשין.
@@ -1272,32 +1271,9 @@ function BuyClock({ id, msLeft, total, onLow }) {
   );
 }
 
-// The buying panel waits this long after a window opens before it shows — about
-// the flight of the thrown card onto the pile — and, once the window is decided,
-// stays on this long with the outcome (a tap anywhere closes it sooner).
+// The buying panel waits this long after the question reaches me before it
+// shows — about the flight of the thrown card onto the pile.
 const BUY_PROMPT_DELAY = 350;
-const BUY_RESULT_MS = 2500;
-
-// What the decided panel says to a seat that was offered the card but didn't
-// get it: who took it (free or with a penalty card), or that nobody did. Null
-// when there's nothing to say there: I took it myself (the message bar says
-// so), or nobody did and it's my turn to draw ("תורך!" says so).
-function buyOutcome(state, mySeat, wallet) {
-  const bn = state.buyNote;
-  const name = (s) => state.players[s]?.name || '';
-  if (bn && state.players[bn.seat]) {
-    if (bn.seat === mySeat) return null;
-    return {
-      icon: bn.paid ? 'coins' : 'gift',
-      text: bn.paid ? `${name(bn.seat)} קנה את הקלף עם קלף קנס` : `${name(bn.seat)} לקח את הקלף בחינם`,
-      sub: !bn.outbidYou ? ''
-        : wallet ? `הוא היה לפניך בתור — ${wallet.buyPrice} המטבעות ששמרת חזרו אליך`
-        : 'הוא היה לפניך בתור',
-    };
-  }
-  if (state.cur === mySeat) return null;
-  return { icon: 'x', text: 'אף אחד לא לקח את הקלף', sub: `${name(state.cur)} שולף מהחבילה` };
-}
 
 // The wallet in a paid room, always in view: what I have, and what this game
 // has cost me so far (the entry fee, every buy with a penalty card, and a buy
@@ -1390,18 +1366,14 @@ function Game({ state, dispatch, onLeave, wallet }) {
   const mk      = MK[state.mk];
   const buy     = state.buy;
 
-  // The buying window (game-core settleBuy): everyone offered the discard
-  // answers at once, and it goes by turn order to the first who wants it.
+  // The buying window (game-core settleBuy): the discard is offered one seat
+  // at a time in turn order, and goes to the first who wants it.
   const offered       = (buy && buy.offered) || [];
-  // I'm offered the card: I answer whenever I like while the window is open.
-  const humanDecides  = state.phase === 'buying' && offered.includes(mySeat);
+  // The question has reached me: I'm the seat being asked.
+  const humanDecides  = state.phase === 'buying' && !!buy && buy.checker === mySeat && offered.includes(mySeat);
   // Mine is the free offer when I'm the player on turn.
   const isFreeOffer   = !!buy && buy.origNext === mySeat;
   const myPick        = buy ? buy.mine : undefined;   // true / false / not yet
-  // Who hasn't answered yet (never what anyone answered), and of them, who is
-  // ahead of me in line.
-  const waitingOn     = ((buy && buy.waiting) || []).filter(s => s !== mySeat);
-  const aheadOfMe     = waitingOn.filter(s => offered.indexOf(s) < offered.indexOf(mySeat));
   const namesOf       = (seats) => seats.map(s => state.players[s]?.name).filter(Boolean).join(', ');
   // What this buy costs in coins: only a buy that brings a penalty card.
   const buyCost       = humanDecides && !isFreeOffer && wallet ? wallet.buyPrice : 0;
@@ -1422,53 +1394,16 @@ function Game({ state, dispatch, onLeave, wallet }) {
       : bn.paid ? `💰 ${bnName} קנה את הקלף עם הקנס`
       : `🎁 ${bnName} לקח מהאשפה בלי קנס`;
 
-  // ── The buying panel: when it shows, and what it says once decided ──────
-  // It comes up a beat after the window opens, once the thrown card has landed
-  // on the pile, so it never pops up while the card is still in the air.
-  // And it doesn't vanish the moment someone ahead of me takes the card: it
-  // stays on a few seconds with what happened (`buyResult`), and goes on a tap
-  // anywhere or by itself. The rules aren't touched — only what I see.
-  const offerId = humanDecides && buy ? buy.id : null;
-  const [promptShown, setPromptShown] = useState(null);   // the window id now on screen
-  const [buyResult, setBuyResult] = useState(null);
-  // The last window offered to me, as it was while open: what the decided
-  // panel shows once the card is gone from the pile.
-  const lastOffer = useRef(null);
-  if (offerId != null) lastOffer.current = { id: offerId, card: discard, free: isFreeOffer };
-  const prevOffer = useRef(null);
+  // ── The buying panel comes up a beat after the question reaches me ──────
+  // once the thrown card has landed on the pile, so it never pops up while
+  // the card is still in the air.
+  const offerId = humanDecides && buy ? `${buy.id}:${buy.checker}` : null;
+  const [promptShown, setPromptShown] = useState(null);   // the offer now on screen
   useEffect(() => {
-    const was = prevOffer.current;
-    prevOffer.current = offerId;
-    if (offerId != null) {
-      setBuyResult(null);
-      if (promptShown === offerId) return;
-      const t = setTimeout(() => setPromptShown(offerId), BUY_PROMPT_DELAY);
-      return () => clearTimeout(t);
-    }
-    // The window I was offered is decided. Whoever won it already sees it in
-    // their hand and the message bar; the rest see who took it, if anyone. A
-    // window decided before its panel ever came up shows nothing.
-    const o = lastOffer.current;
-    if (was == null || !o || o.id !== was || promptShown !== was) return;
-    if (state.phase !== 'draw' && state.phase !== 'action') return;
-    const r = buyOutcome(state, mySeat, wallet);
-    if (r) setBuyResult({ ...r, id: was, card: o.card });
+    if (offerId == null || promptShown === offerId) return;
+    const t = setTimeout(() => setPromptShown(offerId), BUY_PROMPT_DELAY);
+    return () => clearTimeout(t);
   }, [offerId]);
-  useEffect(() => {
-    if (!buyResult) return;
-    const close = () => setBuyResult(null);
-    const t = setTimeout(close, BUY_RESULT_MS);
-    // Wait a tick, so the tap that decided the window isn't the one that closes it.
-    const on = setTimeout(() => {
-      window.addEventListener('pointerdown', close);
-      window.addEventListener('keydown', close);
-    }, 0);
-    return () => {
-      clearTimeout(t); clearTimeout(on);
-      window.removeEventListener('pointerdown', close);
-      window.removeEventListener('keydown', close);
-    };
-  }, [buyResult]);
   const showPrompt = humanDecides && promptShown === offerId;
 
   // ── One draw per turn, even on a double-tap ──────────────────────────────
@@ -1808,7 +1743,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
     // everyone at once, so it waits on me from the moment it's offered until
     // I answer — whoever is ahead of me in line.
     const waitsOnMe = (s) => s.phase === 'buying'
-      ? !!s.buy && (s.buy.offered || []).includes(mySeat) && s.buy.mine === undefined
+      ? !!s.buy && s.buy.checker === mySeat && (s.buy.offered || []).includes(mySeat)
       : s.phase === 'draw' && s.cur === mySeat;
     if (waitsOnMe(state) && !waitsOnMe(ps)) buzz();
 
@@ -1964,7 +1899,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
     // Buying phase: my own question until I answer, then who we're waiting on
     if (state.phase === 'buying') {
       if (humanDecides && myPick === undefined) return isFreeOffer ? `🎁 האם לקחת מהאשפה?` : `💰 האם לקנות?`;
-      return `⏳ ממתין ל${namesOf(waitingOn) || '...'}`;
+      return `⏳ ממתין ל${namesOf([buy?.checker]) || '...'}`;
     }
     // Not my turn → show who we're waiting on
     if (!isMyTurn) {
@@ -2406,17 +2341,15 @@ function Game({ state, dispatch, onLeave, wallet }) {
 
 
       {/* ── Buying prompt ─────────────────────────── */}
-      {/* Everyone offered the card sees it at once and answers when they like;
-          the answer can change until the card is decided. It floats above the
-          hand (a zero-height row), so the table never shifts under it. */}
+      {/* Only the seat being asked sees it; everyone else sees who we're
+          waiting on. It floats above the hand (a zero-height row), so the
+          table never shifts under it. */}
       <div className="ga-prompt buy-float">
       {showPrompt && (() => {
         const place = offered.indexOf(mySeat) + 1;
         const queue = isFreeOffer
-          ? 'אתה הבא בתור, אז הוא שלך בחינם. אם תוותר, הוא יוצע לשאר.'
-          : aheadOfMe.length
-            ? `אתה ${place} בתור — הקלף שלך רק אם ${namesOf(aheadOfMe)} יוותרו`
-            : `אתה ${place} בתור — כל מי שלפניך ויתר, אם תרצה הקלף שלך`;
+          ? 'אתה הבא בתור, אז הוא שלך בחינם. אם תוותר, הוא יוצע לבא אחריך.'
+          : `אתה ${place} בתור — כל מי שלפניך ויתר, אם תרצה הקלף שלך`;
         const choice = (on, bg) => ({
           flex: 1, maxWidth: 170, padding: '11px 18px', color: 'white', border: 'none', borderRadius: 10,
           fontSize: 15, fontWeight: 700, fontFamily: 'inherit',
@@ -2454,8 +2387,8 @@ function Game({ state, dispatch, onLeave, wallet }) {
               <br />{queue}
             </>}
           </div>
-          {/* The line, in the order the card goes: who still hasn't answered
-              (never what anyone answered). */}
+          {/* The line, in the order the card goes: who already passed, and
+              who is still to be asked after me. */}
           {offered.length > 1 && (
             <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 5, marginBottom: 9 }}>
               {offered.map((s, i) => {
@@ -2503,17 +2436,6 @@ function Game({ state, dispatch, onLeave, wallet }) {
               {keys.skip && <Kbd code={keys.skip} />}
             </button>
           </div>
-          {myPick === true && (
-            <div style={{ fontSize: 12, color: '#86efac', marginTop: 7 }}>
-              <Icon name="check" /> סימנת שאתה רוצה
-              {held ? ` · ${held} מטבעות שמורים בצד — יחזרו אליך אם מישהו לפניך ייקח` : ' — הקלף שלך אם מי שלפניך יוותר'}
-            </div>
-          )}
-          {myPick === false && (
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,.65)', marginTop: 7 }}>
-              סימנת שלא — אפשר לשנות עד שמוחלט
-            </div>
-          )}
           {cantAfford && (
             <div style={{ fontSize: 12, color: '#fca5a5', marginTop: 7 }}>
               אין מספיק מטבעות לקנייה ({buyCost}) — אפשר לוותר ולשלוף בתורך
@@ -2521,7 +2443,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
           )}
           {buy.msLeft != null && (
             <BuyClock id={buy.id} msLeft={buy.msLeft} total={buyWindowMs(state)}
-                      onLow={myPick === undefined ? buzz : undefined} />
+                      onLow={buzz} />
           )}
           <button onClick={() => setShowRules('buy')} style={{
             marginTop: 7, background: 'none', border: 'none', padding: 2, cursor: 'pointer',
@@ -2532,29 +2454,6 @@ function Game({ state, dispatch, onLeave, wallet }) {
         </div>
         );
       })()}
-      {/* The window is decided: what happened, for a few seconds. Taps go
-          through it to the table (and close it), except on its own X. */}
-      {!showPrompt && buyResult && (
-        <div key={`r${buyResult.id}`} className="buy-sheet" role="status" style={{
-          background: '#1c2c3e', borderRadius: 14, pointerEvents: 'none',
-          padding: '10px 14px', color: CREAM, display: 'flex', alignItems: 'center', gap: 12,
-          border: '1px solid rgba(255,255,255,.14)', boxShadow: '0 10px 30px rgba(0,0,0,.45)',
-        }}>
-          {buyResult.card && <CardView card={buyResult.card} sm />}
-          <div style={{ flex: 1, minWidth: 0, textAlign: 'right' }}>
-            <div style={{ fontWeight: 800, fontSize: 14.5 }}>
-              <IconLabel name={buyResult.icon}>{buyResult.text}</IconLabel>
-            </div>
-            {buyResult.sub && <div style={{ fontSize: 12, color: 'rgba(255,255,255,.72)', marginTop: 2 }}>{buyResult.sub}</div>}
-          </div>
-          <button onClick={() => setBuyResult(null)} aria-label="סגור" className="tap-40" style={{
-            pointerEvents: 'auto', flexShrink: 0,
-            background: 'rgba(255,255,255,.15)', color: CREAM, border: 'none',
-            borderRadius: 8, width: 30, height: 30, cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}><Icon name="x" size={15} strokeWidth={2.6} /></button>
-        </div>
-      )}
       </div>
 
       {/* ── Message bar ───────────────────────────── */}
@@ -2566,7 +2465,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
         }}>
           <IconText text={state.msg} />
         </div>
-      ) : buyNoteText && !buyResult && (
+      ) : buyNoteText && (
         <div className="ga-msg" style={{
           padding: '6px 12px', textAlign: 'center', fontSize: 13, flexShrink: 0,
           background: 'rgba(30,64,120,.85)', color: CREAM,

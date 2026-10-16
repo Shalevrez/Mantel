@@ -157,12 +157,13 @@ async function paidBuy(coins) {
   room.handleSocket(ws[2], 'ג', 'GGGG', false, 'g3', false, coins);
   ws[0].msg({ t: 'start' });
   await settle();
-  // The opening card is offered to everyone; ג (seat 2) asks to buy it and
-  // the others pass. When ג is the one on turn it would take it for free —
-  // nothing to test, so the caller deals again.
+  // The opening card is offered seat by seat; the seats before ג (seat 2)
+  // pass, then ג asks to buy it. When ג is the one on turn it would take it
+  // for free — nothing to test, so the caller deals again.
   if (room.state.buy.origNext === 2) return null;
+  while (room.state.phase === 'buying' && room.state.buy.checker !== 2)
+    ws[room.state.buy.checker].msg({ t: 'action', action: { type: 'SKIP' } });
   ws[2].msg({ t: 'action', action: { type: 'BUY', idx: 2 } });
-  for (const s of [0, 1]) if (room.state.phase === 'buying') ws[s].msg({ t: 'action', action: { type: 'SKIP' } });
   await settle();
   return { paid: room.state.players[2].paidBuys || 0, err: ws[2].last('error')?.msg || '' };
 }
