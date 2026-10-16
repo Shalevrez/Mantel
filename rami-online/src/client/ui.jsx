@@ -476,9 +476,13 @@ function JokerPick({ opts, onPick, onClose }) {
 // RULES POPUP
 // ═══════════════════════════════════════════════════════
 
-function RulesModal({ onClose }) {
-  const Section = ({ title, children }) => (
-    <div style={{ marginBottom: 16 }}>
+// `focus` names a section to open at (its `id`), e.g. 'buy' from the buying panel.
+function RulesModal({ onClose, focus }) {
+  useEffect(() => {
+    if (focus) document.getElementById(`rules-${focus}`)?.scrollIntoView({ block: 'start' });
+  }, [focus]);
+  const Section = ({ title, children, id }) => (
+    <div id={id ? `rules-${id}` : undefined} style={{ marginBottom: 16 }}>
       <div style={{
         fontWeight: 700, color: FELTD, fontSize: 15, marginBottom: 6,
         borderRight: `3px solid ${GOLD}`, paddingRight: 8,
@@ -576,12 +580,11 @@ function RulesModal({ onClose }) {
             נשאר פתוח באשפה. ממשיכים לשלוף ולקנות כרגיל.
           </Section>
 
-          <Section title="🛒 קנייה">
-            כשמישהו זורק קלף, הוא מוצע <b>לכולם בבת אחת</b>, וכל אחד מסמן "רוצה" או "לא רוצה"
-            (בחדר עם טיימר לקנייה, מי שלא סימן בזמן — לא רוצה). הקלף הולך <b>לפי סדר התור</b>: השחקן הבא בתור
-            ראשון ומקבל אותו בחינם; אחריו השאר, שמקבלים יחד איתו קלף עונשין מהחבילה. הקלף
-            של הראשון לפי הסדר שרוצה — ברגע שכל מי שלפניו ויתר. אפשר לשנות את הבחירה עד שמוחלט.
-            מי שרצה אבל מישהו לפניו לקח — לא משלם כלום.
+          <Section title="🛒 קנייה" id="buy">
+            כשמישהו זורק קלף, הוא מוצע <b>לפי סדר התור, שחקן אחרי שחקן</b>. קודם <b>השחקן הבא בתור</b>,
+            שיכול לקחת אותו בחינם. אם הוא מוותר, הקלף מוצע לבא אחריו, שיכול לקנות אותו ומקבל יחד איתו
+            קלף עונשין מהחבילה — וכן הלאה. הראשון שרוצה לוקח את הקלף.
+            (בחדר עם טיימר לקנייה, לכל שחקן יש את הזמן כולו כשמגיע תורו להחליט, ומי שלא ענה בזמן — ויתר.)
             אם אף אחד לא לקח — הקלף נשרף והשחקן הבא שולף מהחבילה.<br/>
             <b>הקלף הפתוח בתחילת הסיבוב</b> מתנהג כמו כל קלף שנזרק: הראשון בתור יכול לקחת אותו או לשלוף
             מהחבילה, ואם הוא מוותר — שאר השחקנים יכולים לקנות אותו עם קלף עונשין.
@@ -881,7 +884,7 @@ function Setup({ onStart }) {
         </button>
       </div>
 
-      {showRules && <RulesModal onClose={() => setShowRules(false)} />}
+      {showRules && <RulesModal focus={showRules === 'buy' ? 'buy' : null} onClose={() => setShowRules(false)} />}
     </div>
   );
 }
@@ -1235,22 +1238,30 @@ function KeysModal({ onClose }) {
 // How long the buying window has left — a bar that runs down, and the
 // seconds. The server sends the time left rather than a clock time, so the
 // countdown never depends on this device's clock being right.
-function BuyClock({ id, msLeft, total }) {
-  const end = useRef({ id: null, at: 0 });
-  if (end.current.id !== id && msLeft != null) end.current = { id, at: Date.now() + msLeft };
+// `onLow` is called once per window when 3 seconds are left (a last nudge
+// for a player who hasn't answered yet).
+const BUY_LOW_MS = 3000;
+function BuyClock({ id, msLeft, total, onLow }) {
+  const end = useRef({ id: null, at: 0, low: false });
+  if (end.current.id !== id && msLeft != null) end.current = { id, at: Date.now() + msLeft, low: false };
   const [, tick] = useState(0);
   useEffect(() => {
     const h = setInterval(() => tick(t => t + 1), 250);
     return () => clearInterval(h);
   }, []);
-  if (end.current.id !== id) return null;
-  const left = Math.max(0, end.current.at - Date.now());
+  const left = end.current.id === id ? Math.max(0, end.current.at - Date.now()) : null;
+  useEffect(() => {
+    if (left == null || end.current.low || left <= 0 || left >= BUY_LOW_MS) return;
+    end.current.low = true;
+    if (onLow) onLow();
+  });
+  if (left == null) return null;
   return (
     <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
       <div style={{ flex: 1, height: 5, borderRadius: 3, background: 'rgba(255,255,255,.12)', overflow: 'hidden' }}>
         <div style={{
           height: '100%', width: `${Math.min(1, left / total) * 100}%`, borderRadius: 3,
-          background: left < 3000 ? '#f87171' : GOLD, transition: 'width .25s linear',
+          background: left < BUY_LOW_MS ? '#f87171' : GOLD, transition: 'width .25s linear',
         }} />
       </div>
       <span style={{ fontSize: 11, color: 'rgba(255,255,255,.7)', fontVariantNumeric: 'tabular-nums', minWidth: 22 }}>
@@ -1259,6 +1270,10 @@ function BuyClock({ id, msLeft, total }) {
     </div>
   );
 }
+
+// The buying panel waits this long after the question reaches me before it
+// shows — about the flight of the thrown card onto the pile.
+const BUY_PROMPT_DELAY = 350;
 
 // The wallet in a paid room, always in view: what I have, and what this game
 // has cost me so far (the entry fee, every buy with a penalty card, and a buy
@@ -1351,18 +1366,14 @@ function Game({ state, dispatch, onLeave, wallet }) {
   const mk      = MK[state.mk];
   const buy     = state.buy;
 
-  // The buying window (game-core settleBuy): everyone offered the discard
-  // answers at once, and it goes by turn order to the first who wants it.
+  // The buying window (game-core settleBuy): the discard is offered one seat
+  // at a time in turn order, and goes to the first who wants it.
   const offered       = (buy && buy.offered) || [];
-  // I'm offered the card: I answer whenever I like while the window is open.
-  const humanDecides  = state.phase === 'buying' && offered.includes(mySeat);
+  // The question has reached me: I'm the seat being asked.
+  const humanDecides  = state.phase === 'buying' && !!buy && buy.checker === mySeat && offered.includes(mySeat);
   // Mine is the free offer when I'm the player on turn.
   const isFreeOffer   = !!buy && buy.origNext === mySeat;
   const myPick        = buy ? buy.mine : undefined;   // true / false / not yet
-  // Who hasn't answered yet (never what anyone answered), and of them, who is
-  // ahead of me in line.
-  const waitingOn     = ((buy && buy.waiting) || []).filter(s => s !== mySeat);
-  const aheadOfMe     = waitingOn.filter(s => offered.indexOf(s) < offered.indexOf(mySeat));
   const namesOf       = (seats) => seats.map(s => state.players[s]?.name).filter(Boolean).join(', ');
   // What this buy costs in coins: only a buy that brings a penalty card.
   const buyCost       = humanDecides && !isFreeOffer && wallet ? wallet.buyPrice : 0;
@@ -1382,6 +1393,18 @@ function Game({ state, dispatch, onLeave, wallet }) {
       : bn.onTurn ? `↑ ${bnName} לקח מהאשפה`
       : bn.paid ? `💰 ${bnName} קנה את הקלף עם הקנס`
       : `🎁 ${bnName} לקח מהאשפה בלי קנס`;
+
+  // ── The buying panel comes up a beat after the question reaches me ──────
+  // once the thrown card has landed on the pile, so it never pops up while
+  // the card is still in the air.
+  const offerId = humanDecides && buy ? `${buy.id}:${buy.checker}` : null;
+  const [promptShown, setPromptShown] = useState(null);   // the offer now on screen
+  useEffect(() => {
+    if (offerId == null || promptShown === offerId) return;
+    const t = setTimeout(() => setPromptShown(offerId), BUY_PROMPT_DELAY);
+    return () => clearTimeout(t);
+  }, [offerId]);
+  const showPrompt = humanDecides && promptShown === offerId;
 
   // ── One draw per turn, even on a double-tap ──────────────────────────────
   // The pile stays lit until the server's next state arrives, so two fast taps would
@@ -1720,7 +1743,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
     // everyone at once, so it waits on me from the moment it's offered until
     // I answer — whoever is ahead of me in line.
     const waitsOnMe = (s) => s.phase === 'buying'
-      ? !!s.buy && (s.buy.offered || []).includes(mySeat) && s.buy.mine === undefined
+      ? !!s.buy && s.buy.checker === mySeat && (s.buy.offered || []).includes(mySeat)
       : s.phase === 'draw' && s.cur === mySeat;
     if (waitsOnMe(state) && !waitsOnMe(ps)) buzz();
 
@@ -1876,7 +1899,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
     // Buying phase: my own question until I answer, then who we're waiting on
     if (state.phase === 'buying') {
       if (humanDecides && myPick === undefined) return isFreeOffer ? `🎁 האם לקחת מהאשפה?` : `💰 האם לקנות?`;
-      return `⏳ ממתין ל${namesOf(waitingOn) || '...'}`;
+      return `⏳ ממתין ל${namesOf([buy?.checker]) || '...'}`;
     }
     // Not my turn → show who we're waiting on
     if (!isMyTurn) {
@@ -2176,7 +2199,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
       </div>
 
       {showLeave && <LeaveConfirm started onConfirm={onLeave} onClose={() => setShowLeave(false)} />}
-      {showRules && <RulesModal onClose={() => setShowRules(false)} />}
+      {showRules && <RulesModal focus={showRules === 'buy' ? 'buy' : null} onClose={() => setShowRules(false)} />}
       {showNotes && <ReleaseNotes onClose={() => setShowNotes(false)} />}
       {showScores && <ScoreModal state={state} onClose={() => setShowScores(false)} />}
       {showKeys && <KeysModal onClose={() => setShowKeys(false)} />}
@@ -2318,38 +2341,76 @@ function Game({ state, dispatch, onLeave, wallet }) {
 
 
       {/* ── Buying prompt ─────────────────────────── */}
-      {/* Everyone offered the card sees it at once and answers when they like;
-          the answer can change until the card is decided. */}
-      {humanDecides && (() => {
+      {/* Only the seat being asked sees it; everyone else sees who we're
+          waiting on. It floats above the hand (a zero-height row), so the
+          table never shifts under it. */}
+      <div className="ga-prompt buy-float">
+      {showPrompt && (() => {
         const place = offered.indexOf(mySeat) + 1;
         const queue = isFreeOffer
-          ? 'אתה ראשון בתור — אם תוותר, הקלף יוצע לשאר'
-          : aheadOfMe.length
-            ? `אתה ${place} בתור · ממתין ל${namesOf(aheadOfMe)}`
-            : `אתה ${place} בתור · כל מי שלפניך ויתר — אם תרצה, הקלף שלך`;
+          ? 'אתה הבא בתור, אז הוא שלך בחינם. אם תוותר, הוא יוצע לבא אחריך.'
+          : `אתה ${place} בתור — כל מי שלפניך ויתר, אם תרצה הקלף שלך`;
         const choice = (on, bg) => ({
-          padding: '9px 22px', color: 'white', border: 'none', borderRadius: 9,
-          fontSize: 14, fontWeight: 700, fontFamily: 'inherit',
+          flex: 1, maxWidth: 170, padding: '11px 18px', color: 'white', border: 'none', borderRadius: 10,
+          fontSize: 15, fontWeight: 700, fontFamily: 'inherit',
           background: bg, cursor: 'pointer',
           boxShadow: on ? `0 0 0 3px ${CREAM}` : 'none',
           opacity: myPick === undefined || on ? 1 : 0.55,
         });
+        const waiting = (buy.waiting) || [];
         return (
-        <div className="ga-prompt" style={{
-          background: '#1c2c3e', margin: '0 10px', borderRadius: 14,
-          padding: '11px 14px', color: CREAM, textAlign: 'center',
-          flexShrink: 0, border: '1px solid rgba(255,255,255,.12)',
+        <div key={buy.id} className="buy-sheet" style={{
+          background: '#1c2c3e', borderRadius: 14,
+          padding: '11px 14px 10px', color: CREAM, textAlign: 'center',
+          border: '1px solid rgba(255,255,255,.14)', boxShadow: '0 10px 30px rgba(0,0,0,.45)',
         }}>
-          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>
-            {isFreeOffer
-              ? `קח את ${discard ? cTxt(discard) : '?'} מהאשפה — בחינם?`
-              : <>לקנות {discard ? cTxt(discard) : '?'}? (+קלף קנס מהחבילה{buyCost ? <> · <Icon name="coins" /> {buyCost}</> : null})</>
-            }
+          <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 8 }}>
+            {isFreeOffer ? 'לקחת את הקלף מהאשפה?' : 'לקנות את הקלף?'}
           </div>
-          <div style={{ fontSize: 12, color: 'rgba(255,255,255,.7)', marginBottom: 8 }}>{queue}</div>
-          {discard && (
-            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
-              <CardView card={discard} />
+          {/* What I'd get: the card, and with a buy, a penalty card on top. */}
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+            {discard && <CardView card={discard} />}
+            {!isFreeOffer && (
+              <>
+                <Icon name="plus" size={18} color="rgba(255,255,255,.7)" />
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                  <CardView back />
+                  <span style={{ fontSize: 11, color: '#fca5a5', fontWeight: 700 }}>קלף קנס</span>
+                </div>
+              </>
+            )}
+          </div>
+          <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,.75)', marginBottom: 8, lineHeight: 1.5 }}>
+            {isFreeOffer ? queue : <>
+              מקבלים את הקלף ועוד קלף אחד מהחבילה
+              {buyCost ? <> · עולה <Icon name="coins" /> {buyCost}</> : null}
+              <br />{queue}
+            </>}
+          </div>
+          {/* The line, in the order the card goes: who already passed, and
+              who is still to be asked after me. */}
+          {offered.length > 1 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 5, marginBottom: 9 }}>
+              {offered.map((s, i) => {
+                const mine = s === mySeat;
+                const open = waiting.includes(s);
+                return (
+                  <span key={s} style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 4, maxWidth: 130,
+                    padding: '2px 8px', borderRadius: 999, fontSize: 11.5, fontWeight: 700,
+                    background: mine ? `${GOLD}33` : 'rgba(255,255,255,.08)',
+                    border: `1px solid ${mine ? GOLD : 'rgba(255,255,255,.15)'}`,
+                    color: open ? CREAM : 'rgba(255,255,255,.55)',
+                  }}>
+                    <span style={{ opacity: .6 }}>{i + 1}.</span>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {mine ? 'אתה' : state.players[s]?.name}
+                    </span>
+                    {i === 0 && <span style={{ color: '#86efac' }}>חינם</span>}
+                    {open && !mine && <Icon name="hourglass" size={11} />}
+                  </span>
+                );
+              })}
             </div>
           )}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
@@ -2375,26 +2436,25 @@ function Game({ state, dispatch, onLeave, wallet }) {
               {keys.skip && <Kbd code={keys.skip} />}
             </button>
           </div>
-          {myPick === true && (
-            <div style={{ fontSize: 12, color: '#86efac', marginTop: 7 }}>
-              <Icon name="check" /> סימנת שאתה רוצה
-              {held ? ` · ${held} מטבעות שמורים בצד — יחזרו אליך אם מישהו לפניך ייקח` : ' — הקלף שלך אם מי שלפניך יוותר'}
-            </div>
-          )}
-          {myPick === false && (
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,.65)', marginTop: 7 }}>
-              סימנת שלא — אפשר לשנות עד שמוחלט
-            </div>
-          )}
           {cantAfford && (
             <div style={{ fontSize: 12, color: '#fca5a5', marginTop: 7 }}>
               אין מספיק מטבעות לקנייה ({buyCost}) — אפשר לוותר ולשלוף בתורך
             </div>
           )}
-          {buy.msLeft != null && <BuyClock id={buy.id} msLeft={buy.msLeft} total={buyWindowMs(state)} />}
+          {buy.msLeft != null && (
+            <BuyClock id={buy.id} msLeft={buy.msLeft} total={buyWindowMs(state)}
+                      onLow={buzz} />
+          )}
+          <button onClick={() => setShowRules('buy')} style={{
+            marginTop: 7, background: 'none', border: 'none', padding: 2, cursor: 'pointer',
+            color: 'rgba(255,255,255,.6)', fontSize: 11.5, fontFamily: 'inherit', textDecoration: 'underline',
+          }}>
+            <IconLabel name="book">איך עובדת קנייה?</IconLabel>
+          </button>
         </div>
         );
       })()}
+      </div>
 
       {/* ── Message bar ───────────────────────────── */}
       {state.msg ? (

@@ -155,16 +155,18 @@ createRoot(document.getElementById('root')).render(
   screen === 'decks' ? <Decks />
   : screen === 'live' ? <Live />
   : screen === 'buying' ? <Game state={buying} dispatch={(a) => console.log('dispatch', a)} />
-  // ?screen=buypaid / buybroke / buywant — a buy with a penalty card in a
-  // 500-coin room, with enough coins for it, without, and after saying "want"
-  // while a seat ahead is still deciding. ?screen=outbid — someone ahead took
-  // the card, and the coins put aside for it came back.
-  : ['buypaid', 'buybroke', 'buywant'].includes(screen) ? (
+  // ?screen=buypaid / buybroke — the question has reached me, to buy with a
+  // penalty card in a 500-coin room, with enough coins for it and without.
+  // ?screen=buywait — a seat ahead of me is being asked; I only wait.
+  // ?screen=outbid — someone ahead took the card.
+  : ['buypaid', 'buybroke', 'buywait'].includes(screen) ? (
       <Game state={viewFor({
               ...st, phase: 'buying', cur: 2 % n,
               players: st.players.map((p, i) => i === 0 ? { ...p, paidBuys: 2 } : p),
-              buy: { id: 1, checker: 2 % n, origNext: 2 % n, prev: 1, deadline: Date.now() + 7000,
-                     picks: screen === 'buywant' ? { 0: true } : {} },
+              buy: screen === 'buywait'
+                ? { id: 1, checker: 2 % n, origNext: 2 % n, prev: 1, deadline: Date.now() + 7000, picks: {} }
+                : { id: 1, checker: 0, origNext: 2 % n, prev: 1, deadline: Date.now() + 7000,
+                    picks: { [2 % n]: false, [3 % n]: false } },
             }, 0)}
             wallet={{ coins: screen === 'buybroke' ? 5 : 1480, buyPrice: 10, fee: 500 }}
             dispatch={(a) => console.log('dispatch', a)} onLeave={() => {}} />
