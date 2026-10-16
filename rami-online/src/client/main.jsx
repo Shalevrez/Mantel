@@ -178,13 +178,17 @@ function App() {
     setClosed(null);
     writeStore(LAST_ROOM_KEY, roomCode);
     const conn = joinRoom(
-      { code: roomCode, name: name.trim() || 'שחקן', host: asHost, resume },
+      { code: roomCode, name: name.trim() || 'שחקן', host: asHost, resume,
+        coins: () => P.current()?.coins },
       {
         onOpen:  () => { setConnecting(false); },
         onLobby: (l) => {
           writeStore(ACTIVE_ROOM_KEY, roomCode);
           setLobby(l);
           setShowJoin(false);
+          // A room played for coins checks buys against the wallet; it may
+          // have changed since we connected (the last game in this room).
+          if (!l.started && l.mode === 'online' && l.fee > 0) conn.wallet();
           const pr = practiceRef.current;
           if (pr && l.youHost && !l.started && l.mode === 'practice') {
             practiceRef.current = null;
