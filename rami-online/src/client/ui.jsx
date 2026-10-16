@@ -1705,9 +1705,12 @@ function Game({ state, dispatch, onLeave, wallet }) {
     // animations off too — it's a notice, not decoration (the CSS stills it).
     const onTurn = (s) => s.cur === mySeat && TURN_PHASES.has(s.phase);
     // And again when I passed on the discard and the others had their say on
-    // buying it: the turn is back with me, now to draw.
+    // buying it: the turn is back with me, now to draw. Answers come in any
+    // order, so my "no" may be the one that closes the window — when someone
+    // bought the card with a penalty, that still hands the turn back to me.
     const backToMe = state.cur === mySeat && state.phase === 'draw'
-      && ps.phase === 'buying' && ps.buy && ps.buy.checker !== mySeat;
+      && ps.phase === 'buying' && ps.buy
+      && (ps.buy.checker !== mySeat || !!state.buyNote?.paid);
     if ((onTurn(state) && !onTurn(ps)) || backToMe) setBanner(b => b + 1);
     else if (!onTurn(state)) setBanner(0);   // the turn is over — the notice goes too
 
