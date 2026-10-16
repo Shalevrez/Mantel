@@ -260,11 +260,13 @@ function orderSeq(cards) {
   if (real.length < 1) return cards;
 
   const vals = real.map(c => c.v);
-  // Ace low unless a face card asks for it high, or the jokers can't bridge it to
-  // the others as a 1 (10,JK,JK,JK,A is 10-J-Q-K-A, not A-2-3-4…10).
+  // Ace low whenever the run fits that way (A,2…J stays A-2-…-J), high only when it
+  // can't: the jokers can't bridge it to the others as a 1 (10,JK,JK,JK,A is
+  // 10-J-Q-K-A, not A-2-3-4…10), or a face card pulls it up (Q,K,A).
   const low = [...vals].sort((a, b) => a - b);
   const lowGaps = low.reduce((g, v, i) => i ? g + v - low[i - 1] - 1 : 0, 0);
-  const aceHigh = vals.includes(1) && (vals.some(v => v >= 11) || lowGaps > jokers.length);
+  const lowFits = lowGaps <= jokers.length && jokers.length - lowGaps <= 13 - low[low.length - 1];
+  const aceHigh = vals.includes(1) && !lowFits;
   const sv = c => (aceHigh && c.v === 1) ? 14 : c.v;
   real = [...real].sort((a, b) => sv(a) - sv(b));
 
@@ -460,6 +462,7 @@ function endWin(state, players, board, isAnt) {
   const result = { w, isAnt, empty: false };
   return {
     ...state, phase: 'round_end', board, players: up, staging: [], sel: [], msg: '',
+    undoBefore: null, mustUseJoker: null,
     result,
     history: [...(state.history || []), roundRecord(state, up, result)],
     log: [...state.log, `✓ ${state.players[w].name} ${isAnt ? 'אנט! (−50)' : 'סיים!'}`],
@@ -475,6 +478,7 @@ function endDeck(state) {
   const result = { w: null, isAnt: false, empty: true };
   return {
     ...state, phase: 'round_end', players: up, staging: [], sel: [], msg: '',
+    undoBefore: null, mustUseJoker: null,
     result,
     history: [...(state.history || []), roundRecord(state, up, result)],
     log: [...state.log, '📦 החבילה נגמרה'],
@@ -619,7 +623,7 @@ function buyPaid(state, seat) {
   if (!top || !pen) return null;
   const players = st.players.map((p, i) =>
     i === seat
-      ? { ...p, hand: [...p.hand, top, pen], newIds: [...(p.newIds || []), top.id, pen.id],
+      ? { ...p, hand: [...p.hand, top, pen], newIds: [top.id, pen.id],
           paidBuys: (p.paidBuys || 0) + 1 }
       : p
   );

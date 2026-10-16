@@ -63,7 +63,9 @@ export async function createRoom(terms = {}) {
 // callbacks: { onLobby, onState, onError, onOpen, onClose, onRoomClosed, onNoSeat }
 // `resume` asks only for a seat this player already holds (a page reloaded
 // mid-game); the server answers 'noseat' instead of seating anyone new.
-export function joinRoom({ code, name, host = false, resume = false }, callbacks = {}) {
+// `coins` returns the player's balance, read on every (re)connect: the server
+// keeps it to refuse a buy the wallet can't cover in a room played for coins.
+export function joinRoom({ code, name, host = false, resume = false, coins = null }, callbacks = {}) {
   let ws = null;
   let closedByUs = false;
   let retry = 0;
@@ -72,11 +74,17 @@ export function joinRoom({ code, name, host = false, resume = false }, callbacks
   // be worse than being told there's nothing to go back to.
   let seated = false;
 
+  const coinsNow = () => {
+    const n = typeof coins === 'function' ? coins() : coins;
+    return Number.isFinite(n) ? n : null;
+  };
+
   const url = () =>
     `${wsBase()}/api/room?code=${encodeURIComponent(code)}` +
     `&name=${encodeURIComponent(name)}&host=${host ? 1 : 0}` +
     `&pid=${encodeURIComponent(playerId())}` +
-    (resume || seated ? '&resume=1' : '');
+    (resume || seated ? '&resume=1' : '') +
+    (coinsNow() != null ? `&coins=${encodeURIComponent(coinsNow())}` : '');
 
   function connect() {
     ws = new WebSocket(url());
@@ -126,6 +134,13 @@ export function joinRoom({ code, name, host = false, resume = false }, callbacks
     action(action) {
       if (ws && ws.readyState === WebSocket.OPEN)
         ws.send(JSON.stringify({ t: 'action', action }));
+    },
+    // The balance again, while the room waits for its game (it changes
+    // between games in the same room).
+    wallet() {
+      const n = coinsNow();
+      if (n != null && ws && ws.readyState === WebSocket.OPEN)
+        ws.send(JSON.stringify({ t: 'wallet', coins: n }));
     },
     // Host: start the game
     start(opts = {}) {

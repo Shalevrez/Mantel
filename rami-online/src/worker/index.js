@@ -11,7 +11,7 @@ import {
   G, initGame, cSc, MK, aiLevel as normLevel, retireSeat, normFormat, normFormatMk,
   aiWantCard, findAIGroups, meetsReq, attachPos, aiDiscard, buyOffered, BUY_MS, normBuyTimer, buyWindowMs,
 } from '../game-core.js';
-import { normFee, normMode } from '../economy.js';
+import { normFee, normMode, buyPrice } from '../economy.js';
 
 // ── Table size ───────────────────────────────────────
 // Six chairs, of which at most five may be computer players: the host decides
@@ -211,7 +211,7 @@ export class Room {
       seats: this.seats.map(s => ({
         name: s.name, uid: s.uid, connId: s.connId,
         isAI: s.isAI, ai: s.ai, botNum: s.botNum, downAt: s.downAt || 0, left: !!s.left,
-        pending: !!s.pending,
+        pending: !!s.pending, finalSeat: s.finalSeat, coins: s.coins,
       })),
       hostUid: this.hostUid,
       code: this.code,
@@ -336,7 +336,7 @@ export class Room {
       const wantHost = url.searchParams.get('host') === '1';
       const pid = url.searchParams.get('pid') || '';
       const resume = url.searchParams.get('resume') === '1';
-      this.handleSocket(server, name, code, wantHost, pid, resume);
+      this.handleSocket(server, name, code, wantHost, pid, resume, url.searchParams.get('coins'));
       return new Response(null, { status: 101, webSocket: client });
     }
 
@@ -366,7 +366,7 @@ export class Room {
     return new Response('Room DO', { status: 200 });
   }
 
-  handleSocket(ws, name, code, wantHost, pid, resume = false) {
+  handleSocket(ws, name, code, wantHost, pid, resume = false, coins = null) {
     ws.accept();
     const connId = crypto.randomUUID();
     this.sockets.set(connId, ws);
@@ -433,6 +433,7 @@ export class Room {
     this.seats[seat].ws = ws;
     this.seats[seat].connId = connId;
     this.seats[seat].connected = true;
+    this.noteCoins(seat, coins);
     // First player to ask for it owns the room. Afterwards the crown follows the
     // uid, so reconnecting never has to re-claim it.
     if (wantHost && this.hostUid == null) this.hostUid = uid;
@@ -451,7 +452,10 @@ export class Room {
     this.broadcastLobby();
     if (this.started) this.sendState(seat);
     else if (this.seats[seat].pending && this.finalState) {
-      try { ws.send(JSON.stringify({ t: 'state', state: viewFor(this.finalState, seat) })); } catch {}
+      // The final table is indexed by the chairs as they were when that game
+      // ended; the rematch may have cleared some since, shifting this one.
+      const was = Number.isInteger(this.seats[seat].finalSeat) ? this.seats[seat].finalSeat : seat;
+      try { ws.send(JSON.stringify({ t: 'state', state: viewFor(this.finalState, was) })); } catch {}
     }
   }
 
@@ -466,6 +470,30 @@ export class Room {
   // Which seat this socket is sitting in right now, or -1 if it has none.
   seatOf(connId) {
     return this.seats.findIndex(s => s.connId === connId);
+  }
+
+  // ── The wallet a player declared ─────────────────────
+  // Coins live in each player's own browser (demo — see client/profile.js), so
+  // the server only knows the balance the client reports, before the game is
+  // dealt. That is enough to refuse a buy the wallet can't cover from an old
+  // client or a stray message; a client that lies about its balance still gets
+  // through, which only a server-side wallet would stop.
+  noteCoins(seat, coins) {
+    const s = this.seats[seat];
+    if (!s || this.started || coins == null || coins === '') return;
+    const n = Number(coins);
+    if (Number.isFinite(n)) s.coins = Math.max(0, n);
+  }
+
+  // Why this seat may not buy right now, or null. Only in a room played for
+  // coins, and only for a seat that declared a balance.
+  buyRefusal(seat) {
+    const s = this.seats[seat];
+    const st = this.state;
+    if (!this.paid() || !s || !Number.isFinite(s.coins) || !st || !st.players[seat]) return null;
+    const price = buyPrice(this.fee);
+    const owed = this.fee + ((st.players[seat].paidBuys || 0) + 1) * price;
+    return owed > s.coins ? `אין מספיק מטבעות לקנייה (${price}) — אפשר לוותר ולשלוף בתורך` : null;
   }
 
   // ── Computer players ─────────────────────────────────
@@ -735,6 +763,12 @@ export class Room {
       return;
     }
 
+    // ── The client's balance, kept up to date while the room waits ──
+    if (msg.t === 'wallet') {
+      this.noteCoins(seat, msg.coins);
+      return;
+    }
+
     // ── A player leaves the room for good ──
     if (msg.t === 'leave') {
       await this.leaveSeat(seat);
@@ -782,6 +816,8 @@ export class Room {
       }
       if (!this.started || !this.state || this.state.phase !== 'game_end') return;
       this.finalState = this.state;
+      // Remember each chair's place at that table before the cleared ones go.
+      this.seats.forEach((x, i) => { x.finalSeat = i; });
       this.seats = this.seats.filter(x => x.isAI || (!x.left && x.connected));
       for (const x of this.seats) if (!x.isAI) x.pending = x !== me;
       this.state = null;
@@ -807,6 +843,10 @@ export class Room {
       if (!msg.action || typeof msg.action !== 'object') return;
       const action = { ...msg.action, seat };
       if (!this.actionAllowed(seat, action)) return;
+      if (action.type === 'BUY') {
+        const why = this.buyRefusal(seat);
+        if (why) { this.sendError(seat, why); return; }
+      }
       // Last line of defence: one bad message must not kill the room for everyone.
       try { this.state = stampMsg(this.state, G(this.state, action), seat); }
       catch (e) { console.error('action failed', action && action.type, e); return; }
@@ -844,6 +884,7 @@ export class Room {
       try { ws.close(1000, 'next game started'); } catch {}
     }
     this.finalState = null;
+    for (const s of this.seats) delete s.finalSeat;
     const configs = this.seats.map(s => ({
       name: s.name, isAI: s.isAI, ai: s.isAI ? normLevel(s.ai || this.aiLevel) : 'medium',
     }));
@@ -901,6 +942,12 @@ export class Room {
     // the new state comes back, so anything past the first is dropped here.
     if (['DRAW', 'TAKE_BEIT'].includes(action.type))
       return seat === st.cur && st.phase === 'draw';
+    // The turn's own moves — lay, attach, throw, take back — come after the draw
+    // and before the throw that ends it. The reducer doesn't check the phase, so
+    // without this a player could throw without drawing, or undo the winner's
+    // last turn once the round is already scored.
+    if (['LAY', 'ATTACH', 'DISCARD', 'UNDO'].includes(action.type))
+      return seat === st.cur && st.phase === 'action';
     // Everything else: only the player whose turn it is
     return seat === st.cur;
   }
@@ -932,9 +979,17 @@ export class Room {
     this.aiPending = true;
     setTimeout(async () => {
       this.aiPending = false;
+      // The room may have closed, or its game ended, while the move waited.
+      if (this.closing || !this.state) return;
       // Whatever an AI move tells "the player" is for the AI alone: no human sees it.
-      try { const before = this.state; fn(); if (this.state) this.state = stampMsg(before, this.state, -1); this.touch(); await this.persist(); await this.armAlarm(); this.broadcastState(); this.maybeRunAI(); }
-      catch (e) { /* swallow */ }
+      try { const before = this.state; fn(); if (this.state) this.state = stampMsg(before, this.state, -1); this.touch(); await this.persist(); await this.armAlarm(); }
+      catch (e) { console.error('ai move failed', e); }
+      // Always: a failed move must not leave a computer seat on turn with
+      // nobody to move it (maybeRunAI calls that came in meanwhile were
+      // dropped while this one was pending).
+      if (this.closing || !this.state) return;
+      this.broadcastState();
+      this.maybeRunAI();
     }, 260 + Math.random() * 160);
   }
 
@@ -946,6 +1001,8 @@ export class Room {
 
   // The computer players offered the card that haven't answered yet.
   aiBuyers(st) {
+    // A scheduled answer can arrive after the window was already decided.
+    if (!st.buy) return [];
     const picks = st.buy.picks || {};
     return buyOffered(st).filter(s => this.seats[s]?.isAI && picks[s] === undefined);
   }
@@ -1066,9 +1123,9 @@ export default {
         const code = makeCode();
         const id = env.ROOMS.idFromName(code);
         const stub = env.ROOMS.get(id);
-        // The room's terms: ?mode=practice|online&fee=…&seats=…&format=…&mk=…&touch=0|1
+        // The room's terms: ?mode=practice|online&fee=…&seats=…&format=…&mk=…&touch=0|1&buy=0|10|20
         const q = new URLSearchParams({ code });
-        for (const k of ['mode', 'fee', 'seats', 'format', 'mk', 'touch']) {
+        for (const k of ['mode', 'fee', 'seats', 'format', 'mk', 'touch', 'buy']) {
           const v = url.searchParams.get(k);
           if (v != null) q.set(k, v);
         }
