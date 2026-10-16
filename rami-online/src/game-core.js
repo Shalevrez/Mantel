@@ -541,7 +541,7 @@ const activeCount = state => state.players.filter(p => !p.out).length;
 // one slow or absent player never holds up the table. Without a timer the
 // window waits for every answer it needs.
 // The room picks the timer when it's created, in seconds; 0 is no timer.
-const BUY_TIMERS = [0, 10, 20];
+const BUY_TIMERS = [0, 10, 20, 30];
 const normBuyTimer = (v) => BUY_TIMERS.includes(Number(v)) ? Number(v) : 0;
 // A game saved before rooms chose had the 10-second window.
 const BUY_MS = 10000;
