@@ -2346,10 +2346,6 @@ function Game({ state, dispatch, onLeave, wallet }) {
           table never shifts under it. */}
       <div className="ga-prompt buy-float">
       {showPrompt && (() => {
-        const place = offered.indexOf(mySeat) + 1;
-        const queue = isFreeOffer
-          ? 'אתה הבא בתור, אז הוא שלך בחינם. אם תוותר, הוא יוצע לבא אחריך.'
-          : `אתה ${place} בתור — כל מי שלפניך ויתר, אם תרצה הקלף שלך`;
         const choice = (on, bg) => ({
           flex: 1, maxWidth: 170, padding: '11px 18px', color: 'white', border: 'none', borderRadius: 10,
           fontSize: 15, fontWeight: 700, fontFamily: 'inherit',
@@ -2357,13 +2353,14 @@ function Game({ state, dispatch, onLeave, wallet }) {
           boxShadow: on ? `0 0 0 3px ${CREAM}` : 'none',
           opacity: myPick === undefined || on ? 1 : 0.55,
         });
-        const waiting = (buy.waiting) || [];
         return (
         <div key={buy.id} className="buy-sheet" style={{
           background: '#1c2c3e', borderRadius: 14,
           padding: '11px 14px 10px', color: CREAM, textAlign: 'center',
           border: '1px solid rgba(255,255,255,.14)', boxShadow: '0 10px 30px rgba(0,0,0,.45)',
         }}>
+          {/* "Your turn!" sits here, not over the table, so the card shows. */}
+          {banner > 0 && <TurnBanner inline key={banner} onDone={() => setBanner(0)} />}
           <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 8 }}>
             {isFreeOffer ? 'לקחת את הקלף מהאשפה?' : 'לקנות את הקלף?'}
           </div>
@@ -2380,39 +2377,10 @@ function Game({ state, dispatch, onLeave, wallet }) {
               </>
             )}
           </div>
-          <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,.75)', marginBottom: 8, lineHeight: 1.5 }}>
-            {isFreeOffer ? queue : <>
-              מקבלים את הקלף ועוד קלף אחד מהחבילה
-              {buyCost ? <> · עולה <Icon name="coins" /> {buyCost}</> : null}
-              <br />{queue}
-            </>}
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8,
+                        color: isFreeOffer ? '#86efac' : '#fca5a5' }}>
+            {isFreeOffer ? 'קנייה בחינם' : 'קנייה עם קנס'}
           </div>
-          {/* The line, in the order the card goes: who already passed, and
-              who is still to be asked after me. */}
-          {offered.length > 1 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 5, marginBottom: 9 }}>
-              {offered.map((s, i) => {
-                const mine = s === mySeat;
-                const open = waiting.includes(s);
-                return (
-                  <span key={s} style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 4, maxWidth: 130,
-                    padding: '2px 8px', borderRadius: 999, fontSize: 11.5, fontWeight: 700,
-                    background: mine ? `${GOLD}33` : 'rgba(255,255,255,.08)',
-                    border: `1px solid ${mine ? GOLD : 'rgba(255,255,255,.15)'}`,
-                    color: open ? CREAM : 'rgba(255,255,255,.55)',
-                  }}>
-                    <span style={{ opacity: .6 }}>{i + 1}.</span>
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {mine ? 'אתה' : state.players[s]?.name}
-                    </span>
-                    {i === 0 && <span style={{ color: '#86efac' }}>חינם</span>}
-                    {open && !mine && <Icon name="hourglass" size={11} />}
-                  </span>
-                );
-              })}
-            </div>
-          )}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
             <button
               onClick={doTake}
@@ -2445,12 +2413,6 @@ function Game({ state, dispatch, onLeave, wallet }) {
             <BuyClock id={buy.id} msLeft={buy.msLeft} total={buyWindowMs(state)}
                       onLow={buzz} />
           )}
-          <button onClick={() => setShowRules('buy')} style={{
-            marginTop: 7, background: 'none', border: 'none', padding: 2, cursor: 'pointer',
-            color: 'rgba(255,255,255,.6)', fontSize: 11.5, fontFamily: 'inherit', textDecoration: 'underline',
-          }}>
-            <IconLabel name="book">איך עובדת קנייה?</IconLabel>
-          </button>
         </div>
         );
       })()}
@@ -2720,7 +2682,7 @@ function Game({ state, dispatch, onLeave, wallet }) {
 
       {/* Cards in flight, and the "your turn" ribbon (anim.jsx). */}
       {flyers.map(f => <Flyer key={f.key} f={f} onDone={() => flyDone(f)} />)}
-      {banner > 0 && <TurnBanner key={banner} onDone={() => setBanner(0)} />}
+      {banner > 0 && !showPrompt && <TurnBanner key={banner} onDone={() => setBanner(0)} />}
 
       {/* Drag ghost — under the cursor, or lifted above the finger on touch so
           it stays visible. Positioned by paintDrag(), never by a re-render. */}

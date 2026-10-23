@@ -84,8 +84,9 @@ export function Flyer({ f, onDone }) {
 // "Your turn!" — a gold ribbon across the table that stays until the player
 // shows they're there: a touch, a click, a key, or the mouse moving. Then it
 // fades out. Click-through. The listeners are set once, on mount: the parent
-// passes a fresh `onDone` on every render.
-export function TurnBanner({ onDone, text = 'תורך!' }) {
+// passes a fresh `onDone` on every render. `inline` sets it in the flow of
+// its parent (the buy sheet) instead of over the table, so it hides nothing.
+export function TurnBanner({ onDone, text = 'תורך!', inline = false }) {
   const done = useRef(onDone);
   done.current = onDone;
   const [out, setOut] = useState(false);
@@ -119,7 +120,7 @@ export function TurnBanner({ onDone, text = 'תורך!' }) {
     return () => { clearTimeout(arm); clearTimeout(fade); stop(); };
   }, []);
   return (
-    <div className={'turn-banner' + (out ? ' out' : '')} aria-live="polite">
+    <div className={'turn-banner' + (inline ? ' inline' : '') + (out ? ' out' : '')} aria-live="polite">
       <span>{text}</span>
     </div>
   );

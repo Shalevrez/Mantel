@@ -286,6 +286,9 @@
   /* Ribbon ends cut in a swallowtail. */
   clip-path: polygon(0 0, 100% 0, calc(100% - 18px) 50%, 100% 100%, 0 100%, 18px 50%);
 }
+/* In the buy sheet: a smaller ribbon above the title, clear of the card. */
+.turn-banner.inline { position: static; margin-bottom: 8px; }
+.turn-banner.inline span { padding: 4px 40px; font-size: 22px; box-shadow: 0 6px 16px rgba(0,0,0,.4); }
 @keyframes bannerIn {
   0%   { opacity: 0; transform: scaleX(.3); }
   65%  { opacity: 1; transform: scaleX(1.04); }
