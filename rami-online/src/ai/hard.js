@@ -25,8 +25,11 @@
 // that copy. Whatever it decides could have been decided by a person sitting
 // in that chair.
 //
-// All work is bounded by a node budget per decision; on BUDGET the caller
-// (the room) falls back to the old heuristic for that one step.
+// All work is bounded by a node budget per decision. Out of budget, a buy or
+// draw decision degrades to the safe default (pass / draw blind) and reports
+// it in `diag`; planTurn throws BUDGET and the room finishes that turn with
+// the medium routine. Pass a `diag` object to learn what happened:
+//   { nodes, budget: 'ok' | 'exhausted' }
 // ═══════════════════════════════════════════════════════
 
 import {
@@ -36,12 +39,18 @@ import { makeCtx, Solver, bindPlan, typeOf, typePts, typeCard, posType, INF, BUD
 
 export { BUDGET };
 
-// Production budget: search nodes per decision. ~40k nodes is a few
-// milliseconds of CPU; a hand big enough to need more falls back.
+// Production budget: search nodes per decision (CPU per node varies with the
+// hand; see tests/bench/README.md for measured CPU). A hand big enough to need
+// more falls back.
 export const DEFAULT_BUDGET = 25000;
 
 // Search nodes the last decision used (for the benchmark's cost report).
 export const lastWork = { budget: null, get nodes() { return this.budget ? this.budget.n : 0; } };
+
+// Counters for the benchmark: how often a plan the solver proved could not be
+// carried out move by move (then another plan is tried, or the turn goes on
+// without going out). Never read by the game.
+export const engineStats = { outPlans: 0, outPlanOK: 0 };
 
 // ── Tunables ─────────────────────────────────────────
 // Kept together so the benchmark can sweep them. Values were picked from
@@ -54,6 +63,11 @@ export const TUNE = {
   holdMargin: 1.0,      // waiting for an ant must beat opening by this much
   antValue: -50,
   access: 1.35,
+  // A paid buy is only averaged over every possible penalty card when the
+  // card alone (no penalty card) already comes within this much of paying
+  // off. Measured: skips ~77% of the full averages and changes ~0.4% of the
+  // decisions (tests/bench/README.md).
+  buyPrefilter: 3,
 };
 
 // Chance an opponent goes out on their next turn, by the hand size they
@@ -76,14 +90,21 @@ const blank = id => ({ id, suit: 'h', v: 2, j: false });
 // seat's own cards. Logs are dropped (nothing reads them; it keeps the
 // reducer's copies cheap).
 export function sanitize(state, seat) {
-  const ub = state.undoBefore;
+  // The rollback snapshot belongs to the player on turn: only ever this
+  // seat's own (its hand, the public board and pile); anyone else's is dropped.
+  const ub = state.cur === seat ? state.undoBefore : null;
   return {
     ...state,
     log: [],
+    msg: '', msgSeat: undefined,
+    sel: state.cur === seat ? state.sel : [],
+    staging: state.cur === seat ? state.staging : [],
+    // Who else wanted a card someone took is private to each seat.
+    buyNote: state.buyNote ? { ...state.buyNote, outbid: [] } : state.buyNote,
     deck: state.deck.map((_, k) => blank(`?d${k}`)),
-    undoBefore: ub ? { ...ub, deck: ub.deck ? ub.deck.map((_, k) => blank(`?u${k}`)) : ub.deck } : ub,
+    undoBefore: ub ? { ...ub, deck: ub.deck ? ub.deck.map((_, k) => blank(`?u${k}`)) : ub.deck } : null,
     players: state.players.map((p, i) => i === seat ? p
-      : { ...p, hand: p.hand.map((_, k) => blank(`?${i}.${k}`)) }),
+      : { ...p, hand: p.hand.map((_, k) => blank(`?${i}.${k}`)), newIds: [] }),
   };
 }
 
@@ -107,8 +128,8 @@ export function knowledge(pub, seat) {
     else holder.set(e.c.id, { s: e.s, c: e.c });
   }
   const onTable = new Set();
-  for (const g of pub.board) for (const c of g.cards) onTable.add(c.id);
-  for (const c of pub.discard) onTable.add(c.id);
+  for (const g of pub.board) for (const c of g.cards) if (c) onTable.add(c.id);
+  for (const c of pub.discard) if (c) onTable.add(c.id);
   const known = pub.players.map(() => []);
   for (const { s, c } of holder.values()) {
     if (s === seat || onTable.has(c.id) || !known[s]) continue;
@@ -120,15 +141,28 @@ export function knowledge(pub, seat) {
 }
 
 // ── The table ────────────────────────────────────────
+// Which card types attach to some group on the board. A group can only ever
+// take a card of a suit (a run) or a value (a set) it already holds, so only
+// those are put to the reducer's attachPos — the same answers as testing all
+// 52, for a fraction of the work.
 function attachFlags(board) {
   const attach = new Uint8Array(52);
   let attachJ = false;
   if (!board.length) return { attach, attachJ };
   const J = { id: '?j', suit: 'j', v: 0, j: true };
-  for (const g of board) if (!attachJ && attachPos(g.cards, J)) attachJ = true;
-  for (let t = 0; t < 52; t++) {
-    const c = { id: '?c', ...typeCard(t) };
-    for (const g of board) if (attachPos(g.cards, c)) { attach[t] = 1; break; }
+  for (const g of board) {
+    if (!attachJ && attachPos(g.cards, J)) attachJ = true;
+    const cand = new Set();
+    for (const c of g.cards) {
+      if (c.j) continue;
+      const t = typeOf(c), si = (t / 13) | 0, r = t % 13;
+      for (let k = 0; k < 13; k++) cand.add(si * 13 + k);
+      for (let sj = 0; sj < 4; sj++) cand.add(sj * 13 + r);
+    }
+    for (const t of cand) {
+      if (attach[t]) continue;
+      if (attachPos(g.cards, { id: '?c', ...typeCard(t) })) attach[t] = 1;
+    }
   }
   return { attach, attachJ };
 }
@@ -136,11 +170,17 @@ function attachFlags(board) {
 // The planning frame for one decision: the public view, what is known, the
 // threat level, and solvers (with their memos) per board state.
 export class Frame {
-  constructor(state, seat, budgetMax = DEFAULT_BUDGET, tune = TUNE) {
+  constructor(state, seat, budgetMax = DEFAULT_BUDGET, tune = TUNE, budget = null) {
     this.seat = seat;
     this.pub = sanitize(state, seat);
-    this.tune = tune;
-    this.budget = { n: 0, max: budgetMax };
+    this.tune = tune || TUNE;
+    // `budget` lets one decision that plans in two steps share one allowance.
+    // An oversized hand (repeated buying) costs several times more CPU per
+    // search node and often runs out anyway, so it gets a smaller allowance:
+    // it falls back sooner instead of burning CPU first.
+    const size = state.players[seat].hand.length;
+    const scale = size > 20 ? (20 / size) ** 2 : 1;
+    this.budget = budget || { n: 0, max: Math.round((budgetMax || DEFAULT_BUDGET) * scale) };
     lastWork.budget = this.budget;
     this.know = knowledge(this.pub, seat);
     const pub = this.pub;
@@ -163,10 +203,18 @@ export class Frame {
     const left = lastMk(pub) - pub.mk;
     let app = 1 + Math.max(0, Math.min(0.5, deficit / 200)) * (left <= 1 ? 1 : 0.5);
     if (deficit < -100) app *= 0.9;
-    this.antValue = tune.antValue * app;
+    this.antValue = this.tune.antValue * app;
   }
 
   me(st = this.pub) { return st.players[this.seat]; }
+
+  // Attach flags for a board, computed once per board state.
+  flags(board) {
+    const bkey = 'A|' + board.map(g => g.id + ':' + g.cards.length).join(',');
+    let f = this.cache.get(bkey);
+    if (!f) { f = attachFlags(board); this.cache.set(bkey, f); }
+    return f;
+  }
 
   // Solvers for a board / opened state. `now`: melds can still be laid this
   // turn (the action phase); otherwise they wait for the next turn.
@@ -175,9 +223,7 @@ export class Frame {
     const key = `${mode}|${laid ? 1 : 0}|${now ? 1 : 0}|${freeNeed}|${bkey}`;
     let sv = this.cache.get(key);
     if (sv) return sv;
-    let flags = this.cache.get('A|' + bkey);
-    if (!flags) { flags = attachFlags(board); this.cache.set('A|' + bkey, flags); }
-    const { attach, attachJ } = flags;
+    const { attach, attachJ } = this.flags(board);
     const hand = this.me().hand;
     const h0 = Math.min(120, hand.reduce((n, c) => n + cSc(c), 0));
     const ctx = makeCtx({
@@ -199,11 +245,12 @@ export class Frame {
     if (card.j) return 0;
     const pub = this.pub, seat = this.seat;
     const next = nextActive(pub, seat);
+    const fits = !!this.flags(board).attach[typeOf(card)];
     let sum = 0;
     pub.players.forEach((p, i) => {
       if (i === seat || p.out || onLastCard(p)) return;
       let want = 0;
-      if (p.hasLaid && board.some(g => attachPos(g.cards, card))) want = 0.9;
+      if (p.hasLaid && fits) want = 0.9;
       else if (this.know.known[i].some(k => !k.j && (
         (k.v === card.v && k.suit !== card.suit) ||
         (k.suit === card.suit && Math.abs(k.v - card.v) <= 2 && k.v !== card.v)))) want = 0.55;
@@ -315,6 +362,7 @@ function tryGoOut(F, sim) {
     if (sv.evaluate(hand).o !== 0) continue;
     const items = sv.plan('o', hand);
     if (!items) continue;
+    engineStats.outPlans++;
     const bound = bindPlan(items, hand);
     const s = sim.fork();
     const melds = bound.filter(b => b.kind === 'seq' || b.kind === 'set').map(b => b.cards);
@@ -324,7 +372,7 @@ function tryGoOut(F, sim) {
     if (!ok) continue;
     attachAll(s, null);
     if (s.me.hand.length !== 1) continue;
-    if (s.do({ type: 'DISCARD', cid: s.me.hand[0].id }) && s.ended()) return s;
+    if (s.do({ type: 'DISCARD', cid: s.me.hand[0].id }) && s.ended()) { engineStats.outPlanOK++; return s; }
   }
   return null;
 }
@@ -446,8 +494,20 @@ function touchSet(hand) {
 
 // ── The turn ─────────────────────────────────────────
 // Returns the list of intents for the action phase.
-export function planTurn(state, seat, budgetMax, tune) {
-  const F = new Frame(state, seat, budgetMax, tune);
+export function planTurn(state, seat, budgetMax, tune, diag = null, budget = null) {
+  const F = new Frame(state, seat, budgetMax, tune, budget);
+  if (diag) diag.budgetRef = F.budget;
+  return finish(diag, F, planTurnIn(F));
+}
+
+// Records how much work a decision took.
+function finish(diag, F, result) {
+  if (diag) { diag.nodes = F.budget.n; diag.budget = F.budget.n > F.budget.max ? 'exhausted' : 'ok'; }
+  return result;
+}
+
+function planTurnIn(F) {
+  const seat = F.seat;
   const sim = new Sim(F, F.pub);
   const me = sim.me;
 
@@ -568,13 +628,13 @@ function drawValue(F) {
 }
 
 // ── Taking, buying ───────────────────────────────────
-export function decideBuy(state, seat, budgetMax, tune) {
-  try { return decideBuyInner(state, seat, budgetMax, tune); }
-  catch (e) { if (e !== BUDGET) throw e; return { type: 'SKIP', seat }; }   // out of budget: draw blind
+export function decideBuy(state, seat, budgetMax, tune, diag = null) {
+  const F = new Frame(state, seat, budgetMax, tune);
+  try { return finish(diag, F, decideBuyIn(F, seat)); }
+  catch (e) { if (e !== BUDGET) throw e; return finish(diag, F, { type: 'SKIP', seat }); }   // out of budget: pass (draw blind)
 }
 
-function decideBuyInner(state, seat, budgetMax, tune) {
-  const F = new Frame(state, seat, budgetMax, tune);
+function decideBuyIn(F, seat) {
   const st = F.pub, me = F.me();
   const top = st.discard[st.discard.length - 1];
   if (!top) return { type: 'SKIP', seat };
@@ -585,8 +645,7 @@ function decideBuyInner(state, seat, budgetMax, tune) {
     const skip = { type: 'SKIP', seat };
     const laidOrCan = me.hasLaid || st.canLay;
     if (!top.j && !touchSet(me.hand).types[typeOf(top)]) {
-      const flags = attachFlags(st.board);
-      if (!(laidOrCan && flags.attach[typeOf(top)])) return skip;
+      if (!(laidOrCan && F.flags(st.board).attach[typeOf(top)])) return skip;
     }
     const vTake = turnValue(F, [...me.hand, top]);
     if (vTake <= F.antValue) return { type: 'TAKE_FREE' };
@@ -612,10 +671,13 @@ function decideBuyInner(state, seat, budgetMax, tune) {
 
 function paidBuy(F, top, seat) {
   const st = F.pub, me = F.me();
-  if (!top.j && !touchSet(me.hand).types[typeOf(top)] && !attachFlags(st.board).attach[typeOf(top)]) return { type: 'SKIP', seat };
+  if (!top.j && !touchSet(me.hand).types[typeOf(top)] && !F.flags(st.board).attach[typeOf(top)]) return { type: 'SKIP', seat };
   const sv = F.solver('eval', { board: st.board, laid: me.hasLaid, now: false });
   const pass = sv.evaluate(me.hand).v;
   const withTop = [...me.hand, top];
+  // An unknown extra card almost never helps on average, so a card that
+  // doesn't pay off on its own won't with a penalty card added.
+  if (sv.evaluate(withTop).v >= pass - F.tune.buyMargin + F.tune.buyPrefilter) return { type: 'SKIP', seat };
   const { unseen, unseenJ } = F.know;
   let N = 0, acc = 0;
   const touch = touchSet(withTop);
@@ -642,22 +704,23 @@ function paidBuy(F, top, seat) {
 }
 
 // The draw phase: the beit only for a certain ant, else the deck.
-export function decideDraw(state, seat, budgetMax, tune) {
-  try { return decideDrawInner(state, seat, budgetMax, tune); }
-  catch (e) { if (e !== BUDGET) throw e; return { type: 'DRAW' }; }
+export function decideDraw(state, seat, budgetMax, tune, diag = null) {
+  const F = new Frame(state, seat, budgetMax, tune);
+  try { return finish(diag, F, decideDrawIn(F, seat, budgetMax, tune)); }
+  catch (e) { if (e !== BUDGET) throw e; return finish(diag, F, { type: 'DRAW' }); }
 }
 
-function decideDrawInner(state, seat, budgetMax, tune) {
-  const st = state;
-  const me = st.players[seat];
+function decideDrawIn(F, seat, budgetMax, tune) {
+  const me = F.me();
+  const st = F.pub;
   if (st.beit && st.canLay && !me.hasLaid && !onLastCard(me)) {
-    const F = new Frame(state, seat, budgetMax, tune);
     const sv = F.solver('ant', { board: F.pub.board, laid: false, now: true });
     if (sv.evaluate([...F.me().hand, F.pub.beit]).o === 0) {
       // Prove it through the reducer before committing to it.
       const took = G(F.pub, { type: 'TAKE_BEIT' });
       if (took.phase === 'action' && took.tookBeit) {
-        const intents = planTurn(took, seat, budgetMax, tune);
+        // Same allowance as the rest of this decision.
+        const intents = planTurn(took, seat, budgetMax, tune, null, F.budget);
         const r = applyIntents(took, intents);
         if (r.ok && r.state.phase === 'round_end') return { type: 'TAKE_BEIT' };
       }

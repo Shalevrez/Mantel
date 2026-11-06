@@ -10,8 +10,9 @@
 // ═══════════════════════════════════════════════════════
 import { initGame, mkCard, G, findAIGroups, isGroup, MK } from '../src/game-core.js';
 import { makeCtx, Solver, bindPlan, INF } from '../src/ai/hand.js';
-import { decideBuy, decideDraw, planTurn, applyIntents, sanitize, knowledge, Frame } from '../src/ai/hard.js';
-import { Room } from '../src/worker/index.js';
+import { decideBuy, decideDraw, planTurn, applyIntents, sanitize, knowledge, Frame, BUDGET } from '../src/ai/hard.js';
+import { Room, endTurnSomehow } from '../src/worker/index.js';
+import { mulberry32 } from './bench/harness.mjs';
 import { fakeStorage } from './fake-storage.mjs';
 import { playGame } from './bench/harness.mjs';
 import { makePolicy } from './bench/policies.mjs';
@@ -277,6 +278,90 @@ const play = st => applyIntents(st, planTurn(st, st.cur));
   }
   check('three whole games: no deadlock, no lost or duplicated card', problems === 0 && rounds === 9);
   check('…and no refused move or fallback along the way', hard.stats.refused === 0 && hard.stats.fallbacks === 0);
+}
+
+// ── 7. Fairness on real mid-game positions ───────────
+// Positions taken from actual play (cards on the table, cards taken face up,
+// hands of every size). Every hidden card — opponents' hands and the deck —
+// is dealt again at random, sizes kept; the decision must not change.
+{
+  const rnd = mulberry32(4242);
+  const reshuffle = (st, seat) => {
+    const pool = [...st.deck];
+    st.players.forEach((p, i) => { if (i !== seat) pool.push(...p.hand); });
+    for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+    return { ...st, players: st.players.map((p, i) => i === seat ? p : { ...p, hand: pool.splice(0, p.hand.length) }), deck: pool };
+  };
+  const run = f => { try { return JSON.stringify(f()); } catch (e) { if (e === BUDGET) return 'BUDGET'; throw e; } };
+  let checks = 0, diffs = 0;
+  const base = makePolicy('hard');
+  const spy = {
+    ...base,
+    buy: (st, seat) => { if (rnd() < 0.4) { checks++; if (run(() => decideBuy(st, seat)) !== run(() => decideBuy(reshuffle(st, seat), seat))) diffs++; } return base.buy(st, seat); },
+    draw: (st, seat) => { if (rnd() < 0.4) { checks++; if (run(() => decideDraw(st, seat)) !== run(() => decideDraw(reshuffle(st, seat), seat))) diffs++; } return base.draw(st, seat); },
+    turn: (st, seat) => { if (rnd() < 0.4) { checks++; if (run(() => planTurn(st, seat)) !== run(() => planTurn(reshuffle(st, seat), seat))) diffs++; } return base.turn(st, seat); },
+  };
+  playGame([spy, makePolicy('medium'), spy], 777, { format: 'mini' });
+  check(`decisions never depend on hidden cards (${checks} mid-game positions)`, checks > 50 && diffs === 0);
+
+  // Private fields of other seats never reach the engine's view.
+  const st = initGame([{ name: 'a', isAI: true }, { name: 'b', isAI: true }], 0);
+  const other = { ...st, cur: 1, phase: 'action', undoBefore: { hand: st.players[1].hand, board: [], hasLaid: false },
+                  sel: [st.players[1].hand[0].id], buyNote: { seat: 1, paid: true, outbid: [0] } };
+  const pv = sanitize(other, 0);
+  check('another seat’s rollback snapshot and selection are dropped', pv.undoBefore === null && pv.sel.length === 0);
+  check('who was outbid stays private', pv.buyNote.outbid.length === 0);
+}
+
+// ── 8. The room's safety nets ────────────────────────
+{
+  // A failure inside the engine: counted, logged without any card, and the
+  // room carries on.
+  const room = new Room({ storage: fakeStorage() }, {});
+  const st = craft({ hands: [[C('h', 5), C('h', 6), C('s', 9), C('d', 12)], filler(14)] });
+  const logs = [];
+  const orig = console.error;
+  console.error = (...a) => logs.push(a.join(' '));
+  try {
+    const r1 = room.hardTry('turn', st, 0, () => { throw new Error('boom'); });
+    const r2 = room.hardTry('turn', st, 0, () => { throw BUDGET; });
+    for (let i = 0; i < 10; i++) room.hardTry('turn', st, 0, () => { throw new Error('again'); });
+    check('an engine error falls back (no answer)', r1 === null && r2 === null);
+    check('errors and budget exhaustion are counted apart', room.aiDiag.errors === 11 && room.aiDiag.budget === 1);
+    check('budget exhaustion is not logged; errors are, rate-limited', logs.length === 5 && logs.every(l => !/budget/.test(l)));
+    const text = logs.join('\n');
+    const leaked = st.players.flatMap(p => p.hand).some(c => text.includes(c.id));
+    check('the log carries the table’s shape, never a card', /"hand":4/.test(text) && !leaked && !/[♥♦♣♠]/.test(text));
+  } finally { console.error = orig; }
+
+  // A turn whose throw is refused still ends: a joker owed from a swap with
+  // nowhere to go is handed back (touch-move off) and a card is thrown.
+  const jk = JK();
+  const owed = craft({ hands: [[jk, C('h', 5), C('s', 9)], filler(14)], laid: [true, false] });
+  owed.mustUseJoker = jk.id;
+  owed.undoBefore = { hand: [C('h', 5), C('s', 9), C('c', 13)], board: [], hasLaid: true, beit: null };
+  owed.touchMove = false;
+  const ended = endTurnSomehow(owed, 0);
+  check('a refused throw never leaves the turn stuck', ended.phase !== 'action' || ended.cur !== 0);
+  const beitStuck = craft({ hands: [[C('h', 5), C('h', 6), C('s', 9), C('c', 2)], filler(14)] });
+  beitStuck.tookBeit = true;
+  beitStuck.undoBefore = { hand: [C('h', 5), C('h', 6), C('s', 9)], board: [], hasLaid: false, beit: C('c', 2), deck: [], discard: [], fromBeit: true };
+  check('a beit that can’t finish goes back to the draw', endTurnSomehow(beitStuck, 0).phase === 'draw');
+
+  // Every decision the room makes for a hard seat in a whole game is a real
+  // engine answer: no error, nothing refused.
+  const r = new Room({ storage: fakeStorage() }, {});
+  r.seats = Array.from({ length: 4 }, (_, i) => ({ name: 's' + i, isAI: true, ai: i % 2 ? 'medium' : 'hard' }));
+  r.started = true;
+  r.state = initGame(r.seats.map(s => ({ name: s.name, isAI: true, ai: s.ai })), 0, { format: 'single' });
+  let steps = 0;
+  while (!['round_end', 'game_end'].includes(r.state.phase) && steps++ < 4000) {
+    const before = r.state;
+    if (r.state.phase === 'buying') r.aiBuy(); else if (r.state.phase === 'draw') r.aiDraw(); else r.aiAction();
+    if (r.state === before) break;
+  }
+  check('a four-seat round in the room ends normally', r.state.phase === 'round_end' || r.state.phase === 'game_end');
+  check('…with no engine error or refused move', r.aiDiag && r.aiDiag.errors === 0 && r.aiDiag.refused === 0);
 }
 
 console.log(failures ? `\n${failures} check(s) failed` : '\nall checks passed');

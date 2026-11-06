@@ -92,8 +92,31 @@ export function oldAction(st, seat, lv, rnd = Math.random) {
 }
 
 // ── Policies ──
+// `hard@<dir>`: the engine loaded from another copy of src/ai (e.g. an older
+// commit checked out to a scratch folder) — for before/after comparisons.
+const engines = new Map();
+export async function loadEngine(dir) {
+  if (!engines.has(dir)) engines.set(dir, await import(`${dir}/hard.js`));
+  return engines.get(dir);
+}
 export function makePolicy(name, opts = {}) {
   const stats = newStats();
+  if (name.startsWith('hard@')) {
+    const E = engines.get(name.slice(5));
+    if (!E) throw new Error('call loadEngine first: ' + name);
+    const guard = (fallback, fn) => { try { return fn(); } catch (e) { stats.fallbacks++; return fallback(); } };
+    return {
+      name, stats,
+      buy: (st, seat) => timed(stats, seat === st.buy.origNext ? 'take' : 'buy', () => guard(() => oldBuy(st, seat, 'medium'), () => G(st, E.decideBuy(st, seat)))),
+      draw: (st, seat) => timed(stats, 'draw', () => guard(() => oldDraw(st, seat, 'medium'), () => G(st, E.decideDraw(st, seat)))),
+      turn: (st, seat) => timed(stats, 'turn', () => guard(() => oldAction(st, seat, 'medium'), () => {
+        const r = E.applyIntents(st, E.planTurn(st, seat));
+        if (r.ok && r.state.phase !== 'action') return r.state;
+        stats.refused++;
+        return oldAction(r.state, seat, r.state.tookBeit ? 'hard' : 'medium');
+      })),
+    };
+  }
   if (name === 'hard') {
     stats.track = true;
     const budget = opts.budget, tune = opts.tune;

@@ -72,11 +72,35 @@ export function playGame(seats, seed, { format = 'mega', maxSteps = 200000 } = {
 // even seats first, then in the odd ones) and aggregates.
 // With `layout` (e.g. 'ABBB') each seed is played once per rotation of it,
 // so every side sits in every chair on the same deal.
+// 95% confidence intervals by block bootstrap over seeds: A's win share, and
+// A's average game total minus B's (per seat; negative = A scores better).
+export function bootstrap(blocks, iters = 2000, seed = 12345) {
+  const rnd = mulberry32(seed);
+  const stat = bs => {
+    let g = 0, w = 0, ta = 0, sa = 0, tb = 0, sb = 0;
+    for (const b of bs) { g += b.games; w += b.winsA; ta += b.totA; sa += b.seatsA; tb += b.totB; sb += b.seatsB; }
+    return [w / g, ta / sa - tb / sb];
+  };
+  const ws = [], ds = [];
+  for (let i = 0; i < iters; i++) {
+    const bs = Array.from({ length: blocks.length }, () => blocks[Math.floor(rnd() * blocks.length)]);
+    const [w, d] = stat(bs); ws.push(w); ds.push(d);
+  }
+  ws.sort((a, b) => a - b); ds.sort((a, b) => a - b);
+  const q = (a, f) => +a[Math.floor(f * (a.length - 1))].toFixed(3);
+  const [w0, d0] = stat(blocks);
+  return { winShareA: +w0.toFixed(3), winShareA95: [q(ws, 0.025), q(ws, 0.975)],
+           totalDiffA: +d0.toFixed(1), totalDiffA95: [q(ds, 0.025), q(ds, 0.975)] };
+}
+
 export function duel(makeA, makeB, { pairs = 50, players = 2, seed0 = 1, format = 'mega', onGame, layout = null } = {}) {
   const A = makeA(), B = makeB();
   const agg = side => ({ name: side.name, games: 0, wins: 0, total: 0, rounds: 0, roundPen: 0, outs: 0, ants: 0 });
-  const res = { A: agg(A), B: agg(B), problems: [], games: 0 };
+  const res = { A: agg(A), B: agg(B), problems: [], games: 0, blocks: [] };
   for (let k = 0; k < pairs; k++) {
+    // One block per seed: its games share a deal, so they are resampled together.
+    const block = { games: 0, winsA: 0, totA: 0, seatsA: 0, totB: 0, seatsB: 0 };
+    res.blocks.push(block);
     const rots = layout ? layout.length : 2;
     for (let flip = 0; flip < rots; flip++) {
       const seats = layout
@@ -87,6 +111,11 @@ export function duel(makeA, makeB, { pairs = 50, players = 2, seed0 = 1, format 
       if (g.problems.length) res.problems.push({ seed: seed0 + k, flip, problems: g.problems });
       const best = Math.min(...g.totals);
       const winners = g.totals.map((t, i) => t === best ? i : -1).filter(i => i >= 0);
+      block.games++;
+      seats.forEach((p, i) => {
+        if (p === A) { block.totA += g.totals[i]; block.seatsA++; if (winners.includes(i)) block.winsA += 1 / winners.length; }
+        else { block.totB += g.totals[i]; block.seatsB++; }
+      });
       seats.forEach((p, i) => {
         const r = p === A ? res.A : res.B;
         r.games++;

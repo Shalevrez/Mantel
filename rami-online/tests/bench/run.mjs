@@ -1,8 +1,8 @@
 // Benchmark CLI — local only.
 //   node tests/bench/run.mjs [--a hard] [--b legacy] [--pairs 100] [--players 2] [--seed 1]
 //                            [--format mega|mini] [--budget 60000] [--json out.json]
-import { duel } from './harness.mjs';
-import { makePolicy } from './policies.mjs';
+import { duel, bootstrap } from './harness.mjs';
+import { makePolicy, loadEngine } from './policies.mjs';
 import { writeFileSync } from 'node:fs';
 
 const args = Object.fromEntries(process.argv.slice(2).reduce((acc, a, i, arr) => {
@@ -15,6 +15,7 @@ const format = args.format || 'mega';
 const budget = args.budget ? Number(args.budget) : undefined;
 // --tuneA / --tuneB: JSON overrides of the engine's TUNE for one side only.
 const { TUNE } = await import('../../src/ai/hard.js');
+for (const n of [args.a, args.b]) if (n && n.startsWith('hard@')) await loadEngine(n.slice(5));
 const tuneOf = j => (j ? { ...TUNE, ...JSON.parse(j) } : undefined);
 const mk = (name, t, bud) => () => makePolicy(name, { budget: bud ? Number(bud) : budget, tune: tuneOf(t), loud: !!args.loud });
 
@@ -50,6 +51,7 @@ function report(side) {
 }
 const out = {
   setup: { a, b, pairs, games: res.games, players: layout ? layout.length : players, layout, format, seed0, budget: budget ?? 'default', secs },
+  ci: bootstrap(res.blocks),
   A: report(res.A), B: report(res.B), problems: res.problems.slice(0, 10), problemCount: res.problems.length,
 };
 console.log(JSON.stringify(out, null, 2));

@@ -162,7 +162,14 @@ export class Solver {
     this.strict = mode !== 'eval';
     this.isOut = mode === 'out';
     this.budget = budget;
-    this.memo = new Map();
+    // Memo: an open-addressing table keyed by the 64-bit state hash (two
+    // int32 halves), pointing into mo/mc. Faster than a Map keyed by large
+    // numbers, which boxes every key.
+    this.tcap = 1 << 12;
+    this.ka = new Int32Array(this.tcap);
+    this.kb = new Int32Array(this.tcap);
+    this.kv = new Int32Array(this.tcap).fill(-1);
+    this.ha = 0; this.hb = 0;   // the key dfs is working on
     this.mo = new Float64Array(4096);
     this.mc = new Float64Array(4096);
     this.size = 0;
@@ -192,9 +199,39 @@ export class Solver {
   dec(t) { const i = t * 8 + this.cnt[t]; this.h1 ^= ZA[i] ^ ZA[i - 1]; this.h2 ^= ZB[i] ^ ZB[i - 1]; this.cnt[t]--; }
   addJ(d) { this.h1 ^= ZJA[this.J]; this.h2 ^= ZJB[this.J]; this.J += d; this.h1 ^= ZJA[this.J]; this.h2 ^= ZJB[this.J]; }
 
+  // Sets this.ha / this.hb to the memo key of the current state.
   key(qr, qs, f) {
     const q = qr * 9 + qs * 3 + f + (this.lite ? 27 : 0);
-    return ((this.h1 ^ ZQA[q]) >>> 0) * 1048576 + ((this.h2 ^ ZQB[q]) & 0xfffff);
+    this.ha = (this.h1 ^ ZQA[q]) | 0;
+    this.hb = (this.h2 ^ ZQB[q]) | 0;
+  }
+
+  // Index into mo/mc for key (a, b), or -1.
+  find(a, b) {
+    const mask = this.tcap - 1, ka = this.ka, kb = this.kb, kv = this.kv;
+    let i = (Math.imul(a, 0x9e3779b1) ^ b) & mask;
+    while (kv[i] !== -1) {
+      if (ka[i] === a && kb[i] === b) return kv[i];
+      i = (i + 1) & mask;
+    }
+    return -1;
+  }
+
+  insert(a, b, v) {
+    if (this.size * 2 >= this.tcap) this.grow();
+    const mask = this.tcap - 1, ka = this.ka, kb = this.kb, kv = this.kv;
+    let i = (Math.imul(a, 0x9e3779b1) ^ b) & mask;
+    while (kv[i] !== -1) i = (i + 1) & mask;
+    ka[i] = a; kb[i] = b; kv[i] = v;
+  }
+
+  grow() {
+    const oa = this.ka, ob = this.kb, ov = this.kv;
+    this.tcap *= 2;
+    this.ka = new Int32Array(this.tcap);
+    this.kb = new Int32Array(this.tcap);
+    this.kv = new Int32Array(this.tcap).fill(-1);
+    for (let i = 0; i < ov.length; i++) if (ov[i] !== -1) this.insert(oa[i], ob[i], ov[i]);
   }
 
   // Root answers for the hand currently loaded: { o, c, v }.
@@ -211,9 +248,10 @@ export class Solver {
   undo(m, i) { if (m.j[i]) this.addJ(m.j[i]); const b = i * MT; for (let k = m.nt[i] - 1; k >= 0; k--) this.inc(m.types[b + k]); }
 
   dfs(qr, qs, f, depth) {
-    const key = this.key(qr, qs, f);
-    const hit = this.memo.get(key);
-    if (hit !== undefined) { this.ro = this.mo[hit]; this.rc = this.mc[hit]; return; }
+    this.key(qr, qs, f);
+    const ha = this.ha, hb = this.hb;
+    const hit = this.find(ha, hb);
+    if (hit !== -1) { this.ro = this.mo[hit]; this.rc = this.mc[hit]; return; }
     if (++this.budget.n > this.budget.max) throw BUDGET;
     const t = this.first();
     let bo, bc;
@@ -243,7 +281,7 @@ export class Solver {
       const c2 = new Float64Array(this.size * 2); c2.set(this.mc); this.mc = c2;
     }
     this.mo[this.size] = bo; this.mc[this.size] = bc;
-    this.memo.set(key, this.size++);
+    this.insert(ha, hb, this.size++);
     this.ro = bo; this.rc = bc;
   }
 
