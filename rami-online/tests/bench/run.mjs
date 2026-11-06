@@ -13,15 +13,14 @@ const a = args.a || 'hard', b = args.b || 'legacy';
 const pairs = Number(args.pairs || 50), players = Number(args.players || 2), seed0 = Number(args.seed || 1);
 const format = args.format || 'mega';
 const budget = args.budget ? Number(args.budget) : undefined;
-const tune = args.tune ? JSON.parse(args.tune) : undefined;
-const mk = name => () => makePolicy(name, { budget, tune: tune ? { ...(awaitTune()), ...tune } : undefined, loud: !!args.loud });
-let TUNE0 = null;
-function awaitTune() { return TUNE0; }
-if (tune) TUNE0 = (await import('../../src/ai/hard.js')).TUNE;
+// --tuneA / --tuneB: JSON overrides of the engine's TUNE for one side only.
+const { TUNE } = await import('../../src/ai/hard.js');
+const tuneOf = j => (j ? { ...TUNE, ...JSON.parse(j) } : undefined);
+const mk = (name, t, bud) => () => makePolicy(name, { budget: bud ? Number(bud) : budget, tune: tuneOf(t), loud: !!args.loud });
 
 const t0 = Date.now();
 const layout = args.layout || null;
-const res = duel(mk(a), mk(b), {
+const res = duel(mk(a, args.tuneA, args.budgetA), mk(b, args.tuneB, args.budgetB), {
   pairs, players: layout ? layout.length : players, seed0, format, layout,
   onGame: (r, k, flip) => { if (flip && (k + 1) % 10 === 0) process.stderr.write(`  ${k + 1}/${pairs} pairs\n`); },
 });
@@ -44,6 +43,7 @@ function report(side) {
     decisions: s.decisions,
     avgMs: +(s.ms / s.decisions).toFixed(3),
     maxMs: +s.maxMs.toFixed(1),
+    ...(() => { const a = [...(s.samples || [])].sort((x, y) => x - y); const q = f => +(a[Math.min(a.length - 1, Math.floor(f * a.length))] || 0).toFixed(2); return { p50Ms: q(0.5), p95Ms: q(0.95), p99Ms: q(0.99), p999Ms: q(0.999) }; })(),
     byKind: Object.fromEntries(Object.entries(s.byKind).map(([k, v]) => [k, { n: v.n, avgMs: +(v.ms / v.n).toFixed(3), maxMs: +v.max.toFixed(1), avgNodes: v.nodes ? Math.round(v.nodes / v.n) : undefined, maxNodes: v.maxNodes }])),
     seatsPerGame: perGame,
   };

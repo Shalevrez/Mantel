@@ -22,6 +22,7 @@ function timed(stats, kind, fn) {
   const r = fn();
   const dt = performance.now() - t0;
   stats.decisions++; stats.ms += dt; if (dt > stats.maxMs) stats.maxMs = dt;
+  (stats.samples ||= []).push(dt);
   const k = stats.byKind[kind] ||= { n: 0, ms: 0, max: 0 };
   k.n++; k.ms += dt; if (dt > k.max) k.max = dt;
   if (stats.track) { const n = lastWork.nodes; k.nodes = (k.nodes || 0) + n; k.maxNodes = Math.max(k.maxNodes || 0, n); }

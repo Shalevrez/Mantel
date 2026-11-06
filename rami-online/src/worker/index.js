@@ -1012,6 +1012,15 @@ export class Room {
     return normLevel(this.seats[seat]?.ai || this.aiLevel);
   }
 
+  // Search nodes the hard level may spend on one decision. The default
+  // (src/ai/hard.js) is a few milliseconds of CPU on a normal hand; the
+  // optional AI_BUDGET variable (wrangler.toml [vars]) can lower it. A smaller
+  // budget plays weaker: more decisions fall back (see tests/bench/README.md).
+  aiBudget() {
+    const n = Number(this.env && this.env.AI_BUDGET);
+    return Number.isFinite(n) && n > 0 ? n : undefined;
+  }
+
   // The computer player being asked, if the seat being asked is one.
   aiBuyers(st) {
     // A scheduled answer can arrive after the window was already decided.
@@ -1030,7 +1039,7 @@ export class Room {
       const hand = st.players[seat].hand;
       const top = st.discard[st.discard.length - 1];
       if (lv === 'hard') {
-        const act = hardOr(() => null, () => decideBuy(st, seat));
+        const act = hardOr(() => null, () => decideBuy(st, seat, this.aiBudget()));
         if (act) { this.state = G(st, act); continue; }
       }
       if (seat === st.buy.origNext) {
@@ -1053,7 +1062,7 @@ export class Room {
     const st = this.state;
     const seat = st.cur;
     if (this.levelOf(seat) === 'hard') {
-      const act = hardOr(() => null, () => decideDraw(st, seat));
+      const act = hardOr(() => null, () => decideDraw(st, seat, this.aiBudget()));
       if (act) { this.state = G(st, act); return; }
     }
     // A sharp player reaches for the house card when — and only when — it's
@@ -1074,7 +1083,7 @@ export class Room {
     let lv = this.levelOf(seat);
 
     if (lv === 'hard') {
-      const r = hardOr(() => null, () => applyIntents(st, planTurn(st, seat)));
+      const r = hardOr(() => null, () => applyIntents(st, planTurn(st, seat, this.aiBudget())));
       // A whole turn, played out: done. A partial one carries on below from
       // wherever it stopped.
       if (r && r.ok && r.state.phase !== 'action') { this.state = r.state; return; }
