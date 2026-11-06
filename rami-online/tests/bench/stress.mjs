@@ -85,18 +85,20 @@ const tables = [
 const pols = { M: makePolicy('medium'), E: makePolicy('easy'), L: makePolicy('legacy') };
 const hard = checkedHard();
 let games = 0, rounds = 0, problems = 0, empty = 0;
+const emptyAt = [];
 const t0 = Date.now();
 for (const [n, layout] of tables) {
   for (let k = 0; k < seeds; k++) {
     const seats = layout.map(c => (c === 'H' ? hard : pols[c]));
     const r = playGame(seats, seed0 + 1000 * n + k, { format: k % 3 === 0 ? 'mega' : 'mini' });
     games++; rounds += r.rounds.length; empty += r.rounds.filter(x => x.empty).length;
+    for (const x of r.rounds) if (x.empty) emptyAt.push({ n, layout: layout.join(''), seed: seed0 + 1000 * n + k, scores: x.scores });
     if (r.problems.length) { problems++; issues.push({ kind: 'game', n, layout: layout.join(''), seed: seed0 + 1000 * n + k, problems: r.problems }); }
   }
   process.stderr.write(`  ${n} seats ${layout.join('')} done\n`);
 }
 console.log(JSON.stringify({
-  games, rounds, roundsEndedByDeckLimit: empty, gamesWithProblems: problems,
+  games, rounds, roundsEndedByDeckLimit: empty, deckLimitRounds: emptyAt, gamesWithProblems: problems,
   ...counts, refused: hard.stats.refused, fallbacks: hard.stats.fallbacks,
   issues: issues.slice(0, 20), issueCount: issues.length, secs: ((Date.now() - t0) / 1000).toFixed(0),
 }, null, 1));

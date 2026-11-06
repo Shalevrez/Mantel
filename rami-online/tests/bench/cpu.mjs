@@ -28,6 +28,10 @@ const args = Object.fromEntries(process.argv.slice(2).reduce((acc, a, i, arr) =>
 const level = args.level || 'hard', players = Number(args.players || 6), games = Number(args.games || 4);
 const seed0 = Number(args.seed || 40000);
 const budget = args.budget ? Number(args.budget) : undefined;
+// --warm N: leave the first N AI decisions of the process out of the stats
+// (the JIT warming up — see coldstart.mjs for that cost on its own).
+const warm = Number(args.warm || 0);
+let seen = 0;
 
 const cpu = () => { const u = process.cpuUsage(); return (u.user + u.system) / 1000; };   // ms
 const steps = [], chains = [], decisions = { buy: [], draw: [], turn: [] };
@@ -73,9 +77,11 @@ for (let g = 0; g < games; g++) {
     structuredClone(room.state);
     JSON.stringify({ t: 'state', state: viewFor(room.state, 0) });
     const t2 = cpu();
-    decisions[kind].push(t1 - t0);
-    steps.push(t2 - t0);
-    chain += t2 - t0;
+    if (++seen > warm) {
+      decisions[kind].push(t1 - t0);
+      steps.push(t2 - t0);
+      chain += t2 - t0;
+    }
     if (room.state === st) { console.error('AI made no progress', kind); break; }
   }
   if (chain) chains.push(chain);
@@ -85,7 +91,7 @@ Math.random = realRandom;
 const pct = (a, q) => { const s = [...a].sort((x, y) => x - y); return s.length ? +s[Math.min(s.length - 1, Math.floor(q * s.length))].toFixed(2) : 0; };
 const summ = a => ({ n: a.length, mean: +(a.reduce((x, y) => x + y, 0) / (a.length || 1)).toFixed(2), p50: pct(a, 0.5), p95: pct(a, 0.95), p99: pct(a, 0.99), max: pct(a, 1) });
 console.log(JSON.stringify({
-  level, players, games, seed0, budget: budget || 'default', maxHandSeen: maxHand,
+  level, players, games, seed0, budget: budget || 'default', warmSkipped: warm, maxHandSeen: maxHand,
   decisionCpuMs: Object.fromEntries(Object.entries(decisions).map(([k, v]) => [k, summ(v)])),
   stepCpuMs: summ(steps),
   chainCpuMs: summ(chains),
