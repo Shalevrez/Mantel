@@ -404,7 +404,7 @@ function startHand(base) {
     buy: { id: (base.buyWin || 0) + 1, checker: first, origNext: first, prev: -1, picks: {} },
     buyWin: (base.buyWin || 0) + 1,
     sel: [], staging: [], msg: '', undoBefore: null, mustUseJoker: null, buyNote: null,
-    laidAtTurnStart: false, attachedThisTurn: false, tookBeit: false,
+    laidAtTurnStart: false, attachedThisTurn: false, tookBeit: false, track: [],
     log: [...(base.log || []), `— ${MK[base.mk].name} • סיבוב ${sivuv} —`],
   };
 }
@@ -499,6 +499,18 @@ function refillDeck(state) {
     discard: [top],
     log: [...state.log, '🔄 החבילה נגמרה — האשפה עורבבה והפכה לחבילה'],
   };
+}
+
+// ── Public card record (for the computer players) ─────
+// Which card each seat took from the pile, bought, or threw, this round. All
+// of it happens face up — every player at the table sees it — so a computer
+// player may remember it the way a person would. Penalty cards and draws from
+// the deck are hidden and never recorded. Kept short and stripped from what
+// goes out to clients (see viewFor), who have the log for that.
+const TRACK_MAX = 240;
+function track(state, s, k, c) {
+  const t = [...(state.track || []), { s, k, c: { id: c.id, suit: c.suit, v: c.v, j: !!c.j } }];
+  return t.length > TRACK_MAX ? t.slice(t.length - TRACK_MAX) : t;
 }
 
 function nextCk(buy, n) {
@@ -610,6 +622,7 @@ function takeFree(state) {
     ...state, phase: 'action', buy: null,
     discard: state.discard.slice(0, -1), // remove only the taken (top) card; rest of pile stays
     players, sel: [], staging: [], msg: '',
+    track: track(state, state.cur, 't', top),
     laidAtTurnStart: p.hasLaid, attachedThisTurn: false, tookBeit: false,
     undoBefore: { hand: [...p.hand, top], board: state.board, hasLaid: p.hasLaid, beit: state.beit },
     // Public: everyone sees the player on turn took the discard (a draw from
@@ -636,6 +649,7 @@ function buyPaid(state, seat) {
     deck: st.deck.slice(1),
     discard: st.discard.slice(0, -1),
     players,
+    track: track(st, seat, 'b', top),
     // Public: everyone sees who took the discard out of turn, until the
     // player on turn discards.
     buyNote: { seat, paid: true, outbid: outbid(st, seat) },
@@ -1066,7 +1080,7 @@ function G(state, action) {
       // If the beit was taken this turn, going out is allowed ONLY as an ant.
       if (state.tookBeit && !isAnt)
         return { ...state, msg: '🏠 לקחת בית — מותר לסיים רק באנט. החזר את הבית (↩️) או השלם אנט.' };
-      return endWin({ ...state, discard: [...state.discard, card] }, players, state.board, isAnt);
+      return endWin({ ...state, discard: [...state.discard, card], track: track(state, state.cur, 'd', card) }, players, state.board, isAnt);
     }
     // Took the beit but not going out as an ant → not allowed. Must complete the ant
     // or return the beit.
@@ -1089,6 +1103,7 @@ function G(state, action) {
     return openBuy({
       ...state, board,
       discard: [...state.discard, card],
+      track: track(state, state.cur, 'd', card),
       players, cur: nextIdx, sel: [], staging: [],
       undoBefore: null, turnsPlayed, canLay, mustUseJoker: null, tookBeit: false, buyNote: null,
       log: [...state.log, `↓ ${p.name} זרק ${cTxt(card)}`],
@@ -1287,7 +1302,7 @@ export {
   INK, GOLDD, CLOTH, CLOTH_BASE, TABLE, TABLE_BASE, PLAYER_COLORS, playerColor,
   AI_LEVELS, AI_LEVEL_NAMES, aiLevel, cardAffinity, decksFor,
   uid, sortHand, moveCard, mkCard, makeDeck, shuffle, handScore,
-  isSeq, isSet, isGroup, orderSeq, orderGroup, jokerValues, attachPos, canAttach, meetsReq,
+  isSeq, isSet, isGroup, orderSeq, orderGroup, jokerValues, swapJoker, attachPos, canAttach, meetsReq, onLastCard, nextActive,
   layoutStart, seqLayouts, extendSeq, layGroup,
   startHand, initGame, endWin, endDeck, nextCk, buyOrder, buyOffered, BUY_MS, BUY_TIMERS, normBuyTimer, buyWindowMs, roundRecord, retireSeat,
   G, aiWantCard, findAIGroups, aiDiscard,

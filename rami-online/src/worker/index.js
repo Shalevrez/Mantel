@@ -12,6 +12,16 @@ import {
   aiWantCard, findAIGroups, meetsReq, attachPos, aiDiscard, buyOffered, BUY_MS, normBuyTimer, buyWindowMs,
 } from '../game-core.js';
 import { normFee, normMode, buyPrice } from '../economy.js';
+import { decideBuy, decideDraw, planTurn, applyIntents } from '../ai/hard.js';
+
+// The hard level's decisions come from the search engine in src/ai/hard.js.
+// It only ever looks at what that seat could see. If it fails for any reason
+// (its work budget ran out on a freak hand, or a move it planned is refused),
+// the step is played by the simpler heuristic below instead, so a computer
+// seat can never stall the table.
+function hardOr(fallback, fn) {
+  try { return fn(); } catch (e) { return fallback(); }
+}
 
 // ── Table size ───────────────────────────────────────
 // Six chairs, of which at most five may be computer players: the host decides
@@ -75,6 +85,9 @@ export function viewFor(state, seat) {
   const buyNote = bn ? { seat: bn.seat, paid: bn.paid, onTurn: bn.onTurn, outbidYou: (bn.outbid || []).includes(seat) } : null;
   return {
     ...state, buy, buyNote,
+    // The computer players' memory of face-up pickups and throws: public, but
+    // clients have the log for it, so it doesn't ride out on every update.
+    track: undefined,
     // Never leak the deck contents. The beit card itself is public — it's shown
     // face up so everyone can see what's on offer.
     deck: undefined,
@@ -1016,6 +1029,10 @@ export class Room {
       const lv = this.levelOf(seat);
       const hand = st.players[seat].hand;
       const top = st.discard[st.discard.length - 1];
+      if (lv === 'hard') {
+        const act = hardOr(() => null, () => decideBuy(st, seat));
+        if (act) { this.state = G(st, act); continue; }
+      }
       if (seat === st.buy.origNext) {
         // First refusal, and free: the only cost is picking up a card it doesn't
         // need. A beginner still lets good cards go by now and then.
@@ -1035,6 +1052,10 @@ export class Room {
   aiDraw() {
     const st = this.state;
     const seat = st.cur;
+    if (this.levelOf(seat) === 'hard') {
+      const act = hardOr(() => null, () => decideDraw(st, seat));
+      if (act) { this.state = G(st, act); return; }
+    }
     // A sharp player reaches for the house card when — and only when — it's
     // the exact missing piece of an ante. Taking it is a commitment (every
     // discard is refused until the turn ends as an ante or the card is
@@ -1050,7 +1071,19 @@ export class Room {
   aiAction() {
     let st = this.state;
     const seat = st.cur;
-    const lv = this.levelOf(seat);
+    let lv = this.levelOf(seat);
+
+    if (lv === 'hard') {
+      const r = hardOr(() => null, () => applyIntents(st, planTurn(st, seat)));
+      // A whole turn, played out: done. A partial one carries on below from
+      // wherever it stopped.
+      if (r && r.ok && r.state.phase !== 'action') { this.state = r.state; return; }
+      if (r) st = r.state;
+      // The rest of this turn is played by the medium routine, which measures
+      // stronger than the old hard one (tests/bench) and never holds back a
+      // lay. An unfinished beit attempt still goes through the branch below.
+      if (!st.tookBeit) lv = 'medium';
+    }
 
     // Took the beit chasing an ante: it must go out as one this very turn —
     // lay everything and discard the lone spare — or hand the card back.
