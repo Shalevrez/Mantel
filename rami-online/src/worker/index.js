@@ -12,6 +12,34 @@ import {
   aiWantCard, findAIGroups, meetsReq, attachPos, aiDiscard, buyOffered, BUY_MS, normBuyTimer, buyWindowMs,
 } from '../game-core.js';
 import { normFee, normMode, buyPrice } from '../economy.js';
+import { decideBuy, decideDraw, planTurn, applyIntents } from '../ai/hard.js';
+
+import { BUDGET } from '../ai/hand.js';
+
+// The hard level's decisions come from the search engine in src/ai/hard.js,
+// which only ever looks at what that seat could see. When it can't give an
+// answer the step is played by the medium routine instead, so a computer seat
+// never stalls the table. Two kinds of failure, kept apart:
+//
+//   budget  expected: a freak hand needed more search than one decision may
+//           spend. Counted, not logged one by one.
+//   error   unexpected: a bug. Logged (rate-limited per room) with what kind
+//           of decision it was and the table's shape — never a card, so no
+//           hidden hand can end up in a log.
+//   refused a move the engine planned was turned down by the reducer: also a
+//           bug (the engine plans on a copy of the real state), logged.
+//
+// Ordinary strategic choices (passing, drawing, holding back) are not
+// failures and are never logged.
+const AI_LOG_MAX = 5;   // unexpected-failure log lines per room
+function aiContext(st, seat, kind) {
+  const p = st && st.players[seat];
+  return {
+    kind, seat, phase: st && st.phase, mk: st && st.mk, players: st && st.players.length,
+    hand: p ? p.hand.length : null, laid: p ? !!p.hasLaid : null,
+    board: st && st.board ? st.board.length : null, deck: st && st.deck ? st.deck.length : null,
+  };
+}
 
 // ── Table size ───────────────────────────────────────
 // Six chairs, of which at most five may be computer players: the host decides
@@ -75,6 +103,9 @@ export function viewFor(state, seat) {
   const buyNote = bn ? { seat: bn.seat, paid: bn.paid, onTurn: bn.onTurn, outbidYou: (bn.outbid || []).includes(seat) } : null;
   return {
     ...state, buy, buyNote,
+    // The computer players' memory of face-up pickups and throws: public, but
+    // clients have the log for it, so it doesn't ride out on every update.
+    track: undefined,
     // Never leak the deck contents. The beit card itself is public — it's shown
     // face up so everyone can see what's on offer.
     deck: undefined,
@@ -119,6 +150,32 @@ function antReadyWithBeit(st, seat) {
   if (laid === took || laid.players[seat].hand.length !== 1) return false;
   const done = G(laid, { type: 'DISCARD', cid: laid.players[seat].hand[0].id });
   return done.phase === 'round_end' || done.phase === 'game_end';
+}
+
+// Last resort when a computer player's chosen throw was refused (a joker owed
+// from a swap that can't be placed, a beit that can't end in an ant): give
+// back what can be given back, then throw any card the rules accept. Without
+// this the same refused move would be retried forever and the table would
+// wait on a seat that never moves.
+export function endTurnSomehow(st, seat) {
+  const p = st.players[seat];
+  // A beit attempt goes back whole: the turn returns to the draw.
+  if (st.tookBeit) { const u = G(st, { type: 'UNDO' }); if (u.phase === 'draw') return u; }
+  // A joker that must be used: try every group on the table.
+  if (st.mustUseJoker && p.hand.some(c => c.id === st.mustUseJoker)) {
+    for (const g of st.board) {
+      const n = G(st, { type: 'AI_ATTACH', cid: st.mustUseJoker, gid: g.id });
+      if (n !== st) return endTurnSomehow(n, seat);
+    }
+    // Nowhere to put it: undo the turn's table moves when the rules allow it.
+    const u = G(st, { type: 'UNDO' });
+    if (u !== st && !u.mustUseJoker) st = u;
+  }
+  for (const c of st.players[seat].hand) {
+    const n = G(st, { type: 'DISCARD', cid: c.id });
+    if (n.phase !== 'action' || n.cur !== seat) return n;
+  }
+  return st;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -999,6 +1056,43 @@ export class Room {
     return normLevel(this.seats[seat]?.ai || this.aiLevel);
   }
 
+  // Search nodes the hard level may spend on one decision. The default
+  // (src/ai/hard.js) is a few milliseconds of CPU on a normal hand; the
+  // optional AI_BUDGET variable (wrangler.toml [vars]) can lower it. A smaller
+  // budget plays weaker: more decisions fall back (see tests/bench/README.md).
+  aiBudget() {
+    const n = Number(this.env && this.env.AI_BUDGET);
+    return Number.isFinite(n) && n > 0 ? n : undefined;
+  }
+
+  // Runs one hard-engine decision. Returns its answer, or null when the
+  // caller should fall back (see the note at the top of this file).
+  hardTry(kind, st, seat, fn) {
+    const d = (this.aiDiag ||= { decisions: 0, budget: 0, errors: 0, refused: 0, logged: 0 });
+    d.decisions++;
+    const diag = {};
+    try {
+      const r = fn(diag);
+      if (diag.budget === 'exhausted') d.budget++;
+      return r;
+    } catch (e) {
+      if (e === BUDGET) { d.budget++; return null; }
+      d.errors++;
+      this.aiLog('hard AI error', st, seat, kind, e);
+      return null;
+    }
+  }
+
+  aiLog(what, st, seat, kind, e) {
+    const d = this.aiDiag;
+    if (!d || d.logged >= AI_LOG_MAX) return;
+    d.logged++;
+    try {
+      console.error(what, JSON.stringify(aiContext(st, seat, kind)),
+        e ? String((e && e.stack) || e).split('\n').slice(0, 4).join(' | ') : '');
+    } catch {}
+  }
+
   // The computer player being asked, if the seat being asked is one.
   aiBuyers(st) {
     // A scheduled answer can arrive after the window was already decided.
@@ -1013,9 +1107,20 @@ export class Room {
       const st = this.state;
       // An earlier answer may already have decided the window.
       if (st.phase !== 'buying' || !st.buy || st.buy.id !== first.buy.id) return;
-      const lv = this.levelOf(seat);
+      let lv = this.levelOf(seat);
       const hand = st.players[seat].hand;
       const top = st.discard[st.discard.length - 1];
+      if (lv === 'hard') {
+        const act = this.hardTry('buy', st, seat, diag => decideBuy(st, seat, this.aiBudget(), undefined, diag));
+        if (act) {
+          const next = G(st, act);
+          // The answer must have been taken: this seat answered, or the window moved on.
+          if (next.buy !== st.buy || next.phase !== st.phase) { this.state = next; continue; }
+          this.aiDiag.refused++;
+          this.aiLog('hard AI buy refused', st, seat, 'buy');
+        }
+        lv = 'medium';
+      }
       if (seat === st.buy.origNext) {
         // First refusal, and free: the only cost is picking up a card it doesn't
         // need. A beginner still lets good cards go by now and then.
@@ -1035,6 +1140,15 @@ export class Room {
   aiDraw() {
     const st = this.state;
     const seat = st.cur;
+    if (this.levelOf(seat) === 'hard') {
+      const act = this.hardTry('draw', st, seat, diag => decideDraw(st, seat, this.aiBudget(), undefined, diag));
+      const next = act && G(st, act);
+      // A draw leads to the turn (or, with no card left anywhere, the round's end).
+      if (next && next !== st && next.phase !== 'draw') { this.state = next; return; }
+      if (act) { this.aiDiag.refused++; this.aiLog('hard AI draw refused', st, seat, 'draw'); }
+      this.state = G(st, { type: 'DRAW' });
+      return;
+    }
     // A sharp player reaches for the house card when — and only when — it's
     // the exact missing piece of an ante. Taking it is a commitment (every
     // discard is refused until the turn ends as an ante or the card is
@@ -1050,7 +1164,19 @@ export class Room {
   aiAction() {
     let st = this.state;
     const seat = st.cur;
-    const lv = this.levelOf(seat);
+    let lv = this.levelOf(seat);
+
+    if (lv === 'hard') {
+      const r = this.hardTry('turn', st, seat, diag => applyIntents(st, planTurn(st, seat, this.aiBudget(), undefined, diag)));
+      // A whole turn, played out: done. A partial one carries on below from
+      // wherever it stopped.
+      if (r && r.ok && r.state.phase !== 'action') { this.state = r.state; return; }
+      if (r) { this.aiDiag.refused++; this.aiLog('hard AI turn refused', st, seat, 'turn'); st = r.state; }
+      // The rest of this turn is played by the medium routine, which measures
+      // stronger than the old hard one (tests/bench) and never holds back a
+      // lay. An unfinished beit attempt still goes through the branch below.
+      if (!st.tookBeit) lv = 'medium';
+    }
 
     // Took the beit chasing an ante: it must go out as one this very turn —
     // lay everything and discard the lone spare — or hand the card back.
@@ -1104,7 +1230,8 @@ export class Room {
 
     // 3. Throw a card — which is also how an AI goes out.
     const hand = st.players[seat].hand;
-    this.state = G(st, { type: 'DISCARD', cid: aiDiscard(hand, lv, Math.random, st.board).id });
+    const thrown = G(st, { type: 'DISCARD', cid: aiDiscard(hand, lv, Math.random, st.board).id });
+    this.state = thrown.phase !== 'action' || thrown.cur !== seat ? thrown : endTurnSomehow(st, seat);
   }
 }
 
