@@ -60,6 +60,10 @@ const HAND_ZONE_SLACK = 28;
 // A card dropped near a group it fits — not quite on it — still attaches there:
 // the nearest fitting group within this many pixels of the drop point catches it.
 const ATTACH_SNAP = 64;
+// The discard pile is a single card, so a throw catches this far around it too.
+// It wins over the forgiving strip above the hand, which reaches up to the pile
+// on a phone and used to send a throw back into the hand.
+const DISCARD_SNAP = 40;
 
 // Wipe any text selection the browser started on its own. Called when a press
 // turns into a card drag, and again when the drag ends.
@@ -1565,11 +1569,15 @@ function Game({ state, dispatch, onLeave, wallet }) {
     return best;
   }
 
-  // Over the discard pile, on my turn to act: releasing throws the card.
+  // On or near the discard pile, on my turn to act: releasing throws the card.
   function discardAt(x, y) {
     if (!isMyTurn || state.phase !== 'action') return false;
-    const el = document.elementFromPoint(x, y);
-    return !!(el && el.closest('[data-drop="discard"]'));
+    const el = document.querySelector('[data-drop="discard"]');
+    if (!el) return false;
+    const r = el.getBoundingClientRect();
+    const dx = Math.max(r.left - x, 0, x - r.right);
+    const dy = Math.max(r.top - y, 0, y - r.bottom);
+    return Math.hypot(dx, dy) <= DISCARD_SNAP;
   }
 
   // Put the ghost and the insertion bar where dragRef says, straight on the DOM.
@@ -1592,8 +1600,8 @@ function Game({ state, dispatch, onLeave, wallet }) {
     d.x = x; d.y = y;
     // The drop point is the ghost's centre: on touch that's above the finger.
     const hx = x, hy = y - d.lift;
-    d.slot = slotAt(hx, hy, d.card.id);
-    d.discard = !d.slot && discardAt(hx, hy);
+    d.discard = discardAt(hx, hy);
+    d.slot = d.discard ? null : slotAt(hx, hy, d.card.id);
     d.gid = d.slot || d.discard ? null : groupAt(hx, hy, d.fit);
     setHotGid(g => g === d.gid ? g : d.gid);
     setHotDiscard(d.discard);
